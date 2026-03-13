@@ -45,7 +45,7 @@ export default function Settings() {
          
          <div className="space-y-3 mb-4">
             {vehicles.map(v => (
-               <div key={v.id} className={cn("glass-card p-4 rounded-xl flex items-center justify-between shadow-sm dark:shadow-none border-slate-200 dark:border-slate-800", v.id === selectedVehicleId && "border-blue-500/50 bg-blue-50 dark:bg-blue-500/5")}>
+               <div key={v.id} className={cn("glass-card group p-4 rounded-xl flex items-center justify-between shadow-sm dark:shadow-none border-slate-200 dark:border-slate-800", v.id === selectedVehicleId && "border-blue-500/50 bg-blue-50 dark:bg-blue-500/5")}>
                   {editingVehicleId === v.id ? (
                     <div className="flex-1 mr-3 flex items-center gap-2">
                        <Input 

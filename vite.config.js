@@ -28,16 +28,28 @@ export default defineConfig(({ mode }) => {
           categories: ['utilities', 'productivity'],
           icons: [
             {
-              src: 'icon.png',
+              src: 'ios/180.png',
+              sizes: '180x180',
+              type: 'image/png',
+              purpose: 'any'
+            },
+            {
+              src: 'ios/192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'icon.png',
+              src: 'ios/512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
+            },
+            {
+              src: 'ios/1024.png',
+              sizes: '1024x1024',
+              type: 'image/png',
+              purpose: 'any'
             }
           ]
         },
