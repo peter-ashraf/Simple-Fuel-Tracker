@@ -10,10 +10,10 @@ export default function Dashboard() {
   const recentTrips = [...activeVehicleFillUps].reverse().slice(0, 5);
 
   const getEfficiencyColorStatus = (kmPerL) => {
-    if (!kmPerL || kmPerL === 0) return "text-slate-400";
-    if (kmPerL > 12) return "text-emerald-500";
-    if (kmPerL >= 8) return "text-amber-500";
-    return "text-red-500";
+    if (!kmPerL || kmPerL === 0) return "text-slate-500 dark:text-slate-400";
+    if (kmPerL > 12) return "text-emerald-600 dark:text-emerald-500";
+    if (kmPerL >= 8) return "text-amber-600 dark:text-amber-500";
+    return "text-red-600 dark:text-red-500";
   };
 
   const avgKmL = stats.avgKmPerLiter > 0 ? stats.avgKmPerLiter.toFixed(2) : "-";
@@ -29,48 +29,48 @@ export default function Dashboard() {
         <Card className="flex flex-col justify-between group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-500/10 blur-2xl rounded-full"></div>
           <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Km/L</span>
+            <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg Km/L</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className={`text-4xl font-bold tracking-tighter ${getEfficiencyColorStatus(stats.avgKmPerLiter)}`}>{avgKmL}</span>
-            {avgKmL !== "-" && <span className="text-xs text-slate-400 font-medium">km/l</span>}
+            {avgKmL !== "-" && <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">km/l</span>}
           </div>
         </Card>
 
         <Card className="flex flex-col justify-between group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-blue-500/10 blur-2xl rounded-full"></div>
           <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-4 h-4 text-blue-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Avg L/100km</span>
+            <TrendingUp className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg L/100km</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">{avgL100}</span>
-            {avgL100 !== "-" && <span className="text-xs text-slate-400 font-medium">L</span>}
+            {avgL100 !== "-" && <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">L</span>}
           </div>
         </Card>
 
         <Card className="flex flex-col justify-between group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-purple-500/10 blur-2xl rounded-full"></div>
           <div className="flex items-center gap-2 mb-3">
-            <DollarSign className="w-4 h-4 text-purple-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total spent</span>
+            <DollarSign className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total spent</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tighter">{stats.totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-            <span className="text-xs text-slate-400 font-medium">EGP</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">EGP</span>
           </div>
         </Card>
 
         <Card className="flex flex-col justify-between group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/10 blur-2xl rounded-full"></div>
           <div className="flex items-center gap-2 mb-3">
-            <Fuel className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fill-ups</span>
+            <Fuel className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Fill-ups</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">{stats.totalFillUps}</span>
-            <span className="text-xs text-slate-400 font-medium">trips</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">trips</span>
           </div>
         </Card>
       </section>
@@ -84,9 +84,9 @@ export default function Dashboard() {
         </div>
 
         {recentTrips.length === 0 ? (
-          <div className="text-center py-10 px-6 border-2 border-dashed border-slate-300 dark:border-slate-700/50 rounded-3xl">
-            <Fuel className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-400 font-medium tracking-tight">No recent trips.<br/>Add your first fill-up!</p>
+          <div className="text-center py-10 px-6 border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-3xl">
+            <Fuel className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium tracking-tight">No recent trips.<br/>Add your first fill-up!</p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -106,7 +106,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{metrics.tripCost.toFixed(0)} <span className="text-[10px] text-slate-400">EGP</span></p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{metrics.tripCost.toFixed(0)} <span className="text-[10px] text-slate-500 dark:text-slate-400">EGP</span></p>
                     <p className={`text-xs font-bold mt-0.5 ${getEfficiencyColorStatus(metrics.kmPerLiter)}`}>{kmPerLiter} <span className="text-[10px] font-medium text-slate-500">km/L</span></p>
                   </div>
                 </li>

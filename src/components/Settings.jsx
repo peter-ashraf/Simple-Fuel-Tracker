@@ -34,18 +34,18 @@ export default function Settings() {
   };
 
   return (
-    <PageWrapper className="space-y-6 pb-10">
+    <PageWrapper className="space-y-6 pb-1">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Settings</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage vehicles and fuel preferences.</p>
       </div>
 
       <section>
-         <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><CarFront className="w-4 h-4"/> Your Garage</h3>
+         <h3 className="text-xs font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><CarFront className="w-4 h-4"/> Your Garage</h3>
          
          <div className="space-y-3 mb-4">
             {vehicles.map(v => (
-               <div key={v.id} className={cn("bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center justify-between shadow-sm dark:shadow-none", v.id === selectedVehicleId && "border-blue-500/50 bg-blue-50 dark:bg-blue-500/5")}>
+               <div key={v.id} className={cn("glass-card p-4 rounded-xl flex items-center justify-between shadow-sm dark:shadow-none border-slate-200 dark:border-slate-800", v.id === selectedVehicleId && "border-blue-500/50 bg-blue-50 dark:bg-blue-500/5")}>
                   {editingVehicleId === v.id ? (
                     <div className="flex-1 mr-3 flex items-center gap-2">
                        <Input 
@@ -114,9 +114,9 @@ export default function Settings() {
          <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Palette className="w-4 h-4"/> Theme Preferences</h3>
          <Card className="px-5 py-6">
             <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl">
-              <button type="button" onClick={() => setTheme('light')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'light' ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Light</button>
-              <button type="button" onClick={() => setTheme('dark')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'dark' ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Dark</button>
-              <button type="button" onClick={() => setTheme('system')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'system' ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>System</button>
+              <button type="button" onClick={() => setTheme('light')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'light' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Light</button>
+              <button type="button" onClick={() => setTheme('dark')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'dark' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Dark</button>
+              <button type="button" onClick={() => setTheme('system')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'system' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>System</button>
             </div>
          </Card>
       </section>
@@ -154,7 +154,7 @@ export default function Settings() {
          </Card>
       </section>
 
-      <section className="pt-8 mb-10">
+      <section className="pt-8 mb-2">
          <button onClick={handleClearApp} className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center shadow-lg shadow-red-500/5">
             <AlertCircle className="w-5 h-5" /> Factory Reset App
          </button>

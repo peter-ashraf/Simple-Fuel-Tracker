@@ -8,7 +8,7 @@ export function cn(...inputs) {
 }
 
 export const Card = forwardRef(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("bg-card/80 backdrop-blur-md border border-white/10 shadow-xl rounded-3xl p-5 relative overflow-hidden", className)} {...props}>
+  <div ref={ref} className={cn("glass-card rounded-3xl p-5 relative overflow-hidden", className)} {...props}>
     {children}
   </div>
 ));
@@ -17,7 +17,7 @@ Card.displayName = "Card"
 export const Input = forwardRef(({ className, ...props }, ref) => (
   <input
     ref={ref}
-    className={cn("w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-5 py-4 text-left text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all font-medium", className)}
+    className={cn("input-field", className)}
     {...props}
   />
 ));

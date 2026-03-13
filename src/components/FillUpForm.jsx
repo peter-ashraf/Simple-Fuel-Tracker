@@ -109,29 +109,29 @@ export default function FillUpForm() {
               <div>
                  <Label>Fuel Grade</Label>
                  <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl">
-                    <button 
-                       type="button"
-                       onClick={() => setSelectedFuelType('92')}
-                       className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '92' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
-                    >
-                       92
-                    </button>
-                    <button 
-                       type="button"
-                       onClick={() => setSelectedFuelType('95')}
-                       className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '95' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
-                    >
-                       95
-                    </button>
-                    <button 
-                       type="button"
-                       onClick={() => setSelectedFuelType('diesel')}
-                       className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === 'diesel' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
-                    >
-                       Diesel
-                    </button>
+                     <button 
+                        type="button"
+                        onClick={() => setSelectedFuelType('92')}
+                        className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '92' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                     >
+                        92
+                     </button>
+                     <button 
+                        type="button"
+                        onClick={() => setSelectedFuelType('95')}
+                        className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '95' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                     >
+                        95
+                     </button>
+                     <button 
+                        type="button"
+                        onClick={() => setSelectedFuelType('diesel')}
+                        className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === 'diesel' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                     >
+                        Diesel
+                     </button>
                  </div>
-                 <p className="text-[10px] text-emerald-600 dark:text-emerald-500/70 font-medium text-center mt-2">Will apply current price: {fuelPrices[selectedFuelType]} EGP/L</p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium text-center mt-2 opacity-80">Will apply current price: {fuelPrices[selectedFuelType]} EGP/L</p>
               </div>
 
            </div>
@@ -164,7 +164,7 @@ export default function FillUpForm() {
         </form>
       </PageWrapper>
 
-      <div className="fixed bottom-[80px] left-0 right-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800/80 p-4 z-40 transition-colors duration-300">
+      <div className="fixed bottom-[80px] left-0 right-0 bg-white/80 dark:bg-slate-950/90 backdrop-blur-xl border-t border-slate-200/60 dark:border-slate-800/80 p-4 z-40 transition-colors duration-300">
         <div className="max-w-lg mx-auto">
           <button 
              type="submit" 

@@ -56,6 +56,18 @@ export default defineConfig(({ mode }) => {
           ]
         }
       })
-    ]
+    ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-charts': ['chart.js', 'react-chartjs-2'],
+            'vendor-ui': ['lucide-react', 'framer-motion', 'clsx', 'tailwind-merge']
+          }
+        }
+      },
+      chunkSizeWarningLimit: 1000
+    }
   };
 });
