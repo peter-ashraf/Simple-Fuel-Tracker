@@ -107,23 +107,39 @@ export default function App() {
          <div className="flex items-center justify-between h-[72px] max-w-lg mx-auto px-4 relative">
             
             <NavLink to="/" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
-               {({ isActive }) => (
-                 <motion.div whileTap={{ scale: 0.85 }} className="flex flex-col items-center">
-                    <Home className="w-[22px] h-[22px]" />
-                    <span className="text-[10px] font-semibold mt-0.5">Home</span>
-                    {isActive && <motion.div layoutId="nav-pill" className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full" />}
-                 </motion.div>
-               )}
+                {({ isActive }) => (
+                  <div className="flex flex-col items-center relative h-full justify-center">
+                    <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
+                       <Home className="w-[22px] h-[22px]" />
+                       <span className="text-[10px] font-semibold mt-0.5">Home</span>
+                    </motion.div>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="nav-pill" 
+                        className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                  </div>
+                )}
             </NavLink>
             
             <NavLink to="/history" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
-               {({ isActive }) => (
-                 <motion.div whileTap={{ scale: 0.85 }} className="flex flex-col items-center">
-                    <List className="w-[22px] h-[22px]" />
-                    <span className="text-[10px] font-semibold mt-0.5">History</span>
-                    {isActive && <motion.div layoutId="nav-pill" className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full" />}
-                 </motion.div>
-               )}
+                {({ isActive }) => (
+                  <div className="flex flex-col items-center relative h-full justify-center">
+                    <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
+                       <List className="w-[22px] h-[22px]" />
+                       <span className="text-[10px] font-semibold mt-0.5">History</span>
+                    </motion.div>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="nav-pill" 
+                        className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                  </div>
+                )}
             </NavLink>
 
             {/* Center Floating FAB */}
@@ -136,23 +152,39 @@ export default function App() {
             </div>
 
             <NavLink to="/analytics" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
-               {({ isActive }) => (
-                 <motion.div whileTap={{ scale: 0.85 }} className="flex flex-col items-center">
-                    <PieChart className="w-[22px] h-[22px]" />
-                    <span className="text-[10px] font-semibold mt-0.5">Stats</span>
-                    {isActive && <motion.div layoutId="nav-pill" className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full" />}
-                 </motion.div>
-               )}
+                {({ isActive }) => (
+                  <div className="flex flex-col items-center relative h-full justify-center">
+                    <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
+                       <PieChart className="w-[22px] h-[22px]" />
+                       <span className="text-[10px] font-semibold mt-0.5">Stats</span>
+                    </motion.div>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="nav-pill" 
+                        className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                  </div>
+                )}
             </NavLink>
 
             <NavLink to="/settings" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
-               {({ isActive }) => (
-                 <motion.div whileTap={{ scale: 0.85 }} className="flex flex-col items-center">
-                    <Settings className="w-[22px] h-[22px]" />
-                    <span className="text-[10px] font-semibold mt-0.5">Config</span>
-                    {isActive && <motion.div layoutId="nav-pill" className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full" />}
-                 </motion.div>
-               )}
+                {({ isActive }) => (
+                  <div className="flex flex-col items-center relative h-full justify-center">
+                    <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
+                       <Settings className="w-[22px] h-[22px]" />
+                       <span className="text-[10px] font-semibold mt-0.5">Config</span>
+                    </motion.div>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="nav-pill" 
+                        className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                  </div>
+                )}
             </NavLink>
 
          </div>
