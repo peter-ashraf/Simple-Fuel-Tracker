@@ -84,6 +84,7 @@ function Header() {
 }
 
 export default function App() {
+  const location = useLocation();
   const cn = (...classes) => classes.filter(Boolean).join(' ');
 
   return (
