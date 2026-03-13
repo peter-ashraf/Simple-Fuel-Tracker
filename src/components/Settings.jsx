@@ -74,7 +74,7 @@ export default function Settings() {
                           setEditingVehicleId(v.id);
                           setEditingName(v.name);
                         }}
-                        className="text-slate-400 hover:text-blue-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity md:opacity-100 ml-auto"
+                        className="text-slate-400 hover:text-blue-400 p-1 opacity-20 group-hover: transition-opacity md:opacity-20 ml-auto"
                       >
                          <Pencil className="w-3.5 h-3.5" />
                       </button>
