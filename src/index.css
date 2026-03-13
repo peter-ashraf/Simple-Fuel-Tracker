@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-background: hsl(222, 47%, 11%);
+  --color-foreground: hsl(213, 31%, 91%);
+  --color-card: hsl(217, 33%, 17%);
+  --color-card-foreground: hsl(213, 31%, 91%);
+  --color-popover: hsl(222, 47%, 11%);
+  --color-popover-foreground: hsl(213, 31%, 91%);
+  --color-primary: hsl(153, 60%, 39%); 
+  --color-primary-foreground: hsl(210, 40%, 98%);
+  --color-secondary: hsl(217, 33%, 17%);
+  --color-secondary-foreground: hsl(210, 40%, 98%);
+  --color-muted: hsl(217, 33%, 17%);
+  --color-muted-foreground: hsl(215, 20.2%, 65.1%);
+  --color-accent: hsl(217, 33%, 17%);
+  --color-accent-foreground: hsl(210, 40%, 98%);
+  --color-destructive: hsl(0, 63%, 31%);
+  --color-destructive-foreground: hsl(210, 40%, 98%);
+  --color-border: hsl(217, 33%, 17%);
+  --color-input: hsl(217, 33%, 17%);
+  --color-ring: hsl(153, 60%, 39%);
+  --radius: 1rem;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 min-h-screen text-base transition-colors duration-300;
+    @apply dark:bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] dark:text-slate-100 dark:from-slate-900 dark:to-slate-950;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/80 dark:bg-card/80 backdrop-blur-md border border-slate-200 dark:border-white/10 shadow-xl;
+  }
+  .input-field {
+    @apply w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700/50 rounded-2xl px-5 py-4 text-left text-slate-900 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all font-medium;
+  }
+  .label-text {
+    @apply text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block ml-1;
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
