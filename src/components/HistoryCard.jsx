@@ -172,14 +172,14 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
 
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-10">
                   <div>
                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Date</label>
                     <input
                       type="date"
                       value={editForm.date}
                       onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
+                      className="w-40 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
                     />
                   </div>
                   <div>
@@ -188,7 +188,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                       type="number"
                       value={editForm.odometer}
                       onChange={(e) => setEditForm({...editForm, odometer: e.target.value})}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
+                      className="w-40 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
                     />
                   </div>
                 </div>
