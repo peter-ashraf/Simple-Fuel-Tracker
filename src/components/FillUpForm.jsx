@@ -1,12 +1,30 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, MapPin } from 'lucide-react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper } from './ui';
+import { useLocationDetection } from '../hooks/useLocationDetection';
+import { gasStationService } from '../services/gasStationService';
+import { StationSuggestion } from './StationSuggestion';
 import { useNavigate } from 'react-router-dom';
 
 export default function FillUpForm() {
   const { fuelPrices, addFillUp, activeVehicleFillUps } = useFuel();
   const navigate = useNavigate();
+  
+  // Location detection state
+  const {
+    location,
+    loading: locationLoading,
+    error: locationError,
+    permissionState,
+    getCurrentLocation,
+    requestPermission
+  } = useLocationDetection();
+  
+  const [stations, setStations] = useState([]);
+  const [showStationModal, setShowStationModal] = useState(false);
+  const [stationLoading, setStationLoading] = useState(false);
+  const [stationError, setStationError] = useState(null);
 
   const [liters, setLiters] = useState('');
   const [moneySpent, setMoneySpent] = useState('');
@@ -18,6 +36,84 @@ export default function FillUpForm() {
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10)); // YYYY-MM-DD
   const [station, setStation] = useState('');
   const [notes, setNotes] = useState('');
+  
+  // Handle station detection
+  const handleDetectStation = async () => {
+    console.log('🚀 Station detection started');
+    console.log('🔐 Permission state:', permissionState);
+    
+    try {
+      if (permissionState === 'denied') {
+        console.log('🔒 Permission denied, trying to request again...');
+        // Try to request permission again
+        const granted = await requestPermission();
+        console.log('🔑 Permission request result:', granted);
+        if (!granted) {
+          console.log('❌ Permission still denied');
+          return;
+        }
+      }
+      
+      console.log('📍 Getting current location...');
+      const locationData = await getCurrentLocation();
+      console.log('📍 Location result:', locationData);
+      
+      if (!locationData) {
+        console.log('❌ No location data received');
+        return;
+      }
+      
+      console.log('🔍 Searching for gas stations...');
+      setStationLoading(true);
+      setStationError(null);
+      
+      const nearbyStations = await gasStationService.findNearbyGasStations(
+        locationData.latitude,
+        locationData.longitude
+      );
+      console.log('⛽ Found stations:', nearbyStations);
+      setStations(nearbyStations);
+      
+    } catch (error) {
+      console.error('❌ Station detection failed:', error);
+      setStationError(error.message);
+    } finally {
+      setStationLoading(false);
+      console.log('✅ Station detection completed');
+    }
+  };
+  
+  const handleStationSelect = (station) => {
+    setStation(station.name);
+    setShowStationModal(false);
+  };
+
+  const handleAddUserStation = async (stationName) => {
+    if (!location) {
+      console.error('No location available to save station');
+      return;
+    }
+    
+    try {
+      const savedStation = gasStationService.saveUserStation(
+        stationName,
+        location.latitude,
+        location.longitude
+      );
+      
+      console.log('✅ Station saved:', savedStation);
+      
+      // Auto-select the saved station
+      setStation(stationName);
+      setShowStationModal(false);
+      
+      // Clear cache to force refresh next time
+      gasStationService.clearCache();
+      
+    } catch (error) {
+      console.error('❌ Failed to save station:', error);
+    }
+  };
   
   // Auto-fill odometer suggestion from previous
   useEffect(() => {
@@ -188,12 +284,23 @@ export default function FillUpForm() {
            <div className="space-y-4">
               <div>
                  <Label>Station (Optional)</Label>
-                 <Input 
-                   type="text" 
-                   value={station}
-                   onChange={e => setStation(e.target.value)}
-                   placeholder="e.g. Total, Mobil, Wataniya"
-                 />
+                 <div className="flex gap-2">
+                    <Input 
+                      type="text" 
+                      value={station}
+                      onChange={e => setStation(e.target.value)}
+                      placeholder="e.g. Total, Mobil, Wataniya"
+                      className="flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStationModal(true)}
+                      className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 rounded-xl transition-colors"
+                      title="Detect nearby gas stations"
+                    >
+                       <MapPin className="w-4 h-4" />
+                    </button>
+                 </div>
               </div>
               <div>
                  <Label>Notes (Optional)</Label>
@@ -224,6 +331,19 @@ export default function FillUpForm() {
           </button>
         </div>
       </div>
+      
+      {/* Station Suggestion Modal */}
+      <StationSuggestion
+        show={showStationModal}
+        stations={stations}
+        loading={stationLoading}
+        error={stationError}
+        permissionState={permissionState}
+        onStationSelect={handleStationSelect}
+        onDetectLocation={handleDetectStation}
+        onAddUserStation={handleAddUserStation}
+        onClose={() => setShowStationModal(false)}
+      />
     </>
   );
 }

@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useFuel } from '../hooks/useFuelContext';
 import { useTheme } from '../hooks/useTheme';
 import { Card, Input, Label, cn, PageWrapper, ConfirmModal } from './ui';
-import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check } from 'lucide-react';
+import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check, MapPin, Navigation } from 'lucide-react';
+import { useLocationDetection } from '../hooks/useLocationDetection';
+import { gasStationService } from '../services/gasStationService';
+import { SavedStations } from './SavedStations';
 
 export default function Settings() {
   const { vehicles, selectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle } = useFuel();
@@ -12,6 +15,10 @@ export default function Settings() {
   const [editingName, setEditingName] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, vehicleId: null, vehicleName: '' });
   const [factoryResetModal, setFactoryResetModal] = useState(false);
+  
+  // Location detection state
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  const { permissionState, clearLocation } = useLocationDetection();
 
   const handleCreateVehicle = (e) => {
     e.preventDefault();
@@ -35,6 +42,11 @@ export default function Settings() {
   const confirmFactoryReset = () => {
     window.localStorage.clear();
     window.location.reload();
+  };
+  
+  const handleClearLocationCache = () => {
+    gasStationService.clearCache();
+    clearLocation();
   };
 
   return (
@@ -122,6 +134,64 @@ export default function Settings() {
               <button type="button" onClick={() => setTheme('dark')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'dark' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Dark</button>
               <button type="button" onClick={() => setTheme('system')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'system' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>System</button>
             </div>
+         </Card>
+      </section>
+
+      <section className="pt-4">
+         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Navigation className="w-4 h-4"/> Location Services</h3>
+         
+         <Card className="px-5 py-6">
+            <div className="space-y-4">
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm font-medium text-slate-900 dark:text-white">Gas Station Detection</p>
+                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Automatically detect nearby gas stations when adding fill-ups</p>
+                  </div>
+                  <button
+                     onClick={() => setLocationEnabled(!locationEnabled)}
+                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        locationEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                     }`}
+                  >
+                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        locationEnabled ? 'translate-x-6' : 'translate-x-1'
+                     }`} />
+                  </button>
+               </div>
+               
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm font-medium text-slate-900 dark:text-white">Location Permission</p>
+                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {permissionState === 'granted' ? '✅ Location access granted' :
+                         permissionState === 'denied' ? '❌ Location access denied' :
+                         permissionState === 'prompt' ? '📍 Location permission required' :
+                         '📍 Checking permission...'}
+                     </p>
+                  </div>
+                  <MapPin className="w-4 h-4 text-slate-400" />
+               </div>
+               
+               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/50">
+                  <button
+                     onClick={handleClearLocationCache}
+                     className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                  >
+                     Clear Location Cache
+                  </button>
+               </div>
+            </div>
+         </Card>
+      </section>
+
+      <section className="pt-4">
+         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><MapPin className="w-4 h-4"/> Saved Gas Stations</h3>
+         
+         <Card className="px-5 py-6">
+            <SavedStations onStationUpdate={() => {
+              // Force refresh of any station detection if needed
+              gasStationService.clearCache();
+            }} />
          </Card>
       </section>
 
