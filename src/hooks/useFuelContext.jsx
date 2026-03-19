@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { calculateTripMetrics } from '../utils/calculations';
 
@@ -10,10 +10,15 @@ export function FuelProvider({ children }) {
   const [fuelPrices, setFuelPrices] = useLocalStorage('fueltracker-prices-v2', { 92: 22.25, 95: 25.00, diesel: 20.50 });
   const [fillUps, setFillUps] = useLocalStorage('fueltracker-fillups-v2', []);
 
-  // Filter for active vehicle
+  // Filter for active vehicle - sorted by timestamp for display
   const activeVehicleFillUps = fillUps
     .filter(f => f.vehicleId === selectedVehicleId)
     .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Filter for active vehicle - sorted by odometer for calculations
+  const activeVehicleFillUpsByOdometer = fillUps
+    .filter(f => f.vehicleId === selectedVehicleId)
+    .sort((a,b) => a.odometer - b.odometer);
 
   const addFillUp = (entry) => {
     setFillUps(prev => [...prev, { ...entry, id: Date.now(), vehicleId: selectedVehicleId }]);
@@ -21,6 +26,10 @@ export function FuelProvider({ children }) {
 
   const deleteFillUp = (id) => {
     setFillUps(prev => prev.filter(f => f.id !== id));
+  };
+
+  const updateFillUp = (id, updatedData) => {
+    setFillUps(prev => prev.map(f => f.id === id ? { ...f, ...updatedData } : f));
   };
 
   const addVehicle = (vehicle) => {
@@ -42,16 +51,16 @@ export function FuelProvider({ children }) {
     }
   };
 
-  // Derived Stats
-  const getVehicleStats = () => {
-    if (activeVehicleFillUps.length === 0) return { totalFillUps: 0, validTripsCount: 0, avgKmPerLiter: 0, avgL100km: 0, totalCost: 0 };
+  // Derived Stats - reactive with useMemo
+  const stats = useMemo(() => {
+    if (activeVehicleFillUpsByOdometer.length === 0) return { totalFillUps: 0, validTripsCount: 0, avgKmPerLiter: 0, avgL100km: 0, totalCost: 0 };
     
     let validTripDistanceSum = 0;
     let validTripLitersSum = 0;
     let totalCost = 0;
 
-    activeVehicleFillUps.forEach((fill, index) => {
-      const metrics = calculateTripMetrics(activeVehicleFillUps, index);
+    activeVehicleFillUpsByOdometer.forEach((fill, index) => {
+      const metrics = calculateTripMetrics(activeVehicleFillUpsByOdometer, index);
       totalCost += metrics.tripCost;
       
       if (index > 0) {
@@ -60,7 +69,7 @@ export function FuelProvider({ children }) {
       }
     });
 
-    const validTripsCount = Math.max(0, activeVehicleFillUps.length - 1);
+    const validTripsCount = Math.max(0, activeVehicleFillUpsByOdometer.length - 1);
     const avgKmPerLiter = validTripLitersSum > 0 ? (validTripDistanceSum / validTripLitersSum) : 0;
     const avgL100km = validTripDistanceSum > 0 ? (validTripLitersSum / validTripDistanceSum) * 100 : 0;
 
@@ -71,15 +80,15 @@ export function FuelProvider({ children }) {
       avgL100km,
       totalCost,
       totalDistance: validTripDistanceSum,
-      totalLiters: validTripLitersSum + (activeVehicleFillUps.length > 0 && activeVehicleFillUps[0].liters)
+      totalLiters: validTripLitersSum + (activeVehicleFillUpsByOdometer.length > 0 && activeVehicleFillUpsByOdometer[0].liters)
     };
-  };
+  }, [activeVehicleFillUpsByOdometer]);
 
   return (
     <FuelContext.Provider value={{
       vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices,
-      activeVehicleFillUps, addFillUp, deleteFillUp, addVehicle, editVehicle, deleteVehicle,
-      stats: getVehicleStats()
+      activeVehicleFillUps, activeVehicleFillUpsByOdometer, addFillUp, deleteFillUp, updateFillUp, addVehicle, editVehicle, deleteVehicle,
+      stats
     }}>
       {children}
     </FuelContext.Provider>

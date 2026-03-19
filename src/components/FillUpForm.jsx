@@ -9,6 +9,8 @@ export default function FillUpForm() {
   const navigate = useNavigate();
 
   const [liters, setLiters] = useState('');
+  const [moneySpent, setMoneySpent] = useState('');
+  const [lastEditedField, setLastEditedField] = useState(null); // 'liters' or 'moneySpent'
   const [odometer, setOdometer] = useState('');
   const [selectedFuelType, setSelectedFuelType] = useState('92');
   
@@ -24,18 +26,47 @@ export default function FillUpForm() {
      }
   }, [activeVehicleFillUps]);
 
+  // Auto-calculate based on last edited field
+  useEffect(() => {
+    if (lastEditedField === 'liters' && liters && fuelPrices[selectedFuelType]) {
+      const calculatedCost = Number(liters) * fuelPrices[selectedFuelType];
+      setMoneySpent(calculatedCost.toFixed(2));
+    } else if (lastEditedField === 'moneySpent' && moneySpent && fuelPrices[selectedFuelType]) {
+      const calculatedLiters = Number(moneySpent) / fuelPrices[selectedFuelType];
+      setLiters(calculatedLiters.toFixed(2));
+    }
+  }, [liters, moneySpent, selectedFuelType, fuelPrices, lastEditedField]);
+
+  // Reset calculation when fuel type changes
+  useEffect(() => {
+    if (lastEditedField && fuelPrices[selectedFuelType]) {
+      if (lastEditedField === 'liters' && liters) {
+        const calculatedCost = Number(liters) * fuelPrices[selectedFuelType];
+        setMoneySpent(calculatedCost.toFixed(2));
+      } else if (lastEditedField === 'moneySpent' && moneySpent) {
+        const calculatedLiters = Number(moneySpent) / fuelPrices[selectedFuelType];
+        setLiters(calculatedLiters.toFixed(2));
+      }
+    }
+  }, [selectedFuelType, fuelPrices]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!liters || !odometer) return;
+    if ((!liters && !moneySpent) || !odometer) return;
 
     const newOdometer = Number(odometer);
-    const prevOdometer = activeVehicleFillUps.length > 0 
-      ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer 
-      : 0;
-
-    if (activeVehicleFillUps.length > 0 && newOdometer <= prevOdometer) {
-       alert("Odometer must be greater than previous fill-up");
-       return;
+    const newDate = new Date(date);
+    
+    // Only validate odometer if this is a newer entry than the latest one
+    if (activeVehicleFillUps.length > 0) {
+      const latestFillUp = activeVehicleFillUps[activeVehicleFillUps.length - 1];
+      const latestDate = new Date(latestFillUp.timestamp);
+      
+      // If new entry is newer than latest entry, odometer must be greater
+      if (newDate >= latestDate && newOdometer <= latestFillUp.odometer) {
+        alert("Odometer must be greater than previous fill-up for newer entries");
+        return;
+      }
     }
 
     const currentPrice = fuelPrices[selectedFuelType] || 0;
@@ -48,7 +79,7 @@ export default function FillUpForm() {
     addFillUp({
       timestamp: baseDate.toISOString(),
       fuelType: selectedFuelType,
-      liters: Number(liters),
+      liters: Number(liters) || 0,
       odometer: newOdometer,
       pricePerLiter: Number(currentPrice),
       station: station.trim(),
@@ -98,12 +129,28 @@ export default function FillUpForm() {
                      type="number" 
                      step="0.01"
                      value={liters} 
-                     onChange={(e) => setLiters(e.target.value)}
+                     onChange={(e) => {
+                       setLastEditedField('liters');
+                       setLiters(e.target.value);
+                     }}
                      placeholder="45.5"
-                     required
                      min="0.1"
                    />
                  </div>
+              </div>
+              <div>
+                 <Label>Money Spent (EGP)</Label>
+                 <Input 
+                   type="number" 
+                   step="0.01"
+                   value={moneySpent} 
+                   onChange={(e) => {
+                     setLastEditedField('moneySpent');
+                     setMoneySpent(e.target.value);
+                   }}
+                   placeholder="1000.00"
+                   min="0.1"
+                 />
               </div>
 
               <div>
@@ -169,7 +216,7 @@ export default function FillUpForm() {
           <button 
              type="submit" 
              form="fillup-form"
-             disabled={!liters || !odometer}
+             disabled={(!liters && !moneySpent) || !odometer}
              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
           >
             <Plus className="w-5 h-5" />
