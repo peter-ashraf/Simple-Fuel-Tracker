@@ -30,6 +30,8 @@ export const Label = forwardRef(({ className, children, ...props }, ref) => (
 ));
 Label.displayName = "Label"
 
+export { Modal, ConfirmModal } from './Modal';
+
 export const PageWrapper = ({ children, className }) => (
   <motion.div
     initial={{ opacity: 0, y: 20, scale: 0.98 }}

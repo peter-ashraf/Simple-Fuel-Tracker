@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useFuel } from '../hooks/useFuelContext';
 import { useTheme } from '../hooks/useTheme';
-import { Card, Input, Label, cn, PageWrapper } from './ui';
+import { Card, Input, Label, cn, PageWrapper, ConfirmModal } from './ui';
 import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check } from 'lucide-react';
 
 export default function Settings() {
@@ -10,6 +10,8 @@ export default function Settings() {
   const [newVehicleName, setNewVehicleName] = useState('');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, vehicleId: null, vehicleName: '' });
+  const [factoryResetModal, setFactoryResetModal] = useState(false);
 
   const handleCreateVehicle = (e) => {
     e.preventDefault();
@@ -27,10 +29,12 @@ export default function Settings() {
   };
 
   const handleClearApp = () => {
-    if (confirm("DANGER: Are you sure you want to completely erase all data in this app? This action is irreversible offline.")) {
-      window.localStorage.clear();
-      window.location.reload();
-    }
+    setFactoryResetModal(true);
+  };
+
+  const confirmFactoryReset = () => {
+    window.localStorage.clear();
+    window.location.reload();
   };
 
   return (
@@ -84,7 +88,7 @@ export default function Settings() {
                   <div className="shrink-0 flex items-center border-l border-slate-200 dark:border-slate-800 pl-2 ml-1">
                      <button 
                         onClick={() => {
-                           if(confirm(`Are you sure you want to delete ${v.name}? All its history will be lost.`)) deleteVehicle(v.id);
+                          setDeleteModal({ isOpen: true, vehicleId: v.id, vehicleName: v.name });
                         }} 
                         disabled={vehicles.length === 1 || editingVehicleId === v.id}
                         className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-2 disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
@@ -160,6 +164,28 @@ export default function Settings() {
          </button>
          <p className="text-center text-xs text-slate-500 mt-3">Clears all local storage data and refreshes.</p>
       </section>
+
+      {/* Vehicle Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, vehicleId: null, vehicleName: '' })}
+        onConfirm={() => deleteVehicle(deleteModal.vehicleId)}
+        title="Delete Vehicle"
+        message={`Are you sure you want to delete ${deleteModal.vehicleName}? All its history will be lost.`}
+        confirmText="Delete Vehicle"
+        variant="danger"
+      />
+
+      {/* Factory Reset Confirmation Modal */}
+      <ConfirmModal
+        isOpen={factoryResetModal}
+        onClose={() => setFactoryResetModal(false)}
+        onConfirm={confirmFactoryReset}
+        title="Factory Reset App"
+        message="DANGER: Are you sure you want to completely erase all data in this app? This action is irreversible offline."
+        confirmText="Reset App"
+        variant="danger"
+      />
 
     </PageWrapper>
   );

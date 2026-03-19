@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Trash2, Fuel, Calendar, MapPin, Save, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
+import { ConfirmModal } from './ui';
 import './HistoryCard.css';
 
 export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
   const [editForm, setEditForm] = useState({
     liters: fill.liters,
     odometer: fill.odometer,
@@ -153,9 +155,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                 <Save className="w-2 h-2" />
               </button>
               <button
-                onClick={() => {
-                  if(confirm("Delete this fill-up entry?")) onDelete(fill.id);
-                }}
+                onClick={() => setDeleteModal(true)}
                 className="bg-red-300/50 hover:bg-red-400/50 text-white font-bold p-2 rounded-full transition-colors shadow-lg opacity-75 hover:opacity-100"
                 aria-label="Delete"
               >
@@ -226,6 +226,17 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
           </div>
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal}
+        onClose={() => setDeleteModal(false)}
+        onConfirm={() => onDelete(fill.id)}
+        title="Delete Fill-up Entry"
+        message="Are you sure you want to delete this fill-up entry?"
+        confirmText="Delete Entry"
+        variant="danger"
+      />
     </div>
   );
 }
