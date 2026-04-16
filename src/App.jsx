@@ -10,6 +10,7 @@ import History from './components/History';
 import FillUpForm from './components/FillUpForm';
 import Analytics from './components/Analytics';
 import SettingsScreen from './components/Settings';
+import TripCostEstimator from './components/trips/TripCostEstimator';
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="/history" element={<History />} />
               <Route path="/add" element={<FillUpForm />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/trip-estimator" element={<TripCostEstimator />} />
               <Route path="/settings" element={<SettingsScreen />} />
            </Routes>
          </AnimatePresence>

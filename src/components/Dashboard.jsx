@@ -1,4 +1,4 @@
-import { Activity, TrendingUp, DollarSign, Fuel } from 'lucide-react';
+import { Activity, TrendingUp, DollarSign, Fuel, Route } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Card, PageWrapper } from './ui';
@@ -73,6 +73,42 @@ export default function Dashboard() {
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">trips</span>
           </div>
         </Card>
+      </section>
+
+      {/* Trip Cost Estimator Card */}
+      <section>
+        <Link to="/trip-estimator" className="block group">
+          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer border-2 border-dashed border-emerald-200 dark:border-emerald-800 hover:border-solid dark:hover:border-emerald-600">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full group-hover:bg-emerald-500/20 transition-colors"></div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/10 group-hover:bg-emerald-500/30 transition-colors">
+                  <Route className="text-emerald-500 dark:text-emerald-400 w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    Trip Cost Estimator
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Plan your trip and estimate fuel costs
+                  </p>
+                </div>
+              </div>
+              <div className="text-emerald-500 dark:text-emerald-400 group-hover:translate-x-1 transition-transform">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+            {stats.totalFillUps > 2 && (
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  Based on {stats.validTripsCount} recorded trips
+                </p>
+              </div>
+            )}
+          </Card>
+        </Link>
       </section>
 
       <section>
