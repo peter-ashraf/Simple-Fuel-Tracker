@@ -89,6 +89,7 @@ export const MAINTENANCE_CATEGORIES = {
 };
 
 export const getMaintenanceCategory = (categoryId) => {
+  if (!categoryId) return MAINTENANCE_CATEGORIES.CUSTOM;
   return MAINTENANCE_CATEGORIES[categoryId.toUpperCase()] || MAINTENANCE_CATEGORIES.CUSTOM;
 };
 

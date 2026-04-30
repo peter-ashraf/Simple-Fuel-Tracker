@@ -9,7 +9,11 @@ const APP_KEYS = [
   'fueltracker-prices-v2',
   'fueltracker-fillups-v2',
   'fueltracker-theme',
-  'fueltracker-user-stations'
+  'fueltracker-user-stations',
+  'fueltracker-trip-estimates-v2',
+  'fueltracker-tyre-comparisons-v2',
+  'fueltracker-maintenance-logs-v2',
+  'fueltracker-maintenance-reminders-v2'
 ];
 
 export const backupService = {
