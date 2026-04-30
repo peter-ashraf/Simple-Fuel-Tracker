@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { Route, Calculator, TrendingUp, AlertCircle, Info, ChevronDown, Check } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Route, Calculator, TrendingUp, AlertCircle, Info, ChevronDown, Check, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Input, Label, PageWrapper, cn } from '../ui';
 import { useFuel } from '../../hooks/useFuelContext';
 import { calculateTripEstimate, convertConsumptionUnits, convertDistance } from '../../utils/tripEstimator';
+import { formatCurrency2Dec, formatVolume2Dec, formatEfficiency2Dec } from '../../utils/formatting';
+import { useNavigate } from 'react-router-dom';
 
 export default function TripCostEstimator() {
-  const { activeVehicleFillUpsByOdometer, fuelPrices } = useFuel();
+  const { activeVehicleFillUpsByOdometer, fuelPrices, addTripEstimate } = useFuel();
+  const navigate = useNavigate();
   const [tripDistance, setTripDistance] = useState('');
   const [distanceUnit, setDistanceUnit] = useState('km');
   const [manualConsumption, setManualConsumption] = useState('');
@@ -62,6 +66,17 @@ export default function TripCostEstimator() {
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const result = calculateTripEstimate(activeVehicleFillUpsByOdometer, finalDistance, options);
+    
+    // Save estimate with additional metadata
+    const estimateToSave = {
+      ...result,
+      inputDistance: parseFloat(tripDistance),
+      distanceUnit,
+      isRoundTrip,
+      calculatedDistance: finalDistance,
+      options
+    };
+    
     setEstimate(result);
     setIsCalculating(false);
   };
@@ -85,15 +100,58 @@ export default function TripCostEstimator() {
   };
 
   const formatConsumption = (value) => {
-    return value > 0 ? `${value.toFixed(2)} km/L` : 'N/A';
+    return formatEfficiency2Dec(value);
   };
 
   const formatPrice = (value) => {
-    return value > 0 ? `${value.toFixed(2)} EGP/L` : 'N/A';
+    return formatCurrency2Dec(value, '').replace('L.E ', '') + ' EGP/L';
   };
 
   return (
-    <PageWrapper className="space-y-6">
+    <>
+      {createPortal(
+        <div className="fixed-button-container-no-nav">
+          <div className="max-w-lg mx-auto flex gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (estimate) {
+                  const estimateToSave = {
+                    ...estimate,
+                    inputDistance: parseFloat(tripDistance),
+                    distanceUnit,
+                    isRoundTrip,
+                    calculatedDistance: isRoundTrip ? convertDistance(parseFloat(tripDistance), distanceUnit, 'km') * 2 : convertDistance(parseFloat(tripDistance), distanceUnit, 'km'),
+                    options: {
+                      manualConsumption: useManualConsumption && manualConsumption ? parseFloat(manualConsumption) : null,
+                      manualFuelPrice: useManualPrice && manualFuelPrice ? parseFloat(manualFuelPrice) : null,
+                      sampleSize: 5,
+                      excludeOutliers: true
+                    }
+                  };
+                  addTripEstimate(estimateToSave);
+                }
+              }}
+              disabled={!estimate}
+              className="flex-1 px-6 bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
+            >
+              <Check className="w-5 h-5" />
+              <span>Save Estimate</span>
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <PageWrapper className="space-y-6">
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Trip Cost Estimator</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Estimate fuel cost for your planned trip</p>
@@ -258,14 +316,14 @@ export default function TripCostEstimator() {
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl border border-emerald-200 dark:border-emerald-500/20">
               <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                {estimate.estimatedCost.toFixed(2)}
+                {formatCurrency2Dec(estimate.estimatedCost, '').replace('L.E ', '')}
               </div>
               <div className="text-xs font-medium text-emerald-700 dark:text-emerald-300 mt-1">EGP Total Cost</div>
             </div>
             
             <div className="text-center p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {estimate.estimatedLiters.toFixed(1)}
+                {formatVolume2Dec(estimate.estimatedLiters, '').replace(' L', '')}
               </div>
               <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mt-1">Liters Needed</div>
             </div>
@@ -332,6 +390,32 @@ export default function TripCostEstimator() {
             </div>
           )}
 
+          {/* Save Estimate Button */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => {
+                const estimateToSave = {
+                  ...estimate,
+                  inputDistance: parseFloat(tripDistance),
+                  distanceUnit,
+                  isRoundTrip,
+                  calculatedDistance: isRoundTrip ? convertDistance(parseFloat(tripDistance), distanceUnit, 'km') * 2 : convertDistance(parseFloat(tripDistance), distanceUnit, 'km'),
+                  options: {
+                    manualConsumption: useManualConsumption && manualConsumption ? parseFloat(manualConsumption) : null,
+                    manualFuelPrice: useManualPrice && manualFuelPrice ? parseFloat(manualFuelPrice) : null,
+                    sampleSize: 5,
+                    excludeOutliers: true
+                  }
+                };
+                addTripEstimate(estimateToSave);
+              }}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <Check className="w-4 h-4" />
+              Save Estimate to History
+            </button>
+          </div>
+
           {/* Raw Data Preview */}
           {estimate.rawData && estimate.rawData.length > 0 && (
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -369,6 +453,8 @@ export default function TripCostEstimator() {
           </p>
         </Card>
       )}
-    </PageWrapper>
+
+          </PageWrapper>
+    </>
   );
 }

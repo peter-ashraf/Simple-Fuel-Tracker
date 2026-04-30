@@ -3,6 +3,7 @@ import { Trash2, Fuel, Calendar, MapPin, Save, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal } from './ui';
+import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec } from '../utils/formatting';
 import './HistoryCard.css';
 
 export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices }) {
@@ -21,9 +22,9 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   // Calculate proper trip metrics by comparing with previous fill-up
   const metrics = calculateTripMetrics(fillUps, index);
   const tripCost = fill.liters * (fill.pricePerLiter || 0);
-  const kmPerLiter = metrics.kmPerLiter > 0 ? metrics.kmPerLiter.toFixed(2) : "-";
-  const litersPer100km = metrics.litersPer100km > 0 ? metrics.litersPer100km.toFixed(2) : "-";
-  const tripDistance = metrics.distance > 0 ? metrics.distance.toFixed(0) : "-";
+  const kmPerLiter = formatEfficiency2Dec(metrics.kmPerLiter);
+  const litersPer100km = formatEfficiency2Dec(metrics.litersPer100km, 'L/100km');
+  const tripDistance = formatDistance2Dec(metrics.distance);
   
   const getEfficiencyColorStatus = (kmPerL) => {
     if (!kmPerL || kmPerL === "-" || kmPerL === 0) return "text-slate-400";

@@ -1,4 +1,5 @@
 import { calculateTripMetrics } from './calculations';
+import { formatTo2Decimals } from './formatting';
 
 /**
  * Calculate trip cost estimate based on historical fill-up data
@@ -99,15 +100,15 @@ export function calculateTripEstimate(fillUps, tripDistance, options = {}) {
   const confidence = getConfidenceLevel(recentMetrics.length, validFillUps.length);
 
   return {
-    estimatedCost: Math.round(estimatedCost * 100) / 100,
-    estimatedLiters: Math.round(estimatedLiters * 100) / 100,
-    consumptionUsed: Math.round(finalConsumption * 100) / 100,
-    priceUsed: Math.round(fuelPrice * 100) / 100,
+    estimatedCost: formatTo2Decimals(estimatedCost),
+    estimatedLiters: formatTo2Decimals(estimatedLiters),
+    consumptionUsed: formatTo2Decimals(finalConsumption),
+    priceUsed: formatTo2Decimals(fuelPrice),
     sampleSize: recentMetrics.length,
     methodUsed: manualConsumption ? 'manual_consumption' : 'historical_average',
     confidence,
     rawData: recentMetrics.map(m => ({
-      kmPerLiter: Math.round(m.kmPerLiter * 100) / 100,
+      kmPerLiter: formatTo2Decimals(m.kmPerLiter),
       pricePerLiter: m.pricePerLiter,
       date: new Date(m.timestamp).toLocaleDateString()
     }))
@@ -122,8 +123,8 @@ function calculateFromManualInputs(tripDistance, consumption, fuelPrice) {
   const estimatedCost = estimatedLiters * fuelPrice;
 
   return {
-    estimatedCost: Math.round(estimatedCost * 100) / 100,
-    estimatedLiters: Math.round(estimatedLiters * 100) / 100,
+    estimatedCost: formatTo2Decimals(estimatedCost),
+    estimatedLiters: formatTo2Decimals(estimatedLiters),
     consumptionUsed: consumption,
     priceUsed: fuelPrice,
     sampleSize: 0,

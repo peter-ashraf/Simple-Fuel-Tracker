@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { Home, List, PieChart, Plus, Settings, Fuel, ChevronDown, Check } from 'lucide-react';
+import { Home, List, PieChart, Plus, Settings, Fuel, ChevronDown, Check, Circle, Wrench, Route as RouteIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from './hooks/useFuelContext';
 
@@ -11,21 +11,31 @@ import FillUpForm from './components/FillUpForm';
 import Analytics from './components/Analytics';
 import SettingsScreen from './components/Settings';
 import TripCostEstimator from './components/trips/TripCostEstimator';
+import TyreCalculator from './components/TyreCalculator';
+import MaintenanceLogs from './components/MaintenanceLogs';
+import MaintenanceLogForm from './components/MaintenanceLogForm';
+import MaintenanceLogEdit from './components/MaintenanceLogEdit';
+import MaintenanceReminders from './components/MaintenanceReminders';
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const featuresDropdownRef = useRef(null);
 
   const isSettings = location.pathname === '/settings';
   const activeVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+      }
+      if (featuresDropdownRef.current && !featuresDropdownRef.current.contains(event.target)) {
+        setFeaturesOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -80,6 +90,59 @@ function Header() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Additional Features Dropdown */}
+      <div className="relative" ref={featuresDropdownRef}>
+        <button
+          onClick={() => setFeaturesOpen(!featuresOpen)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-800"
+        >
+          <Wrench className="w-4 h-4" />
+          <span className="hidden sm:inline">Tools</span>
+          <motion.div animate={{ rotate: featuresOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+            <ChevronDown className="w-4 h-4" />
+          </motion.div>
+        </button>
+
+        <AnimatePresence>
+          {featuresOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="absolute top-10 right-0 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-50 origin-top-right"
+            >
+              <div className="p-1 space-y-0.5">
+                <NavLink
+                  to="/trip-estimator"
+                  onClick={() => setFeaturesOpen(false)}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                >
+                  <RouteIcon className="w-4 h-4" />
+                  Trip Cost Estimator
+                </NavLink>
+                <NavLink
+                  to="/tyre-calculator"
+                  onClick={() => setFeaturesOpen(false)}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                >
+                  <Circle className="w-4 h-4" />
+                  Tyre Size Calculator
+                </NavLink>
+                <NavLink
+                  to="/maintenance"
+                  onClick={() => setFeaturesOpen(false)}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                >
+                  <Wrench className="w-4 h-4" />
+                  Maintenance Logs
+                </NavLink>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </header>
   );
 }
@@ -100,13 +163,19 @@ export default function App() {
               <Route path="/add" element={<FillUpForm />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/trip-estimator" element={<TripCostEstimator />} />
+              <Route path="/tyre-calculator" element={<TyreCalculator />} />
+              <Route path="/maintenance" element={<MaintenanceLogs />} />
+              <Route path="/maintenance/add" element={<MaintenanceLogForm />} />
+              <Route path="/maintenance/edit/:id" element={<MaintenanceLogEdit />} />
+              <Route path="/maintenance/reminders" element={<MaintenanceReminders />} />
               <Route path="/settings" element={<SettingsScreen />} />
            </Routes>
          </AnimatePresence>
       </main>
       
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-950/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800/80 p-1 z-50 transition-colors duration-300">
+      {!location.pathname.startsWith('/trip-estimator') && !location.pathname.startsWith('/tyre-calculator') && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-950/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800/80 p-1 z-50 transition-colors duration-300">
          <div className="flex items-center justify-between h-[72px] max-w-lg mx-auto px-4 relative">
             
             <NavLink to="/" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
@@ -147,11 +216,35 @@ export default function App() {
 
             {/* Center Floating FAB */}
             <div className="relative -top-5 flex justify-center w-20">
-               <NavLink to="/add" className={({isActive}) => cn("flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border", isActive ? "bg-emerald-600 text-white shadow-emerald-500/30 border-emerald-500 ring-4 ring-emerald-500/20" : "bg-emerald-500 text-white dark:text-slate-950 shadow-emerald-500/20 border-emerald-400 hover:bg-emerald-400")}>
-                  <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
-                    <Plus className="w-8 h-8" strokeWidth={2.5}/>
-                  </motion.div>
-               </NavLink>
+               {(() => {
+                   const path = location.pathname;
+                   if (path.startsWith('/maintenance/reminders')) {
+                     return (
+                       <button
+                         onClick={() => {
+                           // Find the MaintenanceReminders component and trigger showAddForm
+                           const event = new CustomEvent('toggleMaintenanceReminderForm');
+                           window.dispatchEvent(event);
+                         }}
+                         className="flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border bg-emerald-500 text-white dark:text-slate-950 shadow-emerald-500/20 border-emerald-400 hover:bg-emerald-400"
+                       >
+                         <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
+                           <Plus className="w-8 h-8" strokeWidth={2.5}/>
+                         </motion.div>
+                       </button>
+                     );
+                   }
+                   return (
+                     <NavLink 
+                       to={path.startsWith('/maintenance') ? '/maintenance/add' : '/add'}
+                       className={({isActive}) => cn("flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border", isActive ? "bg-emerald-600 text-white shadow-emerald-500/30 border-emerald-500 ring-4 ring-emerald-500/20" : "bg-emerald-500 text-white dark:text-slate-950 shadow-emerald-500/20 border-emerald-400 hover:bg-emerald-400")}
+                     >
+                       <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
+                         <Plus className="w-8 h-8" strokeWidth={2.5}/>
+                       </motion.div>
+                     </NavLink>
+                   );
+                 })()}
             </div>
 
             <NavLink to="/analytics" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
@@ -192,6 +285,7 @@ export default function App() {
 
          </div>
       </nav>
+      )}
     </div>
   );
 }

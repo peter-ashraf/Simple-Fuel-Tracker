@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useFuel } from '../hooks/useFuelContext';
 import { useTheme } from '../hooks/useTheme';
 import { Card, Input, Label, cn, PageWrapper, ConfirmModal } from './ui';
-import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check, MapPin, Navigation } from 'lucide-react';
+import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check, MapPin, Navigation, Circle } from 'lucide-react';
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
 import { SavedStations } from './SavedStations';
@@ -11,11 +11,12 @@ import ImportResolver from './ImportResolver';
 import { Download, Upload, Database } from 'lucide-react';
 
 export default function Settings() {
-  const { vehicles, selectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle } = useFuel();
+  const { vehicles, selectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle } = useFuel();
   const { theme, setTheme } = useTheme();
   const [newVehicleName, setNewVehicleName] = useState('');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [editingTyreSize, setEditingTyreSize] = useState({ width: 205, aspectRatio: 55, rimSize: 16 });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, vehicleId: null, vehicleName: '' });
   const [factoryResetModal, setFactoryResetModal] = useState(false);
   
@@ -38,9 +39,18 @@ export default function Settings() {
 
   const handleSaveEdit = (id) => {
     if (editingName.trim()) {
-      editVehicle(id, editingName.trim());
+      editVehicle(id, {
+        name: editingName.trim(),
+        tyreSize: editingTyreSize
+      });
     }
     setEditingVehicleId(null);
+  };
+
+  const startEditing = (vehicle) => {
+    setEditingVehicleId(vehicle.id);
+    setEditingName(vehicle.name);
+    setEditingTyreSize(vehicle.tyreSize || { width: 205, aspectRatio: 55, rimSize: 16 });
   };
 
   const handleClearApp = () => {
@@ -102,34 +112,81 @@ export default function Settings() {
             {vehicles.map(v => (
                <div key={v.id} className={cn("glass-card group p-4 rounded-xl flex items-center justify-between shadow-sm dark:shadow-none border-slate-200 dark:border-slate-800", v.id === selectedVehicleId && "border-blue-500/50 bg-blue-50 dark:bg-blue-500/5")}>
                   {editingVehicleId === v.id ? (
-                    <div className="flex-1 mr-3 flex items-center gap-2">
-                       <Input 
-                         type="text" 
-                         value={editingName} 
-                         onChange={e => setEditingName(e.target.value)}
-                         autoFocus
-                         className="py-1.5 px-3 text-sm h-auto bg-slate-100 dark:bg-slate-900 focus:ring-blue-500/50 focus:border-blue-500/50"
-                         onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit(v.id);
-                            if (e.key === 'Escape') setEditingVehicleId(null);
-                         }}
-                       />
-                       <button onClick={() => handleSaveEdit(v.id)} className="text-emerald-500 hover:text-emerald-400 p-1.5 bg-emerald-500/10 rounded-lg">
-                          <Check className="w-4 h-4" />
-                       </button>
+                    <div className="flex-1 mr-3 space-y-3">
+                       <div className="flex items-center gap-2">
+                         <Input
+                           type="text"
+                           value={editingName}
+                           onChange={e => setEditingName(e.target.value)}
+                           autoFocus
+                           className="py-1.5 px-3 text-sm h-auto bg-slate-100 dark:bg-slate-900 focus:ring-blue-500/50 focus:border-blue-500/50"
+                           onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(v.id);
+                              if (e.key === 'Escape') setEditingVehicleId(null);
+                           }}
+                         />
+                         <button onClick={() => handleSaveEdit(v.id)} className="text-emerald-500 hover:text-emerald-400 p-1.5 bg-emerald-500/10 rounded-lg">
+                            <Check className="w-4 h-4" />
+                         </button>
+                       </div>
+                       <div className="space-y-1.5">
+                         <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                           <Circle className="w-3 h-3" /> Default Tyre Size
+                         </p>
+                         <div className="flex gap-2">
+                           <div className="flex-1">
+                             <Label className="text-[10px]">Width (mm)</Label>
+                             <Input
+                               type="number"
+                               value={editingTyreSize.width}
+                               onChange={e => setEditingTyreSize(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+                               className="py-1 px-2 text-xs h-auto"
+                               min="100"
+                               max="400"
+                             />
+                           </div>
+                           <div className="flex-1">
+                             <Label className="text-[10px]">Aspect (%)</Label>
+                             <Input
+                               type="number"
+                               value={editingTyreSize.aspectRatio}
+                               onChange={e => setEditingTyreSize(prev => ({ ...prev, aspectRatio: parseInt(e.target.value) || 0 }))}
+                               className="py-1 px-2 text-xs h-auto"
+                               min="20"
+                               max="85"
+                             />
+                           </div>
+                           <div className="flex-1">
+                             <Label className="text-[10px]">Rim (in)</Label>
+                             <Input
+                               type="number"
+                               value={editingTyreSize.rimSize}
+                               onChange={e => setEditingTyreSize(prev => ({ ...prev, rimSize: parseInt(e.target.value) || 0 }))}
+                               className="py-1 px-2 text-xs h-auto"
+                               min="10"
+                               max="24"
+                             />
+                           </div>
+                         </div>
+                         <p className="text-[10px] text-slate-400">
+                           {editingTyreSize.width}/{editingTyreSize.aspectRatio} R{editingTyreSize.rimSize}
+                         </p>
+                       </div>
                     </div>
                   ) : (
                     <div className="flex-1 mr-3 flex items-center gap-2">
                       <div>
                         <span className="font-semibold text-slate-900 dark:text-slate-200 block">{v.name}</span>
+                        {v.tyreSize && (
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <Circle className="w-3 h-3" /> {v.tyreSize.width}/{v.tyreSize.aspectRatio} R{v.tyreSize.rimSize}
+                          </span>
+                        )}
                         {v.id === selectedVehicleId && <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase">Active</span>}
                       </div>
-                      <button 
-                        onClick={() => {
-                          setEditingVehicleId(v.id);
-                          setEditingName(v.name);
-                        }}
-                        className="text-slate-400 hover:text-blue-400 p-1 opacity-20 group-hover: transition-opacity md:opacity-20 ml-auto"
+                      <button
+                        onClick={() => startEditing(v)}
+                        className="text-slate-400 hover:text-blue-400 p-1 opacity-40 group-hover:opacity-100 transition-opacity md:opacity-40 ml-auto"
                       >
                          <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -165,6 +222,76 @@ export default function Settings() {
          </form>
       </section>
 
+      {/* Active Vehicle Tyre Size - Always Visible */}
+      <section className="pt-4">
+         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Circle className="w-4 h-4"/> Active Vehicle Tyre Size</h3>
+         <Card className="px-5 py-5 space-y-3">
+            {!activeVehicle ? (
+              <p className="text-sm text-slate-500">No active vehicle selected.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">{activeVehicle.name}</span>
+                  {activeVehicle.tyreSize ? (
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                      {activeVehicle.tyreSize.width}/{activeVehicle.tyreSize.aspectRatio} R{activeVehicle.tyreSize.rimSize}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-lg">Not set</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] mb-1.5 h-4">Width (mm)</Label>
+                    <Input
+                      type="number"
+                      value={(activeVehicle.tyreSize?.width) || 205}
+                      onChange={e => {
+                        const width = parseInt(e.target.value) || 0;
+                        const newSize = { ...(activeVehicle.tyreSize || { aspectRatio: 55, rimSize: 16 }), width };
+                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                      }}
+                      className="py-2 px-2 text-xs h-10"
+                      min="100"
+                      max="400"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] mb-1.5 h-4">Aspect (%)</Label>
+                    <Input
+                      type="number"
+                      value={(activeVehicle.tyreSize?.aspectRatio) || 55}
+                      onChange={e => {
+                        const aspectRatio = parseInt(e.target.value) || 0;
+                        const newSize = { ...(activeVehicle.tyreSize || { width: 205, rimSize: 16 }), aspectRatio };
+                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                      }}
+                      className="py-2 px-2 text-xs h-10"
+                      min="20"
+                      max="85"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] mb-1.5 h-4">Rim (in)</Label>
+                    <Input
+                      type="number"
+                      value={(activeVehicle.tyreSize?.rimSize) || 16}
+                      onChange={e => {
+                        const rimSize = parseInt(e.target.value) || 0;
+                        const newSize = { ...(activeVehicle.tyreSize || { width: 205, aspectRatio: 55 }), rimSize };
+                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                      }}
+                      className="py-2 px-2 text-xs h-10"
+                      min="10"
+                      max="24"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+         </Card>
+      </section>
+
       <section className="pt-4">
          <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Palette className="w-4 h-4"/> Theme Preferences</h3>
          <Card className="px-5 py-6">
@@ -188,12 +315,12 @@ export default function Settings() {
                   </div>
                   <button
                      onClick={() => setLocationEnabled(!locationEnabled)}
-                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                     className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         locationEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
                      }`}
                   >
                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        locationEnabled ? 'translate-x-6' : 'translate-x-1'
+                        locationEnabled ? 'translate-x-5' : 'translate-x-1'
                      }`} />
                   </button>
                </div>

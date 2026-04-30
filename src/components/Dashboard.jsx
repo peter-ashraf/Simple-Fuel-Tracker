@@ -1,9 +1,10 @@
-import { Activity, TrendingUp, DollarSign, Fuel, Route } from 'lucide-react';
+import { Activity, TrendingUp, DollarSign, Fuel } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Card, PageWrapper } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { calculateTripMetrics } from '../utils/calculations';
+import { formatTo2Decimals, formatCurrency2Dec } from '../utils/formatting';
 
 export default function Dashboard() {
   const { stats, activeVehicleFillUps } = useFuel();
@@ -16,8 +17,8 @@ export default function Dashboard() {
     return "text-red-600 dark:text-red-500";
   };
 
-  const avgKmL = stats.avgKmPerLiter > 0 ? stats.avgKmPerLiter.toFixed(2) : "-";
-  const avgL100 = stats.avgL100km > 0 ? stats.avgL100km.toFixed(1) : "-";
+  const avgKmL = stats.avgKmPerLiter > 0 ? formatTo2Decimals(stats.avgKmPerLiter).toFixed(2) : "-";
+  const avgL100 = stats.avgL100km > 0 ? formatTo2Decimals(stats.avgL100km).toFixed(2) : "-";
 
   return (
     <PageWrapper className="space-y-6">
@@ -34,7 +35,6 @@ export default function Dashboard() {
           </div>
           <div className="flex items-baseline gap-1">
             <span className={`text-4xl font-bold tracking-tighter ${getEfficiencyColorStatus(stats.avgKmPerLiter)}`}>{avgKmL}</span>
-            {avgKmL !== "-" && <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">km/l</span>}
           </div>
         </Card>
 
@@ -46,7 +46,6 @@ export default function Dashboard() {
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">{avgL100}</span>
-            {avgL100 !== "-" && <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">L</span>}
           </div>
         </Card>
 
@@ -57,7 +56,7 @@ export default function Dashboard() {
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total spent</span>
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tighter">{stats.totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tighter">{formatCurrency2Dec(stats.totalCost, '').replace('L.E ', '')}</span>
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">EGP</span>
           </div>
         </Card>
@@ -75,42 +74,7 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      {/* Trip Cost Estimator Card */}
-      <section>
-        <Link to="/trip-estimator" className="block group">
-          <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer border-2 border-dashed border-emerald-200 dark:border-emerald-800 hover:border-solid dark:hover:border-emerald-600">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full group-hover:bg-emerald-500/20 transition-colors"></div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/10 group-hover:bg-emerald-500/30 transition-colors">
-                  <Route className="text-emerald-500 dark:text-emerald-400 w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    Trip Cost Estimator
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Plan your trip and estimate fuel costs
-                  </p>
-                </div>
-              </div>
-              <div className="text-emerald-500 dark:text-emerald-400 group-hover:translate-x-1 transition-transform">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-            {stats.totalFillUps > 2 && (
-              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                  Based on {stats.validTripsCount} recorded trips
-                </p>
-              </div>
-            )}
-          </Card>
-        </Link>
-      </section>
-
+      {/* Recent Trips */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">Recent Trips</h2>
@@ -130,7 +94,7 @@ export default function Dashboard() {
               const originalIndex = activeVehicleFillUps.findIndex(f => f.id === fill.id);
               const metrics = calculateTripMetrics(activeVehicleFillUps, originalIndex);
               
-              const kmPerLiter = metrics.kmPerLiter > 0 ? metrics.kmPerLiter.toFixed(1) : "-";
+              const kmPerLiter = formatEfficiency2Dec(metrics.kmPerLiter);
               
               return (
                 <li key={fill.id} className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 flex items-center justify-between shadow-sm dark:shadow-none">
@@ -142,8 +106,8 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{metrics.tripCost.toFixed(0)} <span className="text-[10px] text-slate-500 dark:text-slate-400">EGP</span></p>
-                    <p className={`text-xs font-bold mt-0.5 ${getEfficiencyColorStatus(metrics.kmPerLiter)}`}>{kmPerLiter} <span className="text-[10px] font-medium text-slate-500">km/L</span></p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency2Dec(metrics.tripCost, '').replace('L.E ', '')} <span className="text-[10px] text-slate-500 dark:text-slate-400">EGP</span></p>
+                    <p className={`text-xs font-bold mt-0.5 ${getEfficiencyColorStatus(metrics.kmPerLiter)}`}>{formatEfficiency2Dec(metrics.kmPerLiter)}</p>
                   </div>
                 </li>
               );

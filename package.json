@@ -12,6 +12,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "chart.js": "^4.5.1",
+    "chartjs-plugin-annotation": "^3.1.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.36.0",

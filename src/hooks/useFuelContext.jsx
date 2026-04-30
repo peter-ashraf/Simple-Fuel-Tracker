@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { calculateTripMetrics } from '../utils/calculations';
+import { formatTo2Decimals } from '../utils/formatting';
 
 const FuelContext = createContext(null);
 
@@ -9,6 +10,10 @@ export function FuelProvider({ children }) {
   const [selectedVehicleId, setSelectedVehicleId] = useLocalStorage('fueltracker-active-vehicle-v2', 'default');
   const [fuelPrices, setFuelPrices] = useLocalStorage('fueltracker-prices-v2', { 92: 22.25, 95: 25.00, diesel: 20.50 });
   const [fillUps, setFillUps] = useLocalStorage('fueltracker-fillups-v2', []);
+  const [tripEstimates, setTripEstimates] = useLocalStorage('fueltracker-trip-estimates-v2', []);
+  const [tyreComparisons, setTyreComparisons] = useLocalStorage('fueltracker-tyre-comparisons-v2', []);
+  const [maintenanceLogs, setMaintenanceLogs] = useLocalStorage('fueltracker-maintenance-logs-v2', []);
+  const [maintenanceReminders, setMaintenanceReminders] = useLocalStorage('fueltracker-maintenance-reminders-v2', []);
 
   // Filter for active vehicle - sorted by timestamp for display
   const activeVehicleFillUps = fillUps
@@ -38,17 +43,80 @@ export function FuelProvider({ children }) {
     setSelectedVehicleId(id);
   };
 
-  const editVehicle = (id, newName) => {
-    setVehicles(prev => prev.map(v => v.id === id ? { ...v, name: newName } : v));
+  const editVehicle = (id, updates) => {
+    setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
   };
 
   const deleteVehicle = (id) => {
     if (vehicles.length <= 1) return;
     setVehicles(prev => prev.filter(v => v.id !== id));
     setFillUps(prev => prev.filter(f => f.vehicleId !== id));
+    setTripEstimates(prev => prev.filter(e => e.vehicleId !== id));
+    setTyreComparisons(prev => prev.filter(c => c.vehicleId !== id));
+    setMaintenanceLogs(prev => prev.filter(log => log.vehicleId !== id));
+    setMaintenanceReminders(prev => prev.filter(reminder => reminder.vehicleId !== id));
     if (selectedVehicleId === id) {
        setSelectedVehicleId(vehicles.find(v => v.id !== id).id);
     }
+  };
+
+  const addTripEstimate = (estimate) => {
+    setTripEstimates(prev => [...prev, { 
+      ...estimate, 
+      id: Date.now(), 
+      vehicleId: selectedVehicleId,
+      timestamp: new Date().toISOString()
+    }]);
+  };
+
+  const deleteTripEstimate = (id) => {
+    setTripEstimates(prev => prev.filter(e => e.id !== id));
+  };
+
+  const addTyreComparison = (comparison) => {
+    setTyreComparisons(prev => [...prev, {
+      ...comparison,
+      id: Date.now(),
+      vehicleId: selectedVehicleId
+    }]);
+  };
+
+  const deleteTyreComparison = (id) => {
+    setTyreComparisons(prev => prev.filter(c => c.id !== id));
+  };
+
+  const addMaintenanceLog = (log) => {
+    setMaintenanceLogs(prev => [...prev, {
+      ...log,
+      id: Date.now(),
+      vehicleId: selectedVehicleId,
+      timestamp: new Date().toISOString()
+    }]);
+  };
+
+  const updateMaintenanceLog = (id, updatedData) => {
+    setMaintenanceLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedData } : log));
+  };
+
+  const deleteMaintenanceLog = (id) => {
+    setMaintenanceLogs(prev => prev.filter(log => log.id !== id));
+  };
+
+  const addMaintenanceReminder = (reminder) => {
+    setMaintenanceReminders(prev => [...prev, {
+      ...reminder,
+      id: Date.now(),
+      vehicleId: selectedVehicleId,
+      createdAt: new Date().toISOString()
+    }]);
+  };
+
+  const updateMaintenanceReminder = (id, updatedData) => {
+    setMaintenanceReminders(prev => prev.map(reminder => reminder.id === id ? { ...reminder, ...updatedData } : reminder));
+  };
+
+  const deleteMaintenanceReminder = (id) => {
+    setMaintenanceReminders(prev => prev.filter(reminder => reminder.id !== id));
   };
 
   // Derived Stats - reactive with useMemo
@@ -70,24 +138,56 @@ export function FuelProvider({ children }) {
     });
 
     const validTripsCount = Math.max(0, activeVehicleFillUpsByOdometer.length - 1);
-    const avgKmPerLiter = validTripLitersSum > 0 ? (validTripDistanceSum / validTripLitersSum) : 0;
-    const avgL100km = validTripDistanceSum > 0 ? (validTripLitersSum / validTripDistanceSum) * 100 : 0;
+    const avgKmPerLiter = validTripLitersSum > 0 ? formatTo2Decimals(validTripDistanceSum / validTripLitersSum) : 0;
+    const avgL100km = validTripDistanceSum > 0 ? formatTo2Decimals((validTripLitersSum / validTripDistanceSum) * 100) : 0;
 
     return {
       totalFillUps: activeVehicleFillUps.length,
       validTripsCount,
       avgKmPerLiter,
       avgL100km,
-      totalCost,
-      totalDistance: validTripDistanceSum,
-      totalLiters: validTripLitersSum + (activeVehicleFillUpsByOdometer.length > 0 && activeVehicleFillUpsByOdometer[0].liters)
+      totalCost: formatTo2Decimals(totalCost),
+      totalDistance: formatTo2Decimals(validTripDistanceSum),
+      totalLiters: formatTo2Decimals(validTripLitersSum + (activeVehicleFillUpsByOdometer.length > 0 && activeVehicleFillUpsByOdometer[0].liters))
     };
   }, [activeVehicleFillUpsByOdometer]);
+
+  // Filter trip estimates for active vehicle
+  const activeVehicleTripEstimates = tripEstimates
+    .filter(e => e.vehicleId === selectedVehicleId)
+    .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  // Filter tyre comparisons for active vehicle
+  const activeVehicleTyreComparisons = tyreComparisons
+    .filter(c => c.vehicleId === selectedVehicleId)
+    .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  // Filter maintenance logs for active vehicle
+  const activeVehicleMaintenanceLogs = maintenanceLogs
+    .filter(log => log.vehicleId === selectedVehicleId)
+    .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  // Filter maintenance reminders for active vehicle
+  const activeVehicleMaintenanceReminders = maintenanceReminders
+    .filter(reminder => reminder.vehicleId === selectedVehicleId)
+    .sort((a,b) => {
+      // Sort by upcoming due date first
+      const aDue = new Date(a.nextDueDate || a.dueDate || '9999-12-31').getTime();
+      const bDue = new Date(b.nextDueDate || b.dueDate || '9999-12-31').getTime();
+      return aDue - bDue;
+    });
+
+  const activeVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
   return (
     <FuelContext.Provider value={{
       vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices,
+      activeVehicle,
       activeVehicleFillUps, activeVehicleFillUpsByOdometer, addFillUp, deleteFillUp, updateFillUp, addVehicle, editVehicle, deleteVehicle,
+      tripEstimates: activeVehicleTripEstimates, addTripEstimate, deleteTripEstimate,
+      tyreComparisons: activeVehicleTyreComparisons, addTyreComparison, deleteTyreComparison,
+      maintenanceLogs: activeVehicleMaintenanceLogs, addMaintenanceLog, updateMaintenanceLog, deleteMaintenanceLog,
+      maintenanceReminders: activeVehicleMaintenanceReminders, addMaintenanceReminder, updateMaintenanceReminder, deleteMaintenanceReminder,
       stats
     }}>
       {children}
