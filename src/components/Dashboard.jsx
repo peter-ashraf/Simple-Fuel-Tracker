@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { Card, PageWrapper } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { calculateTripMetrics } from '../utils/calculations';
-import { formatTo2Decimals, formatCurrency2Dec } from '../utils/formatting';
+import { formatTo2Decimals, formatCurrency2Dec, formatEfficiency2Dec } from '../utils/formatting';
 
 export default function Dashboard() {
   const { stats, activeVehicleFillUps } = useFuel();
