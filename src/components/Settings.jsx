@@ -6,6 +6,9 @@ import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
 import { SavedStations } from './SavedStations';
+import { backupService } from '../services/backupService';
+import ImportResolver from './ImportResolver';
+import { Download, Upload, Database } from 'lucide-react';
 
 export default function Settings() {
   const { vehicles, selectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle } = useFuel();
@@ -19,6 +22,11 @@ export default function Settings() {
   // Location detection state
   const [locationEnabled, setLocationEnabled] = useState(true);
   const { permissionState, clearLocation } = useLocationDetection();
+
+  // Backup & Import state
+  const [importAnalysis, setImportAnalysis] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState(null);
 
   const handleCreateVehicle = (e) => {
     e.preventDefault();
@@ -47,6 +55,37 @@ export default function Settings() {
   const handleClearLocationCache = () => {
     gasStationService.clearCache();
     clearLocation();
+  };
+
+  const handleExport = () => {
+    backupService.exportData();
+  };
+
+  const handleImportClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      setIsImporting(true);
+      setImportError(null);
+      try {
+        const analysis = await backupService.analyzeImport(file);
+        setImportAnalysis(analysis);
+      } catch (err) {
+        setImportError(err.message);
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleApplyImport = (resolutions, newRecords) => {
+    backupService.applyImport(importAnalysis.payload, resolutions, newRecords);
+    setImportAnalysis(null);
   };
 
   return (
@@ -228,6 +267,40 @@ export default function Settings() {
          </Card>
       </section>
 
+      <section className="pt-4">
+         <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Database className="w-4 h-4"/> Data Backup & Recovery</h3>
+         
+         <Card className="px-5 py-6">
+            <div className="space-y-4">
+               <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Export your data to a JSON file for safe-keeping, or import a previous backup to restore your history.
+               </p>
+               
+               <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={handleExport}
+                    className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                  >
+                     <Download size={18} className="text-blue-500" /> Export
+                  </button>
+                  <button 
+                    onClick={handleImportClick}
+                    disabled={isImporting}
+                    className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  >
+                     <Upload size={18} className="text-emerald-500" /> {isImporting ? 'Reading...' : 'Import'}
+                  </button>
+               </div>
+
+               {importError && (
+                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-500 font-semibold flex items-center gap-2">
+                   <AlertCircle size={14} /> {importError}
+                 </div>
+               )}
+            </div>
+         </Card>
+      </section>
+
       <section className="pt-8 mb-2">
          <button onClick={handleClearApp} className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center shadow-lg shadow-red-500/5">
             <AlertCircle className="w-5 h-5" /> Factory Reset App
@@ -256,6 +329,15 @@ export default function Settings() {
         confirmText="Reset App"
         variant="danger"
       />
+
+      {/* Import Resolution Modal */}
+      {importAnalysis && (
+        <ImportResolver 
+          analysis={importAnalysis}
+          onCancel={() => setImportAnalysis(null)}
+          onApply={handleApplyImport}
+        />
+      )}
 
     </PageWrapper>
   );
