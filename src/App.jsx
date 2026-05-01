@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { Home, List, PieChart, Plus, Settings, Fuel, ChevronDown, Check, Circle, Wrench, Route as RouteIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from './hooks/useFuelContext';
+import { useNotifications } from './hooks/useNotifications';
 
 // Pages
 import Dashboard from './components/Dashboard';
@@ -43,10 +44,10 @@ function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 px-5 py-4 flex items-center justify-between">
+    <header className="sticky top-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] px-5 py-4 flex items-center justify-between">
       <div className="flex items-center gap-3 relative" ref={dropdownRef}>
-        <div className="bg-emerald-500/20 p-2 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/10">
-          <Fuel className="text-emerald-400 w-5 h-5" />
+        <div className="bg-emerald-500/10 dark:bg-emerald-500/20 p-2 rounded-xl border-0">
+          <Fuel className="text-emerald-500 dark:text-emerald-400 w-5 h-5 neon-glow" />
         </div>
         
         <button 
@@ -64,12 +65,12 @@ function Header() {
 
         <AnimatePresence>
           {isOpen && !isSettings && (
-            <motion.div
+              <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute top-12 left-12 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left"
+              className="absolute top-12 left-12 w-48 bg-white dark:bg-white/[0.06] backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left"
             >
               <div className="p-1">
                 {vehicles.map(v => (
@@ -79,7 +80,7 @@ function Header() {
                       setSelectedVehicleId(v.id);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                   >
                     <span className="truncate">{v.name}</span>
                     {selectedVehicleId === v.id && <Check className="w-4 h-4" />}
@@ -95,7 +96,7 @@ function Header() {
       <div className="relative" ref={featuresDropdownRef}>
         <button
           onClick={() => setFeaturesOpen(!featuresOpen)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-800"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.08] rounded-xl transition-colors border-0"
         >
           <Wrench className="w-4 h-4" />
           <span className="hidden sm:inline">Tools</span>
@@ -111,13 +112,13 @@ function Header() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute top-10 right-0 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-50 origin-top-right"
+              className="absolute top-10 right-0 w-52 bg-white/95 dark:bg-black/90 backdrop-blur-2xl border border-slate-200/50 dark:border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right"
             >
               <div className="p-1 space-y-0.5">
                 <NavLink
                   to="/trip-estimator"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <RouteIcon className="w-4 h-4" />
                   Trip Cost Estimator
@@ -125,7 +126,7 @@ function Header() {
                 <NavLink
                   to="/tyre-calculator"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Circle className="w-4 h-4" />
                   Tyre Size Calculator
@@ -133,7 +134,7 @@ function Header() {
                 <NavLink
                   to="/maintenance"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Wrench className="w-4 h-4" />
                   Maintenance Logs
@@ -150,9 +151,27 @@ function Header() {
 export default function App() {
   const location = useLocation();
   const cn = (...classes) => classes.filter(Boolean).join(' ');
+  
+  // Check for due maintenance reminders on app open
+  const { maintenanceReminders, activeVehicleFillUps } = useFuel();
+  const { checkMaintenanceReminders } = useNotifications();
+  
+  useEffect(() => {
+    // Get current odometer
+    const currentOdometer = activeVehicleFillUps.length > 0 
+      ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer 
+      : 0;
+    
+    // Check for due reminders (with a small delay to ensure everything is loaded)
+    const timer = setTimeout(() => {
+      checkMaintenanceReminders(maintenanceReminders, currentOdometer);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [maintenanceReminders, activeVehicleFillUps, checkMaintenanceReminders]);
 
   return (
-    <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
       <Header />
       
       <main className="flex-1 px-5 pt-6">
@@ -175,7 +194,7 @@ export default function App() {
       
       {/* Bottom Tab Bar */}
       {!location.pathname.startsWith('/trip-estimator') && !location.pathname.startsWith('/tyre-calculator') && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-950/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800/80 p-1 z-50 transition-colors duration-300">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-black/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/[0.06] p-1 z-50 transition-colors duration-300">
          <div className="flex items-center justify-between h-[72px] max-w-lg mx-auto px-4 relative">
             
             <NavLink to="/" className={({isActive}) => cn("flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors relative", isActive ? "text-emerald-500" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300")}>
@@ -226,7 +245,7 @@ export default function App() {
                            const event = new CustomEvent('toggleMaintenanceReminderForm');
                            window.dispatchEvent(event);
                          }}
-                         className="flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border bg-emerald-500 text-white dark:text-slate-950 shadow-emerald-500/20 border-emerald-400 hover:bg-emerald-400"
+                         className="flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border-0 bg-emerald-500 text-white shadow-emerald-500/30 hover:bg-emerald-400 dark:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
                        >
                          <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
                            <Plus className="w-8 h-8" strokeWidth={2.5}/>
@@ -237,7 +256,7 @@ export default function App() {
                    return (
                      <NavLink 
                        to={path.startsWith('/maintenance') ? '/maintenance/add' : '/add'}
-                       className={({isActive}) => cn("flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border", isActive ? "bg-emerald-600 text-white shadow-emerald-500/30 border-emerald-500 ring-4 ring-emerald-500/20" : "bg-emerald-500 text-white dark:text-slate-950 shadow-emerald-500/20 border-emerald-400 hover:bg-emerald-400")}
+                       className={({isActive}) => cn("flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border-0", isActive ? "bg-emerald-600 text-white shadow-emerald-500/40 dark:shadow-[0_0_25px_rgba(16,185,129,0.5)]" : "bg-emerald-500 text-white shadow-emerald-500/30 dark:shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-emerald-400")}
                      >
                        <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
                          <Plus className="w-8 h-8" strokeWidth={2.5}/>

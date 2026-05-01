@@ -1,14 +1,14 @@
 import { useFuel } from '../hooks/useFuelContext';
-import { Card, PageWrapper } from './ui';
+import { Card, MetricCard, PageWrapper } from './ui';
 import { calculateTripMetrics } from '../utils/calculations';
 import { format } from 'date-fns';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
-import { Trophy, AlertTriangle, Circle } from 'lucide-react';
+import { Trophy, AlertTriangle, Circle, TrendingUp, Wallet } from 'lucide-react';
 import { formatEfficiency2Dec, formatCurrency2Dec } from '../utils/formatting';
 import chartjsPluginAnnotation from 'chartjs-plugin-annotation';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, chartjsPluginAnnotation);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler, chartjsPluginAnnotation);
 
 export default function Analytics() {
   const { activeVehicleFillUps, tyreComparisons, activeVehicle } = useFuel();
@@ -66,35 +66,79 @@ export default function Analytics() {
     };
   }).filter(Boolean);
 
-  // Efficiency Line Chart Data
+  // Enhanced Efficiency Line Chart with gradient fill and shadow
   const lineChartData = {
     labels: tripData.map(t => t.date),
     datasets: [{
       label: 'Km / Liter',
       data: tripData.map(t => t.kmPerLiter),
       borderColor: '#10b981',
-      backgroundColor: 'rgba(16, 185, 129, 0.5)',
-      tension: 0.3,
+      backgroundColor: (context) => {
+        const ctx = context.chart.ctx;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+        return gradient;
+      },
+      tension: 0.4,
       pointBackgroundColor: '#10b981',
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      fill: true,
+      borderWidth: 3,
     }]
   };
   
   const lineChartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       title: { display: false },
       annotation: {
         annotations: tyreChangeAnnotations
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        padding: 12,
+        cornerRadius: 8,
+        displayColors: false,
       }
     },
     scales: {
-      y: { grid: { color: 'rgba(255, 255, 255, 0.05)' } },
-      x: { grid: { display: false } }
+      y: { 
+        grid: { 
+          color: 'rgba(148, 163, 184, 0.1)',
+          drawBorder: false,
+        },
+        ticks: {
+          color: 'rgba(148, 163, 184, 0.8)',
+          font: { size: 11 }
+        }
+      },
+      x: { 
+        grid: { display: false },
+        ticks: {
+          color: 'rgba(148, 163, 184, 0.8)',
+          font: { size: 10 }
+        }
+      }
+    },
+    elements: {
+      point: {
+        shadowColor: 'rgba(16, 185, 129, 0.5)',
+        shadowBlur: 10,
+        shadowOffsetX: 0,
+        shadowOffsetY: 0,
+      }
     }
   };
 
-  // Monthly Spend Bar Chart Data
+  // Enhanced Monthly Spend Bar Chart with gradient
   const monthlySpendMap = {};
   activeVehicleFillUps.forEach(fill => {
      const my = format(new Date(fill.timestamp), 'MMM yy');
@@ -107,17 +151,53 @@ export default function Analytics() {
      datasets: [{
         label: 'Spend (EGP)',
         data: Object.values(monthlySpendMap),
-        backgroundColor: '#3b82f6',
-        borderRadius: 4
+        backgroundColor: (context) => {
+          const ctx = context.chart.ctx;
+          const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+          gradient.addColorStop(0, '#3b82f6');
+          gradient.addColorStop(1, 'rgba(59, 130, 246, 0.3)');
+          return gradient;
+        },
+        borderRadius: 6,
+        borderSkipped: false,
      }]
   };
 
   const barChartOptions = {
     responsive: true,
-    plugins: { legend: { display: false } },
+    maintainAspectRatio: false,
+    plugins: { 
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        padding: 12,
+        cornerRadius: 8,
+        displayColors: false,
+        callbacks: {
+          label: (context) => `EGP ${context.raw.toFixed(0)}`
+        }
+      }
+    },
     scales: {
-      y: { grid: { color: 'rgba(255, 255, 255, 0.05)' } },
-      x: { grid: { display: false } }
+      y: { 
+        grid: { 
+          color: 'rgba(148, 163, 184, 0.1)',
+          drawBorder: false,
+        },
+        ticks: {
+          color: 'rgba(148, 163, 184, 0.8)',
+          font: { size: 11 }
+        }
+      },
+      x: { 
+        grid: { display: false },
+        ticks: {
+          color: 'rgba(148, 163, 184, 0.8)',
+          font: { size: 10 }
+        }
+      }
     }
   };
 
@@ -128,41 +208,59 @@ export default function Analytics() {
 
   return (
     <PageWrapper className="space-y-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Analytics</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Deep dive into your fuel consumption.</p>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">Analytics</h2>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-         <Card className="flex flex-col gap-2 p-4">
-            <p className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1"><Trophy className="w-3 h-3"/> Best Trip</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{formatEfficiency2Dec(bestTrip.kmPerLiter)}</p>
-            <p className="text-[11px] text-slate-500">{bestTrip.date}</p>
-         </Card>
-         <Card className="flex flex-col gap-2 p-4">
-            <p className="text-[10px] uppercase font-bold text-red-500 dark:text-red-400 tracking-wider flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Worst Trip</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white flex items-end gap-1 px-1">
-               {formatEfficiency2Dec(worstTrip.kmPerLiter)}
-            </p>
-            <p className="text-[11px] text-slate-500">{worstTrip.date}</p>
-         </Card>
-         <Card className="flex flex-col gap-2 p-4">
-            <p className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1"><Circle className="w-3 h-3"/> Current Tyre</p>
-            <p className="text-lg font-bold text-slate-900 dark:text-white">
+      {/* Stats Cards - Minimal Apple Health Style */}
+      <div className="grid grid-cols-3 gap-3">
+         <MetricCard variant="default" className="flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-1">
+              <Trophy className="w-3 h-3 text-emerald-500 dark:text-emerald-400 neon-glow"/>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Best</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tighter">{formatEfficiency2Dec(bestTrip.kmPerLiter)}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-500">{bestTrip.date}</p>
+         </MetricCard>
+         <MetricCard variant="secondary" className="flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3 text-red-500 dark:text-red-400"/>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Worst</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tighter">{formatEfficiency2Dec(worstTrip.kmPerLiter)}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-500">{worstTrip.date}</p>
+         </MetricCard>
+         <MetricCard variant="default" className="flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-1">
+              <Circle className="w-3 h-3 text-indigo-500 dark:text-indigo-400"/>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Tyre</span>
+            </div>
+            <p className="text-base font-bold text-slate-900 dark:text-white leading-tight">
               {activeVehicle?.tyreSize ? `${activeVehicle.tyreSize.width}/${activeVehicle.tyreSize.aspectRatio} R${activeVehicle.tyreSize.rimSize}` : 'Not set'}
             </p>
-            <p className="text-[11px] text-slate-500">{activeVehicle?.name || 'Active vehicle'}</p>
-         </Card>
+            <p className="text-[10px] text-slate-500 dark:text-slate-500 truncate">{activeVehicle?.name || 'Active vehicle'}</p>
+         </MetricCard>
       </div>
 
-      <Card>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Efficiency Trend (Km/L)</h3>
-        <Line options={lineChartOptions} data={lineChartData} />
+      {/* Charts - Enhanced with gradients and glow */}
+      <Card className="space-y-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400 neon-glow" />
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Efficiency Trend</h3>
+        </div>
+        <div className="h-[200px]">
+          <Line options={lineChartOptions} data={lineChartData} />
+        </div>
       </Card>
 
-      <Card>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Monthly Spend (EGP)</h3>
-        <Bar options={barChartOptions} data={barChartData} />
+      <Card className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-blue-500 dark:text-blue-400 neon-glow-blue" />
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Monthly Spend</h3>
+        </div>
+        <div className="h-[200px]">
+          <Bar options={barChartOptions} data={barChartData} />
+        </div>
       </Card>
     </PageWrapper>
   );

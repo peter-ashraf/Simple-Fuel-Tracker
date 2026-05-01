@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Trash2, Fuel, Calendar, MapPin, Save, X } from 'lucide-react';
+import { Trash2, Fuel, Calendar, MapPin, Save, X, CheckSquare, Square } from 'lucide-react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal } from './ui';
 import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec } from '../utils/formatting';
 import './HistoryCard.css';
 
-export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices }) {
+export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices, isSelectionMode, isSelected, onToggleSelect }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -22,12 +22,14 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   // Calculate proper trip metrics by comparing with previous fill-up
   const metrics = calculateTripMetrics(fillUps, index);
   const tripCost = fill.liters * (fill.pricePerLiter || 0);
-  const kmPerLiter = formatEfficiency2Dec(metrics.kmPerLiter);
+  // Keep raw numeric value for color comparison
+  const kmPerLiterRaw = metrics.kmPerLiter;
+  const kmPerLiter = formatEfficiency2Dec(kmPerLiterRaw);
   const litersPer100km = formatEfficiency2Dec(metrics.litersPer100km, 'L/100km');
   const tripDistance = formatDistance2Dec(metrics.distance);
   
   const getEfficiencyColorStatus = (kmPerL) => {
-    if (!kmPerL || kmPerL === "-" || kmPerL === 0) return "text-slate-400";
+    if (!kmPerL || kmPerL === "-" || kmPerL === 0 || isNaN(kmPerL)) return "text-slate-400";
     if (kmPerL > 12) return "text-emerald-500";
     if (kmPerL >= 8) return "text-amber-500";
     return "text-red-500";
@@ -38,8 +40,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   };
 
   const handleSave = () => {
-    // Calculate liters from total cost if total cost is provided
-    const litersToSave = editForm.totalCost ? (editForm.totalCost / (fill.pricePerLiter || 1)) : editForm.liters;
+    // Use the liters value from the form (already synced with total cost)
+    const litersToSave = parseFloat(editForm.liters) || 0;
     
     // Merge the selected date with the original timestamp time to preserve time of day
     const baseDate = new Date(editForm.date);
@@ -75,10 +77,25 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     <div className={`flip-card ${isFlipped ? 'flipped' : ''}`}>
       <div className="flip-card-inner">
         {/* Front Face */}
-        <div className="flip-card-front">
+        <div className={`flip-card-front ${isSelectionMode ? 'cursor-pointer' : ''}`} onClick={isSelectionMode ? onToggleSelect : undefined}>
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
+                {isSelectionMode ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSelect();
+                    }}
+                    className="flex-shrink-0"
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-5 h-5 text-emerald-500" />
+                    ) : (
+                      <Square className="w-5 h-5 text-slate-400" />
+                    )}
+                  </button>
+                ) : null}
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                   {format(new Date(fill.timestamp), 'MMM d, yyyy')}
                 </p>
@@ -94,13 +111,13 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               </p>
             </div>
             <div 
-              className="text-right cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={handleEdit}
-              role="button"
-              tabIndex={0}
+              className={`text-right ${isSelectionMode ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}`}
+              onClick={isSelectionMode ? undefined : handleEdit}
+              role={isSelectionMode ? undefined : "button"}
+              tabIndex={isSelectionMode ? undefined : 0}
               aria-label="Edit fill-up"
               aria-expanded={isFlipped}
-              onKeyDown={(e) => {
+              onKeyDown={isSelectionMode ? undefined : (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   handleEdit();
@@ -125,8 +142,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
             </div>
             <div className="text-center border-l border-r border-slate-200 dark:border-slate-800/50">
               <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Km/L</p>
-              <p className={`text-sm font-bold ${getEfficiencyColorStatus(kmPerLiter)}`}>
-                {index === 0 ? "First trip" : (kmPerLiter !== "0" ? kmPerLiter : "-")}
+              <p className={`text-sm font-bold ${getEfficiencyColorStatus(kmPerLiterRaw)}`}>
+                {index === 0 ? "First trip" : (kmPerLiterRaw > 0 ? kmPerLiter : "-")}
               </p>
             </div>
             <div className="text-center">
@@ -147,27 +164,27 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
         {/* Back Face */}
         <div className="flip-card-back">
           <div className="flex flex-col h-full relative">
-            <div className="absolute top-[-10px] right-0 flex gap-2">
-              <button
-                onClick={handleSave}
-                className="bg-emerald-500/50 hover:bg-emerald-400/50 text-white dark:text-slate-950 font-bold p-2 rounded-full transition-colors shadow-lg opacity-75 hover:opacity-100"
-                aria-label="Save"
-              >
-                <Save className="w-2 h-2" />
-              </button>
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSave}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-white font-bold px-3 py-1.5 rounded-lg transition-colors text-xs"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="bg-slate-500 hover:bg-slate-400 text-white font-bold px-3 py-1.5 rounded-lg transition-colors text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
               <button
                 onClick={() => setDeleteModal(true)}
-                className="bg-red-300/50 hover:bg-red-400/50 text-white font-bold p-2 rounded-full transition-colors shadow-lg opacity-75 hover:opacity-100"
+                className="text-red-500 hover:text-red-400 font-bold p-1 transition-colors"
                 aria-label="Delete"
               >
-                <Trash2 className="w-2 h-2" />
-              </button>
-              <button
-                onClick={handleCancel}
-                className="bg-slate-500/50 hover:bg-slate-400/50 text-white font-bold p-2 rounded-full transition-colors shadow-lg opacity-75 hover:opacity-100"
-                aria-label="Cancel"
-              >
-                <X className="w-2 h-2" />
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
 
@@ -203,7 +220,15 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                   type="number"
                   step="0.01"
                   value={editForm.liters}
-                  onChange={(e) => setEditForm({...editForm, liters: e.target.value})}
+                  onChange={(e) => {
+                    const newLiters = parseFloat(e.target.value) || 0;
+                    const pricePerLiter = fill.pricePerLiter || 1;
+                    setEditForm({
+                      ...editForm,
+                      liters: e.target.value,
+                      totalCost: newLiters * pricePerLiter
+                    });
+                  }}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
                 />
               </div>
@@ -219,7 +244,15 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                   type="number"
                   step="0.01"
                   value={editForm.totalCost || ''}
-                  onChange={(e) => setEditForm({...editForm, totalCost: e.target.value})}
+                  onChange={(e) => {
+                    const newTotal = parseFloat(e.target.value) || 0;
+                    const pricePerLiter = fill.pricePerLiter || 1;
+                    setEditForm({
+                      ...editForm,
+                      totalCost: e.target.value,
+                      liters: newTotal / pricePerLiter
+                    });
+                  }}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-sm"
                 />
               </div>

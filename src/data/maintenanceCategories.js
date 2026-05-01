@@ -31,6 +31,14 @@ export const MAINTENANCE_CATEGORIES = {
     defaultIntervalTime: { type: 'time', value: 24 }, // months
     color: '#f59e0b'
   },
+  BRAKE_PADS: {
+    id: 'brake_pads',
+    name: 'Brake Pads',
+    icon: 'brake',
+    defaultInterval: { type: 'distance', value: 30000 }, // km
+    defaultIntervalTime: { type: 'time', value: 24 }, // months
+    color: '#dc2626'
+  },
   AIR_FILTER: {
     id: 'air_filter',
     name: 'Air Filter',
@@ -38,6 +46,14 @@ export const MAINTENANCE_CATEGORIES = {
     defaultInterval: { type: 'distance', value: 15000 }, // km
     defaultIntervalTime: { type: 'time', value: 12 }, // months
     color: '#10b981'
+  },
+  AC_FILTER: {
+    id: 'ac_filter',
+    name: 'AC Filter',
+    icon: 'filter',
+    defaultInterval: { type: 'distance', value: 20000 }, // km
+    defaultIntervalTime: { type: 'time', value: 12 }, // months
+    color: '#06b6d4'
   },
   FUEL_FILTER: {
     id: 'fuel_filter',
@@ -70,6 +86,14 @@ export const MAINTENANCE_CATEGORIES = {
     defaultInterval: { type: 'distance', value: 60000 }, // km
     defaultIntervalTime: { type: 'time', value: 48 }, // months
     color: '#a855f7'
+  },
+  BATTERY: {
+    id: 'battery',
+    name: 'Battery',
+    icon: 'battery',
+    defaultInterval: { type: 'distance', value: 50000 }, // km
+    defaultIntervalTime: { type: 'time', value: 36 }, // months
+    color: '#eab308'
   },
   GENERAL_INSPECTION: {
     id: 'general_inspection',

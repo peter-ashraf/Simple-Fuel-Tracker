@@ -4,14 +4,16 @@ import { Plus, MapPin, Wrench, ArrowLeft } from 'lucide-react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, ConfirmModal } from './ui';
 import { useLocationDetection } from '../hooks/useLocationDetection';
+import { useNotifications } from '../hooks/useNotifications';
 import { gasStationService } from '../services/gasStationService';
 import { StationSuggestion } from './StationSuggestion';
 import { useNavigate } from 'react-router-dom';
 
 export default function FillUpForm() {
-  const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceLog } = useFuel();
+  const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceLog, maintenanceReminders } = useFuel();
   const navigate = useNavigate();
   const buttonContainerRef = useRef(null);
+  const { checkOdometerThresholds } = useNotifications();
 
   // Force immediate positioning on mount and also immediately
   useEffect(() => {
@@ -226,6 +228,11 @@ export default function FillUpForm() {
     const now = new Date();
     baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
+    // Get previous odometer for threshold checking
+    const previousOdometer = activeVehicleFillUps.length > 0 
+      ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer 
+      : 0;
+
     addFillUp({
       timestamp: baseDate.toISOString(),
       fuelType: selectedFuelType,
@@ -235,8 +242,12 @@ export default function FillUpForm() {
       station: station.trim(),
       notes: notes.trim()
     });
-    setNotes('');
-    setConvertModal({ isOpen: false, noteData: null });
+    
+    // Check if we crossed any maintenance thresholds
+    checkOdometerThresholds(maintenanceReminders, newOdometer, previousOdometer);
+    
+    // Navigate back to dashboard after successful save
+    navigate('/');
   };
   
 // Auto-fill odometer suggestion from previous
@@ -287,7 +298,7 @@ return (
              type="submit" 
              form="fillup-form"
              disabled={(!liters && !moneySpent) || !odometer}
-             className="flex-1 px-6 bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
+             className="flex-1 px-6 bg-emerald-500 hover:bg-emerald-400 text-white font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/30 dark:shadow-[0_0_25px_rgba(16,185,129,0.4)] active:scale-[0.98]"
           >
             <Plus className="w-5 h-5" />
             <span>Save Fill-up</span>
@@ -299,8 +310,7 @@ return (
 
     <PageWrapper>
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Add Fill-up</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Log your latest trip and fuel stop.</p>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">Add Fill-up</h2>
       </div>
 
       <form id="fillup-form" onSubmit={handleSubmit} className="space-y-5 pb-32">
@@ -361,30 +371,30 @@ return (
 
             <div>
                <Label>Fuel Grade</Label>
-               <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl">
+               <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-white/[0.06] rounded-2xl">
                    <button 
                       type="button"
                       onClick={() => setSelectedFuelType('92')}
-                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '92' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '92' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
                    >
                       92
                    </button>
                    <button 
                       type="button"
                       onClick={() => setSelectedFuelType('95')}
-                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '95' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === '95' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
                    >
                       95
                    </button>
                    <button 
                       type="button"
                       onClick={() => setSelectedFuelType('diesel')}
-                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === 'diesel' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+                      className={`py-3 text-sm font-bold rounded-xl transition ${selectedFuelType === 'diesel' ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
                    >
                       Diesel
                    </button>
                </div>
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium text-center mt-2 opacity-80">Will apply current price: {fuelPrices[selectedFuelType]} EGP/L</p>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium text-center mt-2 opacity-80">Will apply current price: {fuelPrices[selectedFuelType]} EGP/L</p>
             </div>
 
          </div>
@@ -405,7 +415,7 @@ return (
                   <button
                     type="button"
                     onClick={() => setShowStationModal(true)}
-                    className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 rounded-xl transition-colors"
+                    className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 rounded-xl transition-colors border-0"
                     title="Detect nearby gas stations"
                   >
                      <MapPin className="w-4 h-4" />
@@ -416,7 +426,7 @@ return (
                <Label>Notes (Optional)</Label>
                <div className="space-y-2">
                  <textarea 
-                   className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700/50 rounded-2xl px-5 py-4 text-left text-slate-900 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-medium resize-none"
+                   className="w-full bg-white dark:bg-white/[0.06] border-0 rounded-2xl px-5 py-4 text-left text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all font-medium resize-none"
                    rows="2"
                    value={notes}
                    onChange={e => setNotes(e.target.value)}
@@ -426,7 +436,7 @@ return (
                    <button
                      type="button"
                      onClick={handleConvertToMaintenanceLog}
-                     className="flex items-center gap-2 px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 rounded-xl transition-colors text-sm"
+                     className="flex items-center gap-2 px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 rounded-xl transition-colors text-sm border-0"
                    >
                      <Wrench className="w-4 h-4" />
                      Convert to Maintenance Log

@@ -8,11 +8,25 @@ export function cn(...inputs) {
 }
 
 export const Card = forwardRef(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("glass-card rounded-3xl p-5 relative overflow-hidden", className)} {...props}>
+  <div ref={ref} className={cn("bg-white dark:bg-white/[0.03] rounded-3xl p-5 relative overflow-hidden border-0", className)} {...props}>
     {children}
   </div>
 ));
 Card.displayName = "Card"
+
+export const MetricCard = forwardRef(({ className, children, variant = "default", ...props }, ref) => {
+  const variants = {
+    default: "bg-slate-50 dark:bg-white/[0.03]",
+    secondary: "bg-slate-100/80 dark:bg-white/[0.06]",
+    accent: "bg-emerald-50/50 dark:bg-emerald-500/10"
+  };
+  return (
+    <div ref={ref} className={cn(`${variants[variant]} rounded-3xl p-5 relative overflow-hidden border-0`, className)} {...props}>
+      {children}
+    </div>
+  );
+});
+MetricCard.displayName = "MetricCard"
 
 export const Input = forwardRef(({ className, ...props }, ref) => (
   <input

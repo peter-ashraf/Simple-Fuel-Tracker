@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Route, Calculator, TrendingUp, AlertCircle, Info, ChevronDown, Check, ArrowLeft } from 'lucide-react';
+import { Route, Calculator, TrendingUp, AlertCircle, Info, ChevronDown, Check, ArrowLeft, Trash2, Clock, MapPin, History, CheckSquare, Square, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Input, Label, PageWrapper, cn } from '../ui';
 import { useFuel } from '../../hooks/useFuelContext';
 import { calculateTripEstimate, convertConsumptionUnits, convertDistance } from '../../utils/tripEstimator';
 import { formatCurrency2Dec, formatVolume2Dec, formatEfficiency2Dec } from '../../utils/formatting';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 export default function TripCostEstimator() {
-  const { activeVehicleFillUpsByOdometer, fuelPrices, addTripEstimate } = useFuel();
+  const { activeVehicleFillUpsByOdometer, fuelPrices, addTripEstimate, tripEstimates, deleteTripEstimate, deleteMultipleTripEstimates } = useFuel();
   const navigate = useNavigate();
   const [tripDistance, setTripDistance] = useState('');
   const [distanceUnit, setDistanceUnit] = useState('km');
@@ -22,6 +23,40 @@ export default function TripCostEstimator() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  
+  // Bulk selection state for saved estimates
+  const [selectedEstimateIds, setSelectedEstimateIds] = useState(new Set());
+  const [isEstimateSelectionMode, setIsEstimateSelectionMode] = useState(false);
+  
+  const toggleEstimateSelection = (id) => {
+    const newSelected = new Set(selectedEstimateIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedEstimateIds(newSelected);
+  };
+  
+  const selectAllEstimates = () => {
+    if (selectedEstimateIds.size === tripEstimates.length) {
+      setSelectedEstimateIds(new Set());
+    } else {
+      setSelectedEstimateIds(new Set(tripEstimates.map(e => e.id)));
+    }
+  };
+  
+  const handleBulkDeleteEstimates = () => {
+    // Use bulk delete function to delete all at once
+    deleteMultipleTripEstimates(Array.from(selectedEstimateIds));
+    setSelectedEstimateIds(new Set());
+    setIsEstimateSelectionMode(false);
+  };
+  
+  const clearEstimateSelection = () => {
+    setSelectedEstimateIds(new Set());
+    setIsEstimateSelectionMode(false);
+  };
 
   const distanceUnits = [
     { value: 'km', label: 'km' },
@@ -138,6 +173,8 @@ export default function TripCostEstimator() {
                     }
                   };
                   addTripEstimate(estimateToSave);
+                  // Navigate back to home after saving
+                  navigate('/');
                 }
               }}
               disabled={!estimate}
@@ -408,6 +445,8 @@ export default function TripCostEstimator() {
                   }
                 };
                 addTripEstimate(estimateToSave);
+                // Navigate back to home after saving
+                navigate('/');
               }}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
@@ -444,7 +483,155 @@ export default function TripCostEstimator() {
       )}
 
       {/* Empty State */}
-      {!estimate && !isCalculating && (
+      {/* Saved Estimates History */}
+      {tripEstimates.length > 0 && (
+        <Card className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <History className="w-5 h-5 text-purple-500 dark:text-purple-400" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Saved Estimates</h2>
+              {isEstimateSelectionMode ? (
+                <span className="text-xs font-medium text-purple-600 dark:text-purple-400 px-2 py-0.5 bg-purple-100 dark:bg-purple-500/20 rounded-full">
+                  {selectedEstimateIds.size} selected
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
+                  {tripEstimates.length}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              {isEstimateSelectionMode ? (
+                <>
+                  <button
+                    onClick={selectAllEstimates}
+                    className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    title={selectedEstimateIds.size === tripEstimates.length ? "Deselect All" : "Select All"}
+                  >
+                    {selectedEstimateIds.size === tripEstimates.length ? (
+                      <><Square className="w-3 h-3" /><span className="hidden sm:inline">Deselect All</span></>
+                    ) : (
+                      <><CheckSquare className="w-3 h-3" /><span className="hidden sm:inline">Select All</span></>
+                    )}
+                  </button>
+                  {selectedEstimateIds.size > 0 && (
+                    <button
+                      onClick={handleBulkDeleteEstimates}
+                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors"
+                      title={`Delete ${selectedEstimateIds.size} selected`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span className="hidden sm:inline">Delete ({selectedEstimateIds.size})</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={clearEstimateSelection}
+                    className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    title="Cancel"
+                  >
+                    <X className="w-3 h-3 sm:hidden" />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setIsEstimateSelectionMode(true)}
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Select"
+                >
+                  <CheckSquare className="w-3 h-3" />
+                  <span className="hidden sm:inline">Select</span>
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            {tripEstimates.slice().reverse().map((saved) => (
+              <div 
+                key={saved.id}
+                className={`rounded-xl p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/50 ${isEstimateSelectionMode ? 'cursor-pointer' : ''}`}
+                onClick={isEstimateSelectionMode ? () => toggleEstimateSelection(saved.id) : undefined}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {isEstimateSelectionMode && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleEstimateSelection(saved.id);
+                          }}
+                          className="flex-shrink-0"
+                        >
+                          {selectedEstimateIds.has(saved.id) ? (
+                            <CheckSquare className="w-4 h-4 text-purple-500" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+                      )}
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        {saved.inputDistance} {saved.distanceUnit}
+                        {saved.isRoundTrip && (
+                          <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">
+                            (round trip: {saved.calculatedDistance.toFixed(1)} km)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {format(new Date(saved.timestamp), 'MMM d, yyyy h:mm a')}
+                      </span>
+                    </div>
+                  </div>
+                  {!isEstimateSelectionMode && (
+                    <button
+                      onClick={() => deleteTripEstimate(saved.id)}
+                      className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                      aria-label="Delete estimate"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="text-center p-2 bg-white dark:bg-slate-900 rounded-lg">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Cost</p>
+                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency2Dec(saved.estimatedCost, '').replace('L.E ', '')} EGP
+                    </p>
+                  </div>
+                  <div className="text-center p-2 bg-white dark:bg-slate-900 rounded-lg">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Liters</p>
+                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                      {formatVolume2Dec(saved.estimatedLiters, '').replace(' L', '')} L
+                    </p>
+                  </div>
+                  <div className="text-center p-2 bg-white dark:bg-slate-900 rounded-lg">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Efficiency</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {formatEfficiency2Dec(saved.consumptionUsed)}
+                    </p>
+                  </div>
+                </div>
+                
+                {saved.methodUsed !== 'historical_data' && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    * Used manual {saved.methodUsed === 'manual_inputs' ? 'inputs' : 'consumption'}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {!estimate && !isCalculating && tripEstimates.length === 0 && (
         <Card className="flex flex-col items-center justify-center py-12 text-center">
           <Route className="w-12 h-12 text-slate-400 dark:text-slate-600 mb-4" />
           <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Ready to Estimate</h3>

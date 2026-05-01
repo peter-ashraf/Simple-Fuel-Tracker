@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { calculateTripMetrics } from '../utils/calculations';
 import { formatTo2Decimals } from '../utils/formatting';
+import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
 
 const FuelContext = createContext(null);
 
@@ -14,6 +15,12 @@ export function FuelProvider({ children }) {
   const [tyreComparisons, setTyreComparisons] = useLocalStorage('fueltracker-tyre-comparisons-v2', []);
   const [maintenanceLogs, setMaintenanceLogs] = useLocalStorage('fueltracker-maintenance-logs-v2', []);
   const [maintenanceReminders, setMaintenanceReminders] = useLocalStorage('fueltracker-maintenance-reminders-v2', []);
+  
+  // Maintenance settings with defaults
+  const [maintenanceSettings, setMaintenanceSettings] = useLocalStorage('fueltracker-maintenance-settings-v2', {
+    defaultSafetyMarginKm: 2000,
+    categorySettings: {}
+  });
 
   // Filter for active vehicle - sorted by timestamp for display
   const activeVehicleFillUps = fillUps
@@ -31,6 +38,11 @@ export function FuelProvider({ children }) {
 
   const deleteFillUp = (id) => {
     setFillUps(prev => prev.filter(f => f.id !== id));
+  };
+
+  const deleteMultipleFillUps = (ids) => {
+    const idsSet = new Set(ids);
+    setFillUps(prev => prev.filter(f => !idsSet.has(f.id)));
   };
 
   const updateFillUp = (id, updatedData) => {
@@ -73,6 +85,11 @@ export function FuelProvider({ children }) {
     setTripEstimates(prev => prev.filter(e => e.id !== id));
   };
 
+  const deleteMultipleTripEstimates = (ids) => {
+    const idsSet = new Set(ids);
+    setTripEstimates(prev => prev.filter(e => !idsSet.has(e.id)));
+  };
+
   const addTyreComparison = (comparison) => {
     setTyreComparisons(prev => [...prev, {
       ...comparison,
@@ -103,16 +120,66 @@ export function FuelProvider({ children }) {
   };
 
   const addMaintenanceReminder = (reminder) => {
+    // Compute nextDueODO and alertODO
+    const safetyMargin = reminder.safetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+    const baseODO = reminder.performedAtOdometer ?? reminder.odometerThreshold ?? 0;
+    const interval = reminder.odometerInterval ?? 0;
+    
+    let nextDueODO = null;
+    let alertODO = null;
+    
+    if (baseODO > 0 && interval > 0) {
+      nextDueODO = baseODO + interval;
+      alertODO = nextDueODO - safetyMargin;
+    }
+    
     setMaintenanceReminders(prev => [...prev, {
       ...reminder,
       id: Date.now(),
       vehicleId: selectedVehicleId,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      nextDueODO,
+      alertODO,
+      safetyMarginKm: safetyMargin
     }]);
   };
 
   const updateMaintenanceReminder = (id, updatedData) => {
-    setMaintenanceReminders(prev => prev.map(reminder => reminder.id === id ? { ...reminder, ...updatedData } : reminder));
+    setMaintenanceReminders(prev => prev.map(reminder => {
+      if (reminder.id !== id) return reminder;
+      
+      const updated = { ...reminder, ...updatedData };
+      
+      // Recalculate computed ODO values if relevant fields changed
+      if (updated.odometerThreshold || updated.safetyMarginKm !== undefined || updated.performedAtOdometer) {
+        const safetyMargin = updated.safetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+        const baseODO = updated.performedAtOdometer ?? updated.odometerThreshold ?? 0;
+        const interval = updated.odometerInterval ?? 0;
+        
+        if (baseODO > 0 && interval > 0) {
+          updated.nextDueODO = baseODO + interval;
+          updated.alertODO = updated.nextDueODO - safetyMargin;
+        }
+      }
+      
+      return updated;
+    }));
+  };
+
+  // Helper function to update maintenance settings
+  const updateMaintenanceSettings = (updates) => {
+    setMaintenanceSettings(prev => ({ ...prev, ...updates }));
+  };
+
+  // Update category-specific settings
+  const updateCategorySettings = (categoryId, settings) => {
+    setMaintenanceSettings(prev => ({
+      ...prev,
+      categorySettings: {
+        ...prev.categorySettings,
+        [categoryId]: { ...prev.categorySettings[categoryId], ...settings }
+      }
+    }));
   };
 
   const deleteMaintenanceReminder = (id) => {
@@ -183,11 +250,12 @@ export function FuelProvider({ children }) {
     <FuelContext.Provider value={{
       vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices,
       activeVehicle,
-      activeVehicleFillUps, activeVehicleFillUpsByOdometer, addFillUp, deleteFillUp, updateFillUp, addVehicle, editVehicle, deleteVehicle,
-      tripEstimates: activeVehicleTripEstimates, addTripEstimate, deleteTripEstimate,
+      activeVehicleFillUps, activeVehicleFillUpsByOdometer, addFillUp, deleteFillUp, deleteMultipleFillUps, updateFillUp, addVehicle, editVehicle, deleteVehicle,
+      tripEstimates: activeVehicleTripEstimates, addTripEstimate, deleteTripEstimate, deleteMultipleTripEstimates,
       tyreComparisons: activeVehicleTyreComparisons, addTyreComparison, deleteTyreComparison,
       maintenanceLogs: activeVehicleMaintenanceLogs, addMaintenanceLog, updateMaintenanceLog, deleteMaintenanceLog,
       maintenanceReminders: activeVehicleMaintenanceReminders, addMaintenanceReminder, updateMaintenanceReminder, deleteMaintenanceReminder,
+      maintenanceSettings, updateMaintenanceSettings, updateCategorySettings,
       stats
     }}>
       {children}
