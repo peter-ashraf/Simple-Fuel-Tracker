@@ -1,5 +1,6 @@
-import { Trash2, Fuel, Calendar, MapPin, Edit2, Save, X, CheckSquare, Square } from 'lucide-react';
+import { Trash2, Fuel, Calendar, MapPin, Edit2, Save, X, Check, Square, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from '../hooks/useFuelContext';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
@@ -10,7 +11,7 @@ export default function History() {
   const { activeVehicleFillUps, activeVehicleFillUpsByOdometer, deleteFillUp, deleteMultipleFillUps, updateFillUp, fuelPrices } = useFuel();
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   
   const reversedTrips = [...activeVehicleFillUps].reverse();
 
@@ -37,12 +38,6 @@ export default function History() {
     deleteMultipleFillUps(Array.from(selectedIds));
     setSelectedIds(new Set());
     setShowBulkDeleteModal(false);
-    setIsSelectionMode(false);
-  };
-
-  const clearSelection = () => {
-    setSelectedIds(new Set());
-    setIsSelectionMode(false);
   };
 
   return (
@@ -56,63 +51,18 @@ export default function History() {
     >
       {/* Header with bulk actions */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">All Fill-ups</h2>
-          {isSelectionMode ? (
-            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 px-3 py-1 bg-emerald-100 dark:bg-emerald-500/20 rounded-full">
-              {selectedIds.size} selected
-            </span>
-          ) : (
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 px-3 py-1 bg-slate-200 dark:bg-slate-800/50 rounded-full border border-slate-300 dark:border-slate-700/50">
-              {activeVehicleFillUps.length} entries
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          {isSelectionMode ? (
-            <>
-              <button
-                onClick={selectAll}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                title={selectedIds.size === activeVehicleFillUps.length ? "Deselect All" : "Select All"}
-              >
-                {selectedIds.size === activeVehicleFillUps.length ? (
-                  <><Square className="w-4 h-4" /><span className="hidden sm:inline">Deselect All</span></>
-                ) : (
-                  <><CheckSquare className="w-4 h-4" /><span className="hidden sm:inline">Select All</span></>
-                )}
-              </button>
-              {selectedIds.size > 0 && (
-                <button
-                  onClick={() => setShowBulkDeleteModal(true)}
-                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-xl transition-colors"
-                  title={`Delete ${selectedIds.size} selected`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Delete ({selectedIds.size})</span>
-                </button>
-              )}
-              <button
-                onClick={clearSelection}
-                className="px-2 sm:px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                title="Cancel"
-              >
-                <X className="w-4 h-4 sm:hidden" />
-                <span className="hidden sm:inline">Cancel</span>
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setIsSelectionMode(true)}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-              title="Select"
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span className="hidden sm:inline">Select</span>
-            </button>
-          )}
-        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">All Fill-ups</h2>
+        <button 
+          onClick={() => {
+            setSelectionMode(!selectionMode);
+            if (!selectionMode) {
+              setSelectedIds(new Set());
+            }
+          }}
+          className="text-xs font-medium text-slate-500 dark:text-slate-400 px-3 py-1 bg-slate-200 dark:bg-slate-800/50 rounded-full border border-slate-300 dark:border-slate-700/50 hover:bg-slate-300 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+        >
+          {activeVehicleFillUps.length} entries
+        </button>
       </div>
 
       {activeVehicleFillUps.length === 0 ? (
@@ -124,21 +74,58 @@ export default function History() {
         <ul className="space-y-4 pb-4">
           {reversedTrips.map((fill, reversedIndex) => {
             const originalIndex = activeVehicleFillUps.length - 1 - reversedIndex;
+            const isSelected = selectedIds.has(fill.id);
             return (
-              <li key={fill.id} className="group">
-                <HistoryCard
-                  fill={fill}
-                  index={originalIndex}
-                  totalFillUps={activeVehicleFillUps.length}
-                  fillUps={activeVehicleFillUps}
-                  onDelete={deleteFillUp}
-                  onUpdate={updateFillUp}
-                  fuelPrices={fuelPrices}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedIds.has(fill.id)}
-                  onToggleSelect={() => toggleSelection(fill.id)}
-                />
-              </li>
+              <motion.li 
+                key={fill.id} 
+                className="relative flex items-center"
+                layout
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                 <AnimatePresence>
+                   {selectionMode && (
+                     <motion.button
+                             initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                             animate={{ opacity: 1, scale: 1, x: 0 }}
+                             exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                             transition={{ duration: 0.2, ease: "easeOut" }}
+                             onClick={() => toggleSelection(fill.id)}
+                             className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-transparent'}`}
+                     >
+                             <motion.div
+                               initial={{ scale: 0 }}
+                               animate={{ scale: 1 }}
+                               exit={{ scale: 0 }}
+                               transition={{ duration: 0.15, ease: "easeOut" }}
+                             >
+                               {isSelected && <Check className="w-3.5 h-3.5" />}
+                             </motion.div>
+                     </motion.button>
+                   )}
+                 </AnimatePresence>
+                 <motion.div 
+                   className="flex-1"
+                   animate={{ 
+                     scaleX: selectionMode ? 0.92 : 1,
+                     x: selectionMode ? 24 : 0, // Slide right when circles appear, left when they disappear
+                     originX: 0
+                   }}
+                   transition={{ 
+                     duration: 0.2, 
+                     ease: selectionMode ? "easeInOut" : [0.68, -0.55, 0.265, 1.55] // Spring effect for expansion
+                   }}
+                 >
+                  <HistoryCard
+                    fill={fill}
+                    index={originalIndex}
+                    totalFillUps={activeVehicleFillUps.length}
+                    fillUps={activeVehicleFillUps}
+                    onDelete={deleteFillUp}
+                    onUpdate={updateFillUp}
+                    fuelPrices={fuelPrices}
+                  />
+                 </motion.div>
+              </motion.li>
             );
           })}
         </ul>
@@ -154,6 +141,56 @@ export default function History() {
         confirmText="Delete Selected"
         variant="danger"
       />
+
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-[95%] sm:max-w-[500px] bg-slate-900 dark:bg-slate-800 text-white rounded-3xl shadow-2xl p-3 sm:p-4 flex items-center justify-between z-50 origin-bottom border border-white/10"
+          >
+             <div className="flex items-center gap-2 sm:gap-3 ml-1 sm:ml-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-emerald-500/20">
+                   {selectedIds.size}
+                </div>
+                <span className="font-bold text-xs sm:text-sm tracking-tight hidden xs:block">Selected</span>
+             </div>
+             
+             <div className="flex items-center gap-1.5 sm:gap-2">
+                <button 
+                  onClick={selectAll}
+                  className="h-10 px-3 sm:px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm rounded-2xl transition-all flex items-center gap-2 border border-white/5"
+                  title={selectedIds.size === activeVehicleFillUps.length ? 'Deselect All' : 'Select All'}
+                >
+                  {selectedIds.size === activeVehicleFillUps.length ? <Square className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                  <span className="hidden sm:inline">{selectedIds.size === activeVehicleFillUps.length ? 'Deselect' : 'Select All'}</span>
+                </button>
+                
+                <button 
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  className="h-10 px-3 sm:px-4 bg-red-500 hover:bg-red-600 text-white font-bold text-xs sm:text-sm rounded-2xl transition-all flex items-center gap-2 shadow-lg shadow-red-500/20"
+                  title="Delete Selected"
+                >
+                  <Trash2 className="w-4 h-4" /> 
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
+                
+                <div className="w-[1px] h-6 bg-white/10 mx-1 hidden sm:block"></div>
+
+                <button 
+                  onClick={() => {
+                    setSelectedIds(new Set());
+                    setSelectionMode(false);
+                  }}
+                  className="h-10 px-3 text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageWrapper>
   );
 }

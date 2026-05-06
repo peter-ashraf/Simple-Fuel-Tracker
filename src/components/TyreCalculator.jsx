@@ -18,6 +18,8 @@ export default function TyreCalculator() {
   const [errors, setErrors] = useState([]);
   const [saved, setSaved] = useState(false);
   const [sizesOpen, setSizesOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const dropdownRef = useRef(null);
 
   const handleCalculate = () => {
     setSaved(false);
@@ -65,6 +67,28 @@ export default function TyreCalculator() {
     setNewTyre(size);
     setSizesOpen(false);
   };
+
+  const handleDropdownClick = () => {
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX
+      });
+    }
+    setSizesOpen(!sizesOpen);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setSizesOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <>
@@ -145,9 +169,9 @@ export default function TyreCalculator() {
           </div>
 
           {/* Common Sizes Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
-              onClick={() => setSizesOpen(!sizesOpen)}
+              onClick={handleDropdownClick}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
             >
               <span>Common Sizes</span>
@@ -156,30 +180,43 @@ export default function TyreCalculator() {
               </motion.div>
             </button>
 
-            <AnimatePresence>
-              {sizesOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95, transition: { duration: 0.15 } }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                  className="absolute top-9 right-0 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-50 origin-top-right"
-                >
-                  <div className="p-1 max-h-48 overflow-y-auto scrollbar-none">
-                    {commonTyreSizes.map((size, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleQuickSelect(size)}
-                        className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
-                      >
-                        {size.label}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            </div>
+      
+      {createPortal(
+        <AnimatePresence>
+          {sizesOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: `${dropdownPosition.top + 4}px`,
+                left: `${dropdownPosition.left - 120}px`,
+                zIndex: 1000
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95, transition: { duration: 0.15 } }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden origin-top-right"
+              >
+                <div className="p-1 max-h-48 overflow-y-auto scrollbar-none">
+                  {commonTyreSizes.map((size, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleQuickSelect(size)}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
+                    >
+                      {size.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
         </div>
 
         <div className="grid grid-cols-3 gap-3 items-start">

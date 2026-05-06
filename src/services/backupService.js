@@ -26,7 +26,28 @@ export const backupService = {
       const value = localStorage.getItem(key);
       if (value !== null) {
         try {
-          payload[key] = JSON.parse(value);
+          let data = JSON.parse(value);
+          
+          // Enrich fill-up data with trip distance
+          if (key === 'fueltracker-fillups-v2' && Array.isArray(data)) {
+             const vehiclesStr = localStorage.getItem('fueltracker-vehicles-v2');
+             if (vehiclesStr) {
+                const vehicles = JSON.parse(vehiclesStr);
+                const enriched = [];
+                vehicles.forEach(v => {
+                   const vFills = data.filter(f => f.vehicleId === v.id).sort((a,b) => a.odometer - b.odometer);
+                   vFills.forEach((f, i) => {
+                      enriched.push({
+                         ...f,
+                         tripDistance: i > 0 ? f.odometer - vFills[i-1].odometer : 0
+                      });
+                   });
+                });
+                data = enriched;
+             }
+          }
+          
+          payload[key] = data;
         } catch (e) {
           payload[key] = value; // Fallback for non-JSON strings like theme
         }

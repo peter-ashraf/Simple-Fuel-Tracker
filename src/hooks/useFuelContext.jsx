@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { calculateTripMetrics } from '../utils/calculations';
 import { formatTo2Decimals } from '../utils/formatting';
-import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
+import { MAINTENANCE_CATEGORIES, getMaintenanceCategory, getAllCategories } from '../data/maintenanceCategories';
 
 const FuelContext = createContext(null);
 
@@ -15,6 +15,8 @@ export function FuelProvider({ children }) {
   const [tyreComparisons, setTyreComparisons] = useLocalStorage('fueltracker-tyre-comparisons-v2', []);
   const [maintenanceLogs, setMaintenanceLogs] = useLocalStorage('fueltracker-maintenance-logs-v2', []);
   const [maintenanceReminders, setMaintenanceReminders] = useLocalStorage('fueltracker-maintenance-reminders-v2', []);
+  const [maintenanceEntries, setMaintenanceEntries] = useLocalStorage('fueltracker-maintenance-entries-v3', []);
+  const [categories, setCategories] = useLocalStorage('fueltracker-maintenance-categories-v1', Object.values(MAINTENANCE_CATEGORIES));
   
   // Maintenance settings with defaults
   const [maintenanceSettings, setMaintenanceSettings] = useLocalStorage('fueltracker-maintenance-settings-v2', {
@@ -102,6 +104,11 @@ export function FuelProvider({ children }) {
     setTyreComparisons(prev => prev.filter(c => c.id !== id));
   };
 
+  const deleteMultipleTyreComparisons = (ids) => {
+    const idsSet = new Set(ids);
+    setTyreComparisons(prev => prev.filter(c => !idsSet.has(c.id)));
+  };
+
   const addMaintenanceLog = (log) => {
     setMaintenanceLogs(prev => [...prev, {
       ...log,
@@ -186,6 +193,92 @@ export function FuelProvider({ children }) {
     setMaintenanceReminders(prev => prev.filter(reminder => reminder.id !== id));
   };
 
+  // Category Management
+  const addMaintenanceCategory = (category) => {
+    const newCategory = {
+      ...category,
+      id: category.id || `cat_${Date.now()}`,
+      color: category.color || '#64748b'
+    };
+    setCategories(prev => [...prev, newCategory]);
+    return newCategory;
+  };
+
+  const updateMaintenanceCategory = (id, updates) => {
+    setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, ...updates } : cat));
+  };
+
+  const deleteMaintenanceCategory = (id) => {
+    setCategories(prev => prev.filter(cat => cat.id !== id));
+    // Optionally handle cleanup of entries/reminders using this category
+  };
+
+  const getCategoryById = (id) => {
+    return categories.find(cat => cat.id === id) || categories.find(cat => cat.id === 'custom') || categories[0];
+  };
+
+  const addMaintenanceEntry = (entry) => {
+    const type = entry.type || 'custom';
+    const catDef = getCategoryById(type);
+    const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
+
+    const safetyMargin = entry.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+    const intervalKm = entry.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+    const performedAtODO = Number(entry.performedAtODO) || 0;
+    
+    let nextDueODO = 0;
+    let alertODO = 0;
+    
+    if (intervalKm > 0) {
+      nextDueODO = performedAtODO + intervalKm;
+      alertODO = nextDueODO - safetyMargin;
+    }
+    
+    setMaintenanceEntries(prev => [...prev, {
+      ...entry,
+      id: `m_${Date.now()}`,
+      vehicleId: selectedVehicleId,
+      timestamp: new Date().toISOString(),
+      performedAtODO,
+      intervalKm,
+      safetyMarginKm: safetyMargin,
+      nextDueODO,
+      alertODO
+    }]);
+  };
+
+  const updateMaintenanceEntry = (id, updatedData) => {
+    setMaintenanceEntries(prev => prev.map(entry => {
+      if (entry.id !== id) return entry;
+      
+      const updated = { ...entry, ...updatedData };
+      const type = updated.type || 'custom';
+      const catDef = getCategoryById(type);
+      const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
+      
+      // Recalculate if fields changed
+      const safetyMargin = updated.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+      const intervalKm = updated.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+      const performedAtODO = Number(updated.performedAtODO) || 0;
+      
+      if (intervalKm > 0) {
+        updated.nextDueODO = performedAtODO + intervalKm;
+        updated.alertODO = updated.nextDueODO - safetyMargin;
+      }
+      
+      return updated;
+    }));
+  };
+
+  const deleteMaintenanceEntry = (id) => {
+    setMaintenanceEntries(prev => prev.filter(entry => entry.id !== id));
+  };
+
+  const deleteMultipleMaintenanceEntries = (ids) => {
+    const idsSet = new Set(ids);
+    setMaintenanceEntries(prev => prev.filter(entry => !idsSet.has(entry.id)));
+  };
+
   // Derived Stats - reactive with useMemo
   const stats = useMemo(() => {
     if (activeVehicleFillUpsByOdometer.length === 0) return { totalFillUps: 0, validTripsCount: 0, avgKmPerLiter: 0, avgL100km: 0, totalCost: 0 };
@@ -244,6 +337,11 @@ export function FuelProvider({ children }) {
       return aDue - bDue;
     });
 
+  // Filter unified maintenance entries for active vehicle
+  const activeVehicleMaintenanceEntries = maintenanceEntries
+    .filter(entry => entry.vehicleId === selectedVehicleId)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
   const activeVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
   return (
@@ -252,10 +350,12 @@ export function FuelProvider({ children }) {
       activeVehicle,
       activeVehicleFillUps, activeVehicleFillUpsByOdometer, addFillUp, deleteFillUp, deleteMultipleFillUps, updateFillUp, addVehicle, editVehicle, deleteVehicle,
       tripEstimates: activeVehicleTripEstimates, addTripEstimate, deleteTripEstimate, deleteMultipleTripEstimates,
-      tyreComparisons: activeVehicleTyreComparisons, addTyreComparison, deleteTyreComparison,
+      tyreComparisons: activeVehicleTyreComparisons, addTyreComparison, deleteTyreComparison, deleteMultipleTyreComparisons,
       maintenanceLogs: activeVehicleMaintenanceLogs, addMaintenanceLog, updateMaintenanceLog, deleteMaintenanceLog,
       maintenanceReminders: activeVehicleMaintenanceReminders, addMaintenanceReminder, updateMaintenanceReminder, deleteMaintenanceReminder,
+      maintenanceEntries: activeVehicleMaintenanceEntries, addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, deleteMultipleMaintenanceEntries,
       maintenanceSettings, updateMaintenanceSettings, updateCategorySettings,
+      categories, addMaintenanceCategory, updateMaintenanceCategory, deleteMaintenanceCategory, getCategoryById,
       stats
     }}>
       {children}

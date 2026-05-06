@@ -6,15 +6,34 @@ export function calculateTripMetrics(fillUps, index) {
   const previous = index > 0 ? fillUps[index - 1] : null;
 
   const distance = previous ? current.odometer - previous.odometer : 0;
-  const kmPerLiter = distance > 0 ? distance / current.liters : 0;
-  const litersPer100km = distance > 0 ? (current.liters / distance) * 100 : 0;
+  let fuelConsumed = current.liters;
+  let isEstimated = false;
+
+  if (current.tankCapacityLiters > 0) {
+    const prevLevel = previous?.tankLevelAfter !== undefined ? previous.tankLevelAfter : 100;
+    const currLevel = current.tankLevelAfter !== undefined ? current.tankLevelAfter : 100;
+    
+    if (prevLevel < 100 || currLevel < 100) {
+       fuelConsumed = (prevLevel / 100 * current.tankCapacityLiters) + current.liters - (currLevel / 100 * current.tankCapacityLiters);
+       isEstimated = true;
+    }
+  }
+
+  // Ensure fuelConsumed doesn't go below 0 due to gauge inaccuracy
+  if (fuelConsumed <= 0 && current.liters > 0 && distance > 0) {
+    fuelConsumed = current.liters; // fallback
+  }
+
+  const kmPerLiter = distance > 0 && fuelConsumed > 0 ? distance / fuelConsumed : 0;
+  const litersPer100km = distance > 0 && fuelConsumed > 0 ? (fuelConsumed / distance) * 100 : 0;
   const tripCost = current.liters * current.pricePerLiter;
 
   return {
     distance: formatTo2Decimals(distance),
     kmPerLiter: formatTo2Decimals(kmPerLiter),
     litersPer100km: formatTo2Decimals(litersPer100km),
-    tripCost: formatTo2Decimals(tripCost)
+    tripCost: formatTo2Decimals(tripCost),
+    isEstimated
   };
 }
 

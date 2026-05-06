@@ -68,11 +68,30 @@
 }
 
 @layer base {
-  body {
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  html, body {
     @apply bg-slate-50 text-slate-900 min-h-screen text-base transition-colors duration-300;
     @apply dark:bg-black dark:text-slate-100;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-x: none;
+    overflow-x: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  #root {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
   }
 }
 
@@ -178,5 +197,100 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Date input calendar styling to match dropdown theme */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(0.5);
+  }
+
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+  }
+
+  /* Webkit calendar popup styling */
+  input[type="date"]::-webkit-inner-spin-button,
+  input[type="date"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Firefox calendar styling */
+  input[type="date"]::-moz-calendar-picker-indicator {
+    cursor: pointer;
+    background: transparent;
+    color: inherit;
+  }
+
+  /* Calendar popup styles (webkit browsers) */
+  ::-webkit-calendar-picker-indicator:hover {
+    background-color: rgba(16, 185, 129, 0.1);
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-calendar-picker-indicator:hover {
+    background-color: rgba(16, 185, 129, 0.2);
+  }
+
+  /* Calendar popup styling for webkit browsers */
+  input[type="date"]::-webkit-datetime-edit-text {
+    color: inherit;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-month-field {
+    color: inherit;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-day-field {
+    color: inherit;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-year-field {
+    color: inherit;
+  }
+
+  /* Custom calendar dropdown styling (limited CSS support) */
+  /* Note: Full calendar popup styling is limited by browser security restrictions */
+  /* The calendar popup inherits system theme, but we can style the input field */
+  
+  /* Add calendar icon styling */
+  .calendar-icon-wrapper {
+    position: relative;
+  }
+  
+  .calendar-icon-wrapper::after {
+    content: '📅';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    opacity: 0.5;
+    font-size: 16px;
+  }
+
+  /* Enhanced calendar input styling */
+  .calendar-input {
+    cursor: pointer;
+  }
+
+  .calendar-input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  /* Dark mode calendar adjustments */
+  .dark .calendar-input {
+    color-scheme: dark;
+  }
+
+  /* Calendar dropdown shadow and border (limited browser support) */
+  input[type="date"]:focus {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  }
+
+  .dark input[type="date"]:focus {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
   }
 }

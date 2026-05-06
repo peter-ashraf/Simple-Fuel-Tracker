@@ -1,26 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from '../hooks/useFuelContext';
 import { useTheme } from '../hooks/useTheme';
-import { Card, Input, Label, cn, PageWrapper, ConfirmModal } from './ui';
-import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check, MapPin, Navigation, Circle, Bell, Wrench, Settings2 } from 'lucide-react';
+import { Card, Input, Label, cn, PageWrapper, Modal, ConfirmModal } from './ui';
+import { Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, Check, MapPin, Navigation, Circle, Bell, Wrench, Settings2, Save } from 'lucide-react';
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
 import { SavedStations } from './SavedStations';
 import { backupService } from '../services/backupService';
+import { excelService } from '../services/excelService';
 import ImportResolver from './ImportResolver';
 import { Download, Upload, Database } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
 
 export default function Settings() {
-  const { vehicles, selectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle, maintenanceSettings, updateMaintenanceSettings, updateCategorySettings } = useFuel();
+  const { vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle, maintenanceSettings, updateMaintenanceSettings, updateCategorySettings } = useFuel();
   const { theme, setTheme } = useTheme();
   const [newVehicleName, setNewVehicleName] = useState('');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [editingTyreSize, setEditingTyreSize] = useState({ width: 205, aspectRatio: 55, rimSize: 16 });
+  const [editingTankCapacity, setEditingTankCapacity] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, vehicleId: null, vehicleName: '' });
   const [factoryResetModal, setFactoryResetModal] = useState(false);
+  const [validationModal, setValidationModal] = useState({ isOpen: false });
+  const [formatModal, setFormatModal] = useState({ isOpen: false, type: 'export' });
+
+  // Fuel Price Form State
+  const [priceForm, setPriceForm] = useState({ 92: '', 95: '', diesel: '' });
+
+  useEffect(() => {
+    if (fuelPrices) {
+      setPriceForm({
+        92: fuelPrices[92] || '',
+        95: fuelPrices[95] || '',
+        diesel: fuelPrices.diesel || ''
+      });
+    }
+  }, [fuelPrices]);
+
+  const handleSavePrices = () => {
+    setFuelPrices({
+      92: Number(priceForm[92]),
+      95: Number(priceForm[95]),
+      diesel: Number(priceForm.diesel)
+    });
+    showToast('Fuel prices updated successfully');
+  };
+  // Active Vehicle Form State
+  const [activeVehicleForm, setActiveVehicleForm] = useState(null);
+
+  useEffect(() => {
+    if (activeVehicle) {
+      setActiveVehicleForm({
+        tyreSize: activeVehicle.tyreSize || { width: '', aspectRatio: '', rimSize: '' },
+        tankCapacity: activeVehicle.tankCapacity || ''
+      });
+    }
+  }, [activeVehicle?.id]);
   
   // Location detection state
   const [locationEnabled, setLocationEnabled] = useState(true);
@@ -29,16 +67,22 @@ export default function Settings() {
   // Notifications
   const { notificationsEnabled, permissionState: notificationPermission, toggleNotifications } = useNotifications();
 
-  // Backup & Import state
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
+
+  const [toastMessage, setToastMessage] = useState('');
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2500);
+  };
 
   const handleCreateVehicle = (e) => {
     e.preventDefault();
     if (newVehicleName.trim()) {
       addVehicle({ name: newVehicleName.trim(), type: 'car' });
       setNewVehicleName('');
+      showToast('Vehicle added successfully');
     }
   };
 
@@ -46,8 +90,10 @@ export default function Settings() {
     if (editingName.trim()) {
       editVehicle(id, {
         name: editingName.trim(),
-        tyreSize: editingTyreSize
+        tyreSize: editingTyreSize,
+        tankCapacity: editingTankCapacity ? Number(editingTankCapacity) : null
       });
+      showToast('Vehicle updated successfully');
     }
     setEditingVehicleId(null);
   };
@@ -56,6 +102,7 @@ export default function Settings() {
     setEditingVehicleId(vehicle.id);
     setEditingName(vehicle.name);
     setEditingTyreSize(vehicle.tyreSize || { width: 205, aspectRatio: 55, rimSize: 16 });
+    setEditingTankCapacity(vehicle.tankCapacity || '');
   };
 
   const handleClearApp = () => {
@@ -72,14 +119,18 @@ export default function Settings() {
     clearLocation();
   };
 
-  const handleExport = () => {
-    backupService.exportData();
+  const handleExport = (type = 'json') => {
+    if (type === 'excel') {
+      excelService.exportData();
+    } else {
+      backupService.exportData();
+    }
   };
 
-  const handleImportClick = () => {
+  const handleImportClick = (type = 'json') => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = type === 'excel' ? '.xlsx, .xls' : '.json';
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -87,7 +138,7 @@ export default function Settings() {
       setIsImporting(true);
       setImportError(null);
       try {
-        const analysis = await backupService.analyzeImport(file);
+        const analysis = type === 'excel' ? await excelService.analyzeImport(file) : await backupService.analyzeImport(file);
         setImportAnalysis(analysis);
       } catch (err) {
         setImportError(err.message);
@@ -101,6 +152,30 @@ export default function Settings() {
   const handleApplyImport = (resolutions, newRecords) => {
     backupService.applyImport(importAnalysis.payload, resolutions, newRecords);
     setImportAnalysis(null);
+  };
+
+  const handleSaveActiveVehicleDetails = () => {
+    if (!activeVehicleForm) return;
+    
+    const { tyreSize, tankCapacity } = activeVehicleForm;
+    const isMissingTyre = !tyreSize.width || !tyreSize.aspectRatio || !tyreSize.rimSize;
+    const isMissingTank = !tankCapacity;
+
+    if (isMissingTyre || isMissingTank) {
+      setValidationModal({ isOpen: true, isMissingTyre, isMissingTank });
+    } else {
+      confirmSaveActiveVehicleDetails();
+    }
+  };
+
+  const confirmSaveActiveVehicleDetails = () => {
+    if (!activeVehicleForm) return;
+    editVehicle(activeVehicle.id, {
+      tyreSize: activeVehicleForm.tyreSize,
+      tankCapacity: activeVehicleForm.tankCapacity ? parseFloat(activeVehicleForm.tankCapacity) : null
+    });
+    setValidationModal({ isOpen: false });
+    showToast('Vehicle details saved securely');
   };
 
   return (
@@ -129,73 +204,91 @@ export default function Settings() {
                               if (e.key === 'Enter') handleSaveEdit(v.id);
                               if (e.key === 'Escape') setEditingVehicleId(null);
                            }}
+                           onClick={(e) => e.stopPropagation()}
                          />
                          <button onClick={() => handleSaveEdit(v.id)} className="text-emerald-500 hover:text-emerald-400 p-1.5 bg-emerald-500/10 rounded-lg">
                             <Check className="w-4 h-4" />
                          </button>
                        </div>
+                       
+                       <div className="flex-1">
+                         <Label className="text-[10px]">Tank Capacity (Liters)</Label>
+                         <Input
+                           type="number"
+                           value={editingTankCapacity}
+                           onChange={e => setEditingTankCapacity(e.target.value)}
+                           className="py-1 px-2 text-xs h-auto bg-slate-100 dark:bg-slate-900"
+                           placeholder="e.g. 40"
+                         />
+                       </div>
+
                        <div className="space-y-1.5">
                          <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
                            <Circle className="w-3 h-3" /> Default Tyre Size
                          </p>
-                         <div className="flex gap-2">
                            <div className="flex-1">
                              <Label className="text-[10px]">Width (mm)</Label>
                              <Input
                                type="number"
-                               value={editingTyreSize.width}
-                               onChange={e => setEditingTyreSize(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
-                               className="py-1 px-2 text-xs h-auto"
-                               min="100"
-                               max="400"
+                               value={editingTyreSize.width || ''}
+                               onChange={e => {
+                                 const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                 setEditingTyreSize(prev => ({ ...prev, width: isNaN(val) ? 0 : val }));
+                               }}
+                               className={cn("py-1 px-2 text-xs h-auto", (editingTyreSize.width === 0) && "border-red-500")}
                              />
                            </div>
                            <div className="flex-1">
                              <Label className="text-[10px]">Aspect (%)</Label>
                              <Input
                                type="number"
-                               value={editingTyreSize.aspectRatio}
-                               onChange={e => setEditingTyreSize(prev => ({ ...prev, aspectRatio: parseInt(e.target.value) || 0 }))}
-                               className="py-1 px-2 text-xs h-auto"
-                               min="20"
-                               max="85"
+                               value={editingTyreSize.aspectRatio || ''}
+                               onChange={e => {
+                                 const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                 setEditingTyreSize(prev => ({ ...prev, aspectRatio: isNaN(val) ? 0 : val }));
+                               }}
+                               className={cn("py-1 px-2 text-xs h-auto", (editingTyreSize.aspectRatio === 0) && "border-red-500")}
                              />
                            </div>
                            <div className="flex-1">
                              <Label className="text-[10px]">Rim (in)</Label>
                              <Input
                                type="number"
-                               value={editingTyreSize.rimSize}
-                               onChange={e => setEditingTyreSize(prev => ({ ...prev, rimSize: parseInt(e.target.value) || 0 }))}
-                               className="py-1 px-2 text-xs h-auto"
-                               min="10"
-                               max="24"
+                               value={editingTyreSize.rimSize || ''}
+                               onChange={e => {
+                                 const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                 setEditingTyreSize(prev => ({ ...prev, rimSize: isNaN(val) ? 0 : val }));
+                               }}
+                               className={cn("py-1 px-2 text-xs h-auto", (editingTyreSize.rimSize === 0) && "border-red-500")}
                              />
                            </div>
-                         </div>
                          <p className="text-[10px] text-slate-400">
                            {editingTyreSize.width}/{editingTyreSize.aspectRatio} R{editingTyreSize.rimSize}
                          </p>
                        </div>
                     </div>
                   ) : (
-                    <div className="flex-1 mr-3 flex items-center gap-2">
-                      <div>
-                        <span className="font-semibold text-slate-900 dark:text-slate-200 block">{v.name}</span>
-                        {v.tyreSize && (
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                            <Circle className="w-3 h-3" /> {v.tyreSize.width}/{v.tyreSize.aspectRatio} R{v.tyreSize.rimSize}
-                          </span>
-                        )}
-                        {v.id === selectedVehicleId && <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase">Active</span>}
-                      </div>
-                      <button
-                        onClick={() => startEditing(v)}
-                        className="text-slate-400 hover:text-blue-400 p-1 opacity-40 group-hover:opacity-100 transition-opacity md:opacity-40 ml-auto"
-                      >
-                         <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                     <div className="flex-1 mr-3 flex items-center gap-2 cursor-pointer" onClick={() => setSelectedVehicleId(v.id)}>
+                       <div className="flex items-center gap-3">
+                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${v.id === selectedVehicleId ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
+                           {v.id === selectedVehicleId && <Check className="w-3 h-3" />}
+                         </div>
+                         <div>
+                           <span className="font-semibold text-slate-900 dark:text-slate-200 block">{v.name}</span>
+                           {v.tyreSize && (
+                             <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                               <Circle className="w-3 h-3" /> {v.tyreSize.width}/{v.tyreSize.aspectRatio} R{v.tyreSize.rimSize}
+                             </span>
+                           )}
+                         </div>
+                       </div>
+                       <button
+                         onClick={(e) => { e.stopPropagation(); startEditing(v); }}
+                         className="text-slate-400 hover:text-blue-400 p-1 opacity-40 group-hover:opacity-100 transition-opacity md:opacity-40 ml-auto"
+                       >
+                          <Pencil className="w-3.5 h-3.5" />
+                       </button>
+                     </div>
                   )}
                   
                   <div className="shrink-0 flex items-center border-l border-slate-200 dark:border-slate-800 pl-2 ml-1">
@@ -227,68 +320,86 @@ export default function Settings() {
          </form>
       </section>
 
-      {/* Active Vehicle Tyre Size - Always Visible */}
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Circle className="w-4 h-4"/> Active Vehicle Tyre Size</h3>
+         <div className="flex items-center justify-between mb-3">
+           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ml-1"><Circle className="w-4 h-4"/> Active Vehicle Details</h3>
+           {activeVehicleForm && (
+             <button
+               onClick={handleSaveActiveVehicleDetails}
+               className="bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+             >
+               Save Details
+             </button>
+           )}
+         </div>
          <Card className="px-5 py-5 space-y-3">
-            {!activeVehicle ? (
+            {!activeVehicle || !activeVehicleForm ? (
               <p className="text-sm text-slate-500">No active vehicle selected.</p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-900 dark:text-white">{activeVehicle.name}</span>
-                  {activeVehicle.tyreSize ? (
+                  {activeVehicleForm.tyreSize?.width ? (
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
-                      {activeVehicle.tyreSize.width}/{activeVehicle.tyreSize.aspectRatio} R{activeVehicle.tyreSize.rimSize}
+                      {activeVehicleForm.tyreSize.width}/{activeVehicleForm.tyreSize.aspectRatio} R{activeVehicleForm.tyreSize.rimSize}
                     </span>
                   ) : (
-                    <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-lg">Not set</span>
+                    <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-lg">Tyres not set</span>
+                  )}
+                  {activeVehicleForm.tankCapacity && (
+                    <span className="text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-lg ml-2">
+                      {activeVehicleForm.tankCapacity}L Tank
+                    </span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 items-start">
+                <div className="grid grid-cols-4 gap-2 items-start mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
                   <div className="flex flex-col">
                     <Label className="text-[10px] mb-1.5 h-4">Width (mm)</Label>
                     <Input
                       type="number"
-                      value={(activeVehicle.tyreSize?.width) || 205}
+                      value={activeVehicleForm.tyreSize?.width || ''}
                       onChange={e => {
-                        const width = parseInt(e.target.value) || 0;
-                        const newSize = { ...(activeVehicle.tyreSize || { aspectRatio: 55, rimSize: 16 }), width };
-                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                        const width = e.target.value === '' ? '' : parseInt(e.target.value);
+                        setActiveVehicleForm(prev => ({ ...prev, tyreSize: { ...prev.tyreSize, width } }));
                       }}
-                      className="py-2 px-2 text-xs h-10"
-                      min="100"
-                      max="400"
+                      className={cn("py-2 px-2 text-xs h-10", (!activeVehicleForm.tyreSize?.width) && "border-amber-500/50")}
                     />
                   </div>
                   <div className="flex flex-col">
                     <Label className="text-[10px] mb-1.5 h-4">Aspect (%)</Label>
                     <Input
                       type="number"
-                      value={(activeVehicle.tyreSize?.aspectRatio) || 55}
+                      value={activeVehicleForm.tyreSize?.aspectRatio || ''}
                       onChange={e => {
-                        const aspectRatio = parseInt(e.target.value) || 0;
-                        const newSize = { ...(activeVehicle.tyreSize || { width: 205, rimSize: 16 }), aspectRatio };
-                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                        const aspectRatio = e.target.value === '' ? '' : parseInt(e.target.value);
+                        setActiveVehicleForm(prev => ({ ...prev, tyreSize: { ...prev.tyreSize, aspectRatio } }));
                       }}
-                      className="py-2 px-2 text-xs h-10"
-                      min="20"
-                      max="85"
+                      className={cn("py-2 px-2 text-xs h-10", (!activeVehicleForm.tyreSize?.aspectRatio) && "border-amber-500/50")}
                     />
                   </div>
                   <div className="flex flex-col">
                     <Label className="text-[10px] mb-1.5 h-4">Rim (in)</Label>
                     <Input
                       type="number"
-                      value={(activeVehicle.tyreSize?.rimSize) || 16}
+                      value={activeVehicleForm.tyreSize?.rimSize || ''}
                       onChange={e => {
-                        const rimSize = parseInt(e.target.value) || 0;
-                        const newSize = { ...(activeVehicle.tyreSize || { width: 205, aspectRatio: 55 }), rimSize };
-                        editVehicle(activeVehicle.id, { tyreSize: newSize });
+                        const rimSize = e.target.value === '' ? '' : parseInt(e.target.value);
+                        setActiveVehicleForm(prev => ({ ...prev, tyreSize: { ...prev.tyreSize, rimSize } }));
                       }}
-                      className="py-2 px-2 text-xs h-10"
-                      min="10"
-                      max="24"
+                      className={cn("py-2 px-2 text-xs h-10", (!activeVehicleForm.tyreSize?.rimSize) && "border-amber-500/50")}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] mb-1.5 h-4 text-blue-600 dark:text-blue-400 font-bold">Tank (L)</Label>
+                    <Input
+                      type="number"
+                      value={activeVehicleForm.tankCapacity || ''}
+                      onChange={e => {
+                        const cap = e.target.value === '' ? '' : parseFloat(e.target.value);
+                        setActiveVehicleForm(prev => ({ ...prev, tankCapacity: cap }));
+                      }}
+                      className={cn("py-2 px-2 text-xs h-10 border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-900/10 focus:ring-blue-500", (!activeVehicleForm.tankCapacity) && "border-amber-500/50")}
+                      placeholder="e.g. 40"
                     />
                   </div>
                 </div>
@@ -300,10 +411,27 @@ export default function Settings() {
       <section className="pt-4">
          <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><Palette className="w-4 h-4"/> Theme Preferences</h3>
          <Card className="px-5 py-6">
-            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl">
-              <button type="button" onClick={() => setTheme('light')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'light' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Light</button>
-              <button type="button" onClick={() => setTheme('dark')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'dark' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Dark</button>
-              <button type="button" onClick={() => setTheme('system')} className={`py-3 text-sm font-bold rounded-xl transition cursor-pointer ${theme === 'system' ? 'bg-white dark:bg-indigo-500 text-slate-950 dark:text-white shadow-sm dark:shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>System</button>
+            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
+              {['light', 'dark', 'system'].map(t => (
+                 <button
+                    key={t}
+                    onClick={() => { setTheme(t); showToast(`${t.charAt(0).toUpperCase() + t.slice(1)} theme applied`); }}
+                    className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold capitalize transition-all ${
+                       theme === t
+                       ? 'text-slate-900 dark:text-white'
+                       : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                 >
+                    {theme === t && (
+                       <motion.div
+                          layoutId="settingsThemeTab"
+                          className="absolute inset-0 bg-white dark:bg-indigo-500 rounded-xl shadow-sm"
+                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                       />
+                    )}
+                    <span className="relative z-10">{t}</span>
+                 </button>
+              ))}
             </div>
          </Card>
       </section>
@@ -319,7 +447,7 @@ export default function Settings() {
                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Automatically detect nearby gas stations when adding fill-ups</p>
                   </div>
                   <button
-                     onClick={() => setLocationEnabled(!locationEnabled)}
+                     onClick={() => { setLocationEnabled(!locationEnabled); showToast(locationEnabled ? 'Location detection disabled' : 'Location detection enabled'); }}
                      className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         locationEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
                      }`}
@@ -345,7 +473,7 @@ export default function Settings() {
                
                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/50">
                   <button
-                     onClick={handleClearLocationCache}
+                     onClick={() => { handleClearLocationCache(); showToast('Location cache cleared'); }}
                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                   >
                      Clear Location Cache
@@ -367,7 +495,7 @@ export default function Settings() {
                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Get notified when maintenance is due based on date or mileage</p>
                   </div>
                   <button
-                     onClick={toggleNotifications}
+                     onClick={() => { toggleNotifications(); showToast(notificationsEnabled ? 'Notifications disabled' : 'Notifications enabled'); }}
                      className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         notificationsEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
                      }`}
@@ -401,121 +529,7 @@ export default function Settings() {
          </Card>
       </section>
 
-      {/* Maintenance Settings - Unified Compact Design */}
-      <section className="pt-4">
-         <Card className="overflow-hidden">
-            {/* Header with Stats */}
-            <div className="px-5 py-4 bg-gradient-to-r from-blue-500/10 to-violet-500/10 dark:from-blue-500/5 dark:to-violet-500/5 border-b border-slate-200 dark:border-white/[0.06]">
-               <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                     <Settings2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                     <span className="text-sm font-bold text-slate-900 dark:text-white">Maintenance</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px]">
-                     {(() => {
-                       const cats = Object.values(MAINTENANCE_CATEGORIES).filter(c => c.id !== 'custom');
-                       const active = cats.filter(c => (maintenanceSettings?.categorySettings?.[c.id]?.enabled !== false)).length;
-                       const disabled = cats.length - active;
-                       return (
-                         <>
-                           <span className="text-emerald-500 font-medium">{active} active</span>
-                           {disabled > 0 && <span className="text-slate-400">• {disabled} off</span>}
-                         </>
-                       );
-                     })()}
-                  </div>
-               </div>
-            </div>
 
-            <div className="px-5 py-5 space-y-5">
-               {/* Safety Margin - Slider + Input */}
-               <div className="overflow-x-hidden">
-                  <div className="flex items-center justify-between mb-3">
-                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Warning Distance</span>
-                     <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="100"
-                          max="10000"
-                          step="100"
-                          value={maintenanceSettings?.defaultSafetyMarginKm ?? 2000}
-                          onChange={e => {
-                            const val = Math.min(10000, Math.max(100, Number(e.target.value)));
-                            updateMaintenanceSettings({ defaultSafetyMarginKm: val });
-                          }}
-                          className="w-16 text-xs font-bold text-blue-600 dark:text-blue-400 bg-transparent border-b border-blue-300 dark:border-blue-600 text-right focus:outline-none focus:border-blue-500"
-                        />
-                        <span className="text-xs text-slate-500">km</span>
-                     </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="500"
-                    max="5000"
-                    step="100"
-                    value={Math.min(5000, Math.max(500, maintenanceSettings?.defaultSafetyMarginKm ?? 2000))}
-                    onChange={e => updateMaintenanceSettings({ defaultSafetyMarginKm: Number(e.target.value) })}
-                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500 touch-none"
-                  />
-                  <div className="flex justify-between mt-1 text-[10px] text-slate-400">
-                     <span>500 km</span>
-                     <span>5000 km</span>
-                  </div>
-               </div>
-
-               {/* Compact Category Grid */}
-               <div className="pt-4 border-t border-slate-200 dark:border-slate-700/50 overflow-x-hidden">
-                  <div className="flex items-center justify-between mb-3">
-                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Categories</span>
-                     <span className="text-[10px] text-slate-400">Tap to toggle</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-1.5">
-                     {Object.values(MAINTENANCE_CATEGORIES).filter(cat => cat.id !== 'custom').map(category => {
-                       const catSettings = maintenanceSettings?.categorySettings?.[category.id] || {};
-                       const isEnabled = catSettings.enabled !== false;
-                       
-                       return (
-                         <button
-                           key={category.id}
-                           onClick={() => updateCategorySettings(category.id, { enabled: !isEnabled })}
-                           className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-all ${
-                             isEnabled 
-                               ? 'bg-slate-100 dark:bg-white/[0.08]' 
-                               : 'bg-transparent hover:bg-slate-50 dark:hover:bg-white/[0.04]'
-                           }`}
-                         >
-                           {/* Status Dot */}
-                           <div 
-                             className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${
-                               isEnabled ? '' : 'bg-slate-300 dark:bg-slate-600'
-                             }`}
-                             style={isEnabled ? { backgroundColor: category.color } : {}}
-                           />
-                           
-                           {/* Name */}
-                           <span className={`text-[11px] font-medium truncate flex-1 ${
-                             isEnabled ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-500'
-                           }`}>
-                             {category.name}
-                           </span>
-                           
-                           {/* Toggle Indicator */}
-                           <div className={`w-7 h-4 rounded-full flex items-center px-0.5 transition-colors ${
-                             isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                           }`}>
-                             <div className={`w-3 h-3 rounded-full bg-white transition-transform ${
-                               isEnabled ? 'translate-x-3' : 'translate-x-0'
-                             }`} />
-                           </div>
-                         </button>
-                       );
-                     })}
-                  </div>
-               </div>
-            </div>
-         </Card>
-      </section>
 
       <section className="pt-4">
          <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ml-1"><MapPin className="w-4 h-4"/> Saved Gas Stations</h3>
@@ -537,26 +551,33 @@ export default function Settings() {
                   <Label>Petrol 92 (EGP/L)</Label>
                   <Input 
                     type="number" step="0.01"
-                    value={fuelPrices[92] || ''} 
-                    onChange={e => setFuelPrices({...fuelPrices, 92: Number(e.target.value)})}
+                    value={priceForm[92]} 
+                    onChange={e => setPriceForm({...priceForm, 92: e.target.value})}
                   />
                </div>
                <div>
                   <Label>Petrol 95 (EGP/L)</Label>
                   <Input 
                     type="number" step="0.01"
-                    value={fuelPrices[95] || ''} 
-                    onChange={e => setFuelPrices({...fuelPrices, 95: Number(e.target.value)})}
+                    value={priceForm[95]} 
+                    onChange={e => setPriceForm({...priceForm, 95: e.target.value})}
                   />
                </div>
                <div>
                   <Label>Diesel (EGP/L)</Label>
                   <Input 
                     type="number" step="0.01"
-                    value={fuelPrices['diesel'] || ''} 
-                    onChange={e => setFuelPrices({...fuelPrices, 'diesel': Number(e.target.value)})}
+                    value={priceForm['diesel']} 
+                    onChange={e => setPriceForm({...priceForm, 'diesel': e.target.value})}
                   />
                </div>
+               
+               <button
+                  onClick={handleSavePrices}
+                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
+               >
+                  <Save size={18} /> Save Prices
+               </button>
             </div>
          </Card>
       </section>
@@ -572,17 +593,17 @@ export default function Settings() {
                
                <div className="grid grid-cols-2 gap-3">
                   <button 
-                    onClick={handleExport}
-                    className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    onClick={() => setFormatModal({ isOpen: true, type: 'export' })}
+                    className="flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
                   >
                      <Download size={18} className="text-blue-500" /> Export
                   </button>
                   <button 
-                    onClick={handleImportClick}
+                    onClick={() => setFormatModal({ isOpen: true, type: 'import' })}
                     disabled={isImporting}
-                    className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
                   >
-                     <Upload size={18} className="text-emerald-500" /> {isImporting ? 'Reading...' : 'Import'}
+                     <Upload size={18} className="text-emerald-500" /> Import
                   </button>
                </div>
 
@@ -624,6 +645,80 @@ export default function Settings() {
         variant="danger"
       />
 
+      {/* Validation Modal for Active Vehicle Details */}
+      <ConfirmModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ isOpen: false })}
+        onConfirm={confirmSaveActiveVehicleDetails}
+        title="Missing Specifications"
+        message={
+          <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+            <p>You are missing some vehicle specifications which will disable certain features:</p>
+            <ul className="list-disc pl-5 font-medium text-amber-600 dark:text-amber-500">
+              {validationModal.isMissingTyre && <li>Tyre Comparisons won't be calculated accurately.</li>}
+              {validationModal.isMissingTank && <li>Fuel consumption for partial fill-ups cannot be estimated.</li>}
+            </ul>
+            <p className="pt-2">Do you want to save anyway?</p>
+          </div>
+        }
+        confirmText="Save Anyway"
+        cancelText="Go Back"
+      />
+
+      {/* Backup Format Selection Modal */}
+      <Modal
+        isOpen={formatModal.isOpen}
+        onClose={() => setFormatModal({ isOpen: false })}
+        title={formatModal.type === 'export' ? "Export Data" : "Import Data"}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            {formatModal.type === 'export' 
+              ? "Choose the format you'd like to save your data in:" 
+              : "Choose the format of the file you'd like to import:"}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                setFormatModal({ isOpen: false });
+                if (formatModal.type === 'export') handleExport('json');
+                else handleImportClick('json');
+              }}
+              className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all group"
+            >
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <Database className="w-6 h-6 text-blue-500" />
+              </div>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">JSON</span>
+              <span className="text-[10px] text-slate-500 mt-1">Standard Backup</span>
+            </button>
+            
+            <button
+              onClick={() => {
+                setFormatModal({ isOpen: false });
+                if (formatModal.type === 'export') handleExport('excel');
+                else handleImportClick('excel');
+              }}
+              className="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all group"
+            >
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <Database className="w-6 h-6 text-emerald-500" />
+              </div>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">Excel</span>
+              <span className="text-[10px] text-slate-500 mt-1">Spreadsheet (.xlsx)</span>
+            </button>
+          </div>
+          
+          <button
+            onClick={() => setFormatModal({ isOpen: false })}
+            className="w-full py-3 mt-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+
       {/* Import Resolution Modal */}
       {importAnalysis && (
         <ImportResolver 
@@ -632,6 +727,21 @@ export default function Settings() {
           onApply={handleApplyImport}
         />
       )}
+
+      {/* Global Setting Toast */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-500/90 backdrop-blur-md text-white px-4 py-2.5 rounded-full shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 z-50 text-sm font-semibold max-w-[90%]"
+          >
+            <Check className="w-4 h-4" />
+            <span className="truncate">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </PageWrapper>
   );

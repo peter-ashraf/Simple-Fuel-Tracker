@@ -502,39 +502,7 @@ export default function TripCostEstimator() {
             </div>
             
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-              {isEstimateSelectionMode ? (
-                <>
-                  <button
-                    onClick={selectAllEstimates}
-                    className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    title={selectedEstimateIds.size === tripEstimates.length ? "Deselect All" : "Select All"}
-                  >
-                    {selectedEstimateIds.size === tripEstimates.length ? (
-                      <><Square className="w-3 h-3" /><span className="hidden sm:inline">Deselect All</span></>
-                    ) : (
-                      <><CheckSquare className="w-3 h-3" /><span className="hidden sm:inline">Select All</span></>
-                    )}
-                  </button>
-                  {selectedEstimateIds.size > 0 && (
-                    <button
-                      onClick={handleBulkDeleteEstimates}
-                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors"
-                      title={`Delete ${selectedEstimateIds.size} selected`}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span className="hidden sm:inline">Delete ({selectedEstimateIds.size})</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={clearEstimateSelection}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    title="Cancel"
-                  >
-                    <X className="w-3 h-3 sm:hidden" />
-                    <span className="hidden sm:inline">Cancel</span>
-                  </button>
-                </>
-              ) : (
+              {!isEstimateSelectionMode && (
                 <button
                   onClick={() => setIsEstimateSelectionMode(true)}
                   className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -641,7 +609,47 @@ export default function TripCostEstimator() {
         </Card>
       )}
 
-          </PageWrapper>
+      </PageWrapper>
+
+      <AnimatePresence>
+        {isEstimateSelectionMode && selectedEstimateIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-[90%] sm:max-w-[400px] bg-slate-900 dark:bg-slate-800 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between z-[100] origin-bottom"
+          >
+             <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm">
+                   {selectedEstimateIds.size}
+                </div>
+                <span className="font-semibold text-sm">Selected</span>
+             </div>
+             
+             <div className="flex gap-2">
+                <button 
+                  onClick={selectAllEstimates}
+                  className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
+                >
+                  {selectedEstimateIds.size === tripEstimates.length ? <Square className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                  <span>{selectedEstimateIds.size === tripEstimates.length ? 'Deselect' : 'Select All'}</span>
+                </button>
+                <button 
+                  onClick={handleBulkDeleteEstimates}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+                <button 
+                  onClick={clearEstimateSelection}
+                  className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

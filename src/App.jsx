@@ -13,10 +13,9 @@ import Analytics from './components/Analytics';
 import SettingsScreen from './components/Settings';
 import TripCostEstimator from './components/trips/TripCostEstimator';
 import TyreCalculator from './components/TyreCalculator';
-import MaintenanceLogs from './components/MaintenanceLogs';
-import MaintenanceLogForm from './components/MaintenanceLogForm';
+import Maintenance from './components/Maintenance';
+import MaintenanceForm from './components/MaintenanceForm';
 import MaintenanceLogEdit from './components/MaintenanceLogEdit';
-import MaintenanceReminders from './components/MaintenanceReminders';
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
@@ -70,21 +69,23 @@ function Header() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute top-12 left-12 w-48 bg-white dark:bg-white/[0.06] backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left"
+              className="absolute top-12 left-12 w-48 backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left"
+              style={{ background: 'color-mix(in oklab, var(--color-black) 90%, transparent)' }}
             >
               <div className="p-1">
                 {vehicles.map(v => (
-                  <button
+                  <NavLink 
                     key={v.id}
+                    to="#"
                     onClick={() => {
                       setSelectedVehicleId(v.id);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                   >
                     <span className="truncate">{v.name}</span>
                     {selectedVehicleId === v.id && <Check className="w-4 h-4" />}
-                  </button>
+                  </NavLink>
                 ))}
               </div>
             </motion.div>
@@ -118,7 +119,7 @@ function Header() {
                 <NavLink
                   to="/trip-estimator"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <RouteIcon className="w-4 h-4" />
                   Trip Cost Estimator
@@ -126,7 +127,7 @@ function Header() {
                 <NavLink
                   to="/tyre-calculator"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Circle className="w-4 h-4" />
                   Tyre Size Calculator
@@ -134,10 +135,10 @@ function Header() {
                 <NavLink
                   to="/maintenance"
                   onClick={() => setFeaturesOpen(false)}
-                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                  className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Wrench className="w-4 h-4" />
-                  Maintenance Logs
+                  Maintenance
                 </NavLink>
               </div>
             </motion.div>
@@ -174,7 +175,7 @@ export default function App() {
     <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
       <Header />
       
-      <main className="flex-1 px-5 pt-6">
+      <main className="flex-1 px-5 pt-0">
          <AnimatePresence mode="wait">
            <Routes location={location} key={location.pathname}>
               <Route path="/" element={<Dashboard />} />
@@ -183,10 +184,9 @@ export default function App() {
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/trip-estimator" element={<TripCostEstimator />} />
               <Route path="/tyre-calculator" element={<TyreCalculator />} />
-              <Route path="/maintenance" element={<MaintenanceLogs />} />
-              <Route path="/maintenance/add" element={<MaintenanceLogForm />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/maintenance/add" element={<MaintenanceForm />} />
               <Route path="/maintenance/edit/:id" element={<MaintenanceLogEdit />} />
-              <Route path="/maintenance/reminders" element={<MaintenanceReminders />} />
               <Route path="/settings" element={<SettingsScreen />} />
            </Routes>
          </AnimatePresence>
@@ -237,22 +237,6 @@ export default function App() {
             <div className="relative -top-5 flex justify-center w-20">
                {(() => {
                    const path = location.pathname;
-                   if (path.startsWith('/maintenance/reminders')) {
-                     return (
-                       <button
-                         onClick={() => {
-                           // Find the MaintenanceReminders component and trigger showAddForm
-                           const event = new CustomEvent('toggleMaintenanceReminderForm');
-                           window.dispatchEvent(event);
-                         }}
-                         className="flex items-center justify-center w-[60px] h-[60px] rounded-[1.5rem] shadow-2xl transition-all border-0 bg-emerald-500 text-white shadow-emerald-500/30 hover:bg-emerald-400 dark:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-                       >
-                         <motion.div whileTap={{ scale: 0.9, rotate: 90 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
-                           <Plus className="w-8 h-8" strokeWidth={2.5}/>
-                         </motion.div>
-                       </button>
-                     );
-                   }
                    return (
                      <NavLink 
                        to={path.startsWith('/maintenance') ? '/maintenance/add' : '/add'}

@@ -85,49 +85,25 @@ export function useNotifications() {
   }, [notificationsEnabled]);
 
   // Check and send maintenance due notifications
-  const checkMaintenanceReminders = useCallback((reminders, currentOdometer) => {
-    if (!notificationsEnabled || !reminders?.length) return;
+  const checkMaintenanceReminders = useCallback((entries, currentOdometer) => {
+    if (!notificationsEnabled || !entries?.length) return;
 
-    const now = new Date();
-    
-    reminders.forEach(reminder => {
-      // Check date-based reminders
-      if (reminder.nextDueDate || reminder.dueDate) {
-        const dueDate = new Date(reminder.nextDueDate || reminder.dueDate);
-        const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
-        
-        if (daysUntilDue <= 0) {
-          // Overdue
-          sendNotification(`🔧 ${reminder.title} Overdue`, {
-            body: `${reminder.title} was due on ${dueDate.toLocaleDateString()}. Please complete this maintenance task.`,
-            tag: `reminder-${reminder.id}-overdue`,
-            requireInteraction: true
-          });
-        } else if (daysUntilDue <= 7) {
-          // Due soon
-          sendNotification(`⏰ ${reminder.title} Due Soon`, {
-            body: `${reminder.title} is due in ${daysUntilDue} days (${dueDate.toLocaleDateString()}).`,
-            tag: `reminder-${reminder.id}-soon`
-          });
-        }
-      }
-
-      // Check odometer-based reminders
-      if (reminder.odometerThreshold && currentOdometer > 0) {
-        const kmUntilDue = reminder.odometerThreshold - currentOdometer;
+    entries.forEach(entry => {
+      if (entry.nextDueODO && currentOdometer > 0) {
+        const kmUntilDue = entry.nextDueODO - currentOdometer;
         
         if (kmUntilDue <= 0) {
           // Overdue by odometer
-          sendNotification(`🚗 ${reminder.title} - Mileage Due`, {
-            body: `${reminder.title} is overdue. Your odometer (${currentOdometer.toLocaleString()} km) has exceeded the threshold (${reminder.odometerThreshold.toLocaleString()} km).`,
-            tag: `reminder-${reminder.id}-mileage-overdue`,
+          sendNotification(`🚗 ${entry.type} - Overdue`, {
+            body: `Your ${entry.type} maintenance is overdue. Odometer: ${currentOdometer.toLocaleString()} km, Due at: ${entry.nextDueODO.toLocaleString()} km.`,
+            tag: `entry-${entry.id}-overdue`,
             requireInteraction: true
           });
-        } else if (kmUntilDue <= 1000) {
-          // Due soon by odometer
-          sendNotification(`📍 ${reminder.title} - Mileage Approaching`, {
-            body: `${reminder.title} is approaching. Only ${kmUntilDue.toLocaleString()} km remaining (threshold: ${reminder.odometerThreshold.toLocaleString()} km).`,
-            tag: `reminder-${reminder.id}-mileage-soon`
+        } else if (currentOdometer >= entry.alertODO) {
+          // Due soon by alert threshold
+          sendNotification(`📍 ${entry.type} - Due Soon`, {
+            body: `${entry.type} is due soon. Only ${kmUntilDue.toLocaleString()} km remaining.`,
+            tag: `entry-${entry.id}-soon`
           });
         }
       }
@@ -135,34 +111,35 @@ export function useNotifications() {
   }, [notificationsEnabled, sendNotification]);
 
   // Check for notifications triggered by odometer changes (e.g., after fill-up)
-  const checkOdometerThresholds = useCallback((reminders, newOdometer, previousOdometer) => {
-    if (!notificationsEnabled || !reminders?.length) return;
+  const checkOdometerThresholds = useCallback((entries, newOdometer, previousOdometer) => {
+    if (!notificationsEnabled || !entries?.length) return;
 
-    reminders.forEach(reminder => {
-      if (!reminder.odometerThreshold) return;
+    entries.forEach(entry => {
+      if (!entry.nextDueODO || !entry.alertODO) return;
 
-      const threshold = reminder.odometerThreshold;
-      
-      // Check if we crossed into warning zone (within 1000km of threshold)
-      const wasBeforeWarning = previousOdometer < (threshold - 1000);
-      const isInWarning = newOdometer >= (threshold - 1000) && newOdometer < threshold;
+      const threshold = entry.nextDueODO;
+      const alertThreshold = entry.alertODO;
       
       // Check if we crossed into critical zone (at or past threshold)
       const wasBeforeCritical = previousOdometer < threshold;
       const isAtCritical = newOdometer >= threshold;
 
-      if (wasBeforeWarning && isInWarning) {
-        // Entered warning zone
-        sendNotification(`⚠️ ${reminder.title} - Warning Zone`, {
-          body: `You're approaching the ${reminder.title} milestone. Current: ${newOdometer.toLocaleString()} km, Target: ${threshold.toLocaleString()} km`,
-          tag: `reminder-${reminder.id}-warning`,
+      // Check if we crossed into warning zone
+      const wasBeforeWarning = previousOdometer < alertThreshold;
+      const isInWarning = newOdometer >= alertThreshold && newOdometer < threshold;
+
+      if (wasBeforeCritical && isAtCritical) {
+        // Entered critical zone
+        sendNotification(`🚨 ${entry.type} - THRESHOLD REACHED`, {
+          body: `Your odometer (${newOdometer.toLocaleString()} km) has reached the ${entry.type} threshold (${threshold.toLocaleString()} km). Schedule maintenance now!`,
+          tag: `entry-${entry.id}-critical`,
           requireInteraction: true
         });
-      } else if (wasBeforeCritical && isAtCritical) {
-        // Entered critical zone
-        sendNotification(`🚨 ${reminder.title} - THRESHOLD REACHED`, {
-          body: `Your odometer (${newOdometer.toLocaleString()} km) has reached the ${reminder.title} threshold (${threshold.toLocaleString()} km). Schedule maintenance now!`,
-          tag: `reminder-${reminder.id}-critical`,
+      } else if (wasBeforeWarning && isInWarning) {
+        // Entered warning zone
+        sendNotification(`⚠️ ${entry.type} - Warning Zone`, {
+          body: `You're approaching the ${entry.type} milestone. Current: ${newOdometer.toLocaleString()} km, Target: ${threshold.toLocaleString()} km`,
+          tag: `entry-${entry.id}-warning`,
           requireInteraction: true
         });
       }

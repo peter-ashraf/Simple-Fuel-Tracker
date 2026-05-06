@@ -6,7 +6,7 @@ import { ConfirmModal } from './ui';
 import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec } from '../utils/formatting';
 import './HistoryCard.css';
 
-export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices, isSelectionMode, isSelected, onToggleSelect }) {
+export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -16,7 +16,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     station: fill.station || '',
     notes: fill.notes || '',
     date: new Date(fill.timestamp).toISOString().substring(0, 10),
-    totalCost: fill.liters * (fill.pricePerLiter || 0)
+    totalCost: fill.liters * (fill.pricePerLiter || 0),
+    tankLevelAfter: fill.tankLevelAfter !== undefined ? fill.tankLevelAfter : 100
   });
 
   // Calculate proper trip metrics by comparing with previous fill-up
@@ -27,6 +28,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   const kmPerLiter = formatEfficiency2Dec(kmPerLiterRaw);
   const litersPer100km = formatEfficiency2Dec(metrics.litersPer100km, 'L/100km');
   const tripDistance = formatDistance2Dec(metrics.distance);
+  const isEstimated = metrics.isEstimated;
   
   const getEfficiencyColorStatus = (kmPerL) => {
     if (!kmPerL || kmPerL === "-" || kmPerL === 0 || isNaN(kmPerL)) return "text-slate-400";
@@ -43,7 +45,6 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     // Use the liters value from the form (already synced with total cost)
     const litersToSave = parseFloat(editForm.liters) || 0;
     
-    // Merge the selected date with the original timestamp time to preserve time of day
     const baseDate = new Date(editForm.date);
     const originalDate = new Date(fill.timestamp);
     baseDate.setHours(originalDate.getHours(), originalDate.getMinutes(), originalDate.getSeconds());
@@ -54,7 +55,9 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
       odometer: Number(editForm.odometer),
       fuelType: editForm.fuelType,
       station: editForm.station.trim(),
-      notes: editForm.notes.trim()
+      notes: editForm.notes.trim(),
+      tankLevelAfter: editForm.tankLevelAfter,
+      isPartialFill: editForm.tankLevelAfter < 100
     });
     setIsFlipped(false);
   };
@@ -68,7 +71,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
       station: fill.station || '',
       notes: fill.notes || '',
       date: new Date(fill.timestamp).toISOString().substring(0, 10),
-      totalCost: fill.liters * (fill.pricePerLiter || 0)
+      totalCost: fill.liters * (fill.pricePerLiter || 0),
+      tankLevelAfter: fill.tankLevelAfter !== undefined ? fill.tankLevelAfter : 100
     });
     setIsFlipped(false);
   };
@@ -77,25 +81,10 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     <div className={`flip-card ${isFlipped ? 'flipped' : ''}`}>
       <div className="flip-card-inner">
         {/* Front Face */}
-        <div className={`flip-card-front ${isSelectionMode ? 'cursor-pointer' : ''}`} onClick={isSelectionMode ? onToggleSelect : undefined}>
+        <div className="flip-card-front">
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                {isSelectionMode ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleSelect();
-                    }}
-                    className="flex-shrink-0"
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="w-5 h-5 text-emerald-500" />
-                    ) : (
-                      <Square className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
-                ) : null}
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                   {format(new Date(fill.timestamp), 'MMM d, yyyy')}
                 </p>
@@ -111,13 +100,13 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               </p>
             </div>
             <div 
-              className={`text-right ${isSelectionMode ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}`}
-              onClick={isSelectionMode ? undefined : handleEdit}
-              role={isSelectionMode ? undefined : "button"}
-              tabIndex={isSelectionMode ? undefined : 0}
+              className="text-right cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={handleEdit}
+              role="button"
+              tabIndex={0}
               aria-label="Edit fill-up"
               aria-expanded={isFlipped}
-              onKeyDown={isSelectionMode ? undefined : (e) => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   handleEdit();
@@ -140,9 +129,10 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                 {index === 0 ? "First trip" : (tripDistance !== "0" ? tripDistance : "-")}
               </p>
             </div>
-            <div className="text-center border-l border-r border-slate-200 dark:border-slate-800/50">
+            <div className="text-center border-l border-r border-slate-200 dark:border-slate-800/50 relative group">
               <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Km/L</p>
-              <p className={`text-sm font-bold ${getEfficiencyColorStatus(kmPerLiterRaw)}`}>
+              <p className={`text-sm font-bold flex items-center justify-center gap-1 ${getEfficiencyColorStatus(kmPerLiterRaw)}`}>
+                {isEstimated && kmPerLiterRaw > 0 && <span className="text-[10px] opacity-70" title="Estimated based on fuel gauge">🪄</span>}
                 {index === 0 ? "First trip" : (kmPerLiterRaw > 0 ? kmPerLiter : "-")}
               </p>
             </div>
@@ -211,6 +201,22 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-4">
+               <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex justify-between">
+                 <span>Fuel Level After</span>
+                 <span className={editForm.tankLevelAfter < 100 ? "text-amber-500" : "text-emerald-500"}>{editForm.tankLevelAfter}%</span>
+               </label>
+               <input
+                 type="range"
+                 min="0"
+                 max="100"
+                 step="5"
+                 value={editForm.tankLevelAfter}
+                 onChange={(e) => setEditForm({...editForm, tankLevelAfter: Number(e.target.value)})}
+                 className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer mt-2"
+               />
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 grid grid-cols-3 gap-2 border border-slate-200 dark:border-slate-800/50 shrink-0 relative">
