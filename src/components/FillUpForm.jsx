@@ -8,12 +8,12 @@ import { useLocationDetection } from '../hooks/useLocationDetection';
 import { useNotifications } from '../hooks/useNotifications';
 import { gasStationService } from '../services/gasStationService';
 import { StationSuggestion } from './StationSuggestion';
-import { getMaintenanceCategory } from '../data/maintenanceCategories';
+
 import { useNavigate } from 'react-router-dom';
 import { DateInput } from './DateInput';
 
 export default function FillUpForm() {
-  const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceEntry, maintenanceEntries, activeVehicle } = useFuel();
+  const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceEntry, maintenanceEntries, activeVehicle, getCategoryById } = useFuel();
   const navigate = useNavigate();
   const buttonContainerRef = useRef(null);
   const { checkOdometerThresholds } = useNotifications();
@@ -349,22 +349,27 @@ export default function FillUpForm() {
                   />
                   {activeAlerts.length > 0 && (
                     <div className="mt-3 space-y-2">
-                       {activeAlerts.map(alert => (
-                         <div 
-                           key={alert.id}
-                           className={`p-3 rounded-xl border flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 ${
-                             alert.status === 'critical' 
-                              ? 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400' 
-                              : 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-700 dark:text-amber-400'
-                           }`}
-                         >
-                            <div className="flex items-center gap-2">
-                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: alert.categoryColor }}></div>
-                               <span className="text-xs font-black uppercase tracking-wider">{alert.categoryName} {alert.status === 'critical' ? 'Overdue!' : 'Due Soon'}</span>
-                            </div>
-                            <span className="text-[10px] font-bold">Due at {alert.nextDueODO.toLocaleString()} km</span>
-                         </div>
-                       ))}
+                       {activeAlerts.map(alert => {
+                         const currentOdo = Number(odometer);
+                         const isOverdue = currentOdo >= alert.nextDueODO;
+                         const cat = getCategoryById(alert.type);
+                         return (
+                           <div 
+                             key={alert.id}
+                             className={`p-3 rounded-xl border flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 ${
+                               isOverdue
+                                ? 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400' 
+                                : 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-700 dark:text-amber-400'
+                             }`}
+                           >
+                              <div className="flex items-center gap-2">
+                                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat?.color || '#64748b' }}></div>
+                                 <span className="text-xs font-black uppercase tracking-wider">{cat?.name || alert.type} {isOverdue ? 'Overdue!' : 'Due Soon'}</span>
+                              </div>
+                              <span className="text-[10px] font-bold">Due at {alert.nextDueODO.toLocaleString()} km</span>
+                           </div>
+                         );
+                       })}
                     </div>
                   )}
                 </div>

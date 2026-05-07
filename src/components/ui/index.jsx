@@ -8,7 +8,7 @@ export function cn(...inputs) {
 }
 
 export const Card = forwardRef(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("bg-white dark:bg-white/[0.03] rounded-3xl p-5 relative overflow-hidden border-0", className)} {...props}>
+  <div ref={ref} className={cn("bg-white dark:bg-white/[0.03] rounded-3xl p-5 relative border-0", className)} {...props}>
     {children}
   </div>
 ));

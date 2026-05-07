@@ -5,7 +5,7 @@ const SHEET_MAPPING = {
   'fueltracker-vehicles-v2': 'Vehicles',
   'fueltracker-prices-v2': 'Prices',
   'fueltracker-active-vehicle-v2': 'Active Vehicle',
-  'fueltracker-maintenance-logs-v2': 'Maintenance Logs',
+  'fueltracker-maintenance-entries-v3': 'Maintenance Logs',
   'fueltracker-user-stations': 'Stations',
   'fueltracker-maintenance-reminders-v2': 'Reminders',
   'fueltracker-maintenance-categories-v1': 'Categories'
@@ -83,6 +83,25 @@ export const excelService = {
       }
     }
 
+    // Handle car-specific maintenance sheets
+    const maintenanceStr = localStorage.getItem('fueltracker-maintenance-entries-v3');
+    if (maintenanceStr && vehiclesStr) {
+      try {
+        const logs = JSON.parse(maintenanceStr);
+        const vehicles = JSON.parse(vehiclesStr);
+        vehicles.forEach(v => {
+           const vLogs = logs.filter(l => l.vehicleId === v.id).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+           if (vLogs.length > 0) {
+              const worksheet = XLSX.utils.json_to_sheet(vLogs);
+              const sheetName = `Maint - ${v.name}`.substring(0, 31);
+              XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+           }
+        });
+      } catch (e) {
+        console.error("Error creating per-car maintenance sheets", e);
+      }
+    }
+
     // Add a metadata sheet
     const metaSheet = XLSX.utils.json_to_sheet([
       { Key: "App", Value: "Simple Fuel Tracker" },
@@ -156,6 +175,15 @@ export const excelService = {
                  // Handle car-specific fill-up sheets
                  if (sheetName.startsWith('Fills - ')) {
                     fillupsFromSheets.push(...rawData);
+                    return;
+                 }
+
+                 // Handle car-specific maintenance sheets
+                 if (sheetName.startsWith('Maint - ')) {
+                    if (!payload['fueltracker-maintenance-entries-v3']) {
+                       payload['fueltracker-maintenance-entries-v3'] = [];
+                    }
+                    payload['fueltracker-maintenance-entries-v3'].push(...rawData);
                     return;
                  }
                  

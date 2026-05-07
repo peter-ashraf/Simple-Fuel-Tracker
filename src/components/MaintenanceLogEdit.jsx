@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Wrench, Calendar, Tag, ArrowLeft, Shield, Trash2, Save } from 'lucide-react';
+import { Wrench, Calendar, Tag, ArrowLeft, Shield, Trash2, Save } from 'lucide-react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, ConfirmModal } from './ui';
-import { MAINTENANCE_CATEGORIES, getMaintenanceCategory } from '../data/maintenanceCategories';
 import { useNavigate, useParams } from 'react-router-dom';
 
 export default function MaintenanceLogEdit() {
-  const { maintenanceEntries, updateMaintenanceEntry, deleteMaintenanceEntry, activeVehicle, maintenanceSettings } = useFuel();
+  const { maintenanceEntries, updateMaintenanceEntry, deleteMaintenanceEntry, activeVehicle, getCategoryById } = useFuel();
   const navigate = useNavigate();
   const { id } = useParams();
   
   const [log, setLog] = useState(null);
-  const [type, setType] = useState('oil_change');
-  const [customType, setCustomType] = useState('');
   const [performedAtODO, setPerformedAtODO] = useState('');
   const [intervalKm, setIntervalKm] = useState('');
   const [safetyMarginKm, setSafetyMarginKm] = useState('');
@@ -22,15 +19,9 @@ export default function MaintenanceLogEdit() {
 
   // Load the log data on component mount
   useEffect(() => {
-    // Check old style ID or new string ID
     const foundLog = maintenanceEntries.find(l => String(l.id) === String(id));
     if (foundLog) {
       setLog(foundLog);
-      
-      const isCustom = !Object.keys(MAINTENANCE_CATEGORIES).includes(foundLog.type);
-      setType(isCustom ? 'custom' : foundLog.type);
-      if (isCustom) setCustomType(foundLog.type);
-      
       setPerformedAtODO(foundLog.performedAtODO ? String(foundLog.performedAtODO) : '');
       setIntervalKm(foundLog.intervalKm ? String(foundLog.intervalKm) : '');
       setSafetyMarginKm(foundLog.safetyMarginKm ? String(foundLog.safetyMarginKm) : '');
@@ -41,13 +32,10 @@ export default function MaintenanceLogEdit() {
   }, [id, maintenanceEntries, navigate]);
 
   const handleSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!performedAtODO || !intervalKm) return;
 
-    const finalType = type === 'custom' ? customType.trim() : type;
-    
     updateMaintenanceEntry(log.id, {
-      type: finalType,
       performedAtODO: Number(performedAtODO),
       intervalKm: Number(intervalKm),
       safetyMarginKm: Number(safetyMarginKm),
@@ -66,12 +54,14 @@ export default function MaintenanceLogEdit() {
   if (!log) {
     return (
       <PageWrapper>
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Loading...</h2>
+        <div className="mb-6 h-32 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
         </div>
       </PageWrapper>
     );
   }
+
+  const category = getCategoryById(log.type);
 
   return (
     <>
@@ -89,7 +79,7 @@ export default function MaintenanceLogEdit() {
             <button
               type="button"
               onClick={() => setDeleteModal(true)}
-              className="px-6 bg-red-500 hover:bg-red-400 text-white font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all shadow-xl shadow-red-500/25 active:scale-[0.98]"
+              className="px-6 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 text-red-500 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
               <Trash2 className="w-5 h-5" />
             </button>
@@ -97,10 +87,10 @@ export default function MaintenanceLogEdit() {
               type="button"
               onClick={handleSubmit}
               disabled={!performedAtODO || !intervalKm}
-              className="flex-1 px-6 bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
+              className="flex-[2] px-6 bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
             >
               <Save className="w-5 h-5" />
-              <span>Save Entry</span>
+              <span>Update Record</span>
             </button>
           </div>
         </div>,
@@ -109,53 +99,21 @@ export default function MaintenanceLogEdit() {
 
       <PageWrapper>
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Maintenance Entry</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Update service record for {activeVehicle?.name}.</p>
+          <div className="flex items-center gap-3 mb-2">
+             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: category?.color }}>
+                <Wrench className="w-5 h-5" />
+             </div>
+             <div>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white">{category?.name}</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Edit Service Record</p>
+             </div>
+          </div>
         </div>
 
         <div className="pb-24">
           <form onSubmit={handleSubmit} className="space-y-5">
             <Card className="p-6">
-              <div className="space-y-5">
-                <div>
-                  <Label>Maintenance Type</Label>
-                  <div className="grid grid-cols-2 gap-2 p-3 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl">
-                    {Object.values(MAINTENANCE_CATEGORIES).map((cat) => (
-                      <label
-                        key={cat.id}
-                        className={`flex items-center gap-2 p-3 text-sm font-bold rounded-xl cursor-pointer transition ${
-                          type === cat.id 
-                            ? 'bg-white dark:bg-emerald-500 text-slate-900 dark:text-slate-950 shadow-sm' 
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="type"
-                          value={cat.id}
-                          checked={type === cat.id}
-                          onChange={() => setType(cat.id)}
-                          className="hidden"
-                        />
-                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }}></span>
-                        <span className="text-xs leading-tight">{cat.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {type === 'custom' && (
-                    <div className="mt-3">
-                      <Input
-                        type="text"
-                        value={customType}
-                        onChange={(e) => setCustomType(e.target.value)}
-                        placeholder="Enter custom maintenance name"
-                        className="w-full"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
-
+              <div className="space-y-6">
                 <div>
                   <Label className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
@@ -165,7 +123,7 @@ export default function MaintenanceLogEdit() {
                     type="number"
                     value={performedAtODO}
                     onChange={(e) => setPerformedAtODO(e.target.value)}
-                    placeholder="e.g. 50000"
+                    placeholder="Mileage at service"
                     min="0"
                     required
                   />
@@ -181,7 +139,7 @@ export default function MaintenanceLogEdit() {
                       type="number"
                       value={intervalKm}
                       onChange={(e) => setIntervalKm(e.target.value)}
-                      placeholder="e.g. 5000"
+                      placeholder="e.g. 10000"
                       min="1"
                       required
                     />
@@ -211,7 +169,7 @@ export default function MaintenanceLogEdit() {
                     rows="3"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Parts used, technician name, etc..."
+                    placeholder="Add details about parts or shop..."
                   />
                 </div>
               </div>
@@ -225,7 +183,7 @@ export default function MaintenanceLogEdit() {
         onClose={() => setDeleteModal(false)}
         onConfirm={confirmDelete}
         title="Delete Record"
-        message="Are you sure you want to delete this maintenance entry?"
+        message={`Are you sure you want to delete this ${category?.name} record? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"

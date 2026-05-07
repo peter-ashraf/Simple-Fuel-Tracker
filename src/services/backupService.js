@@ -12,7 +12,7 @@ const APP_KEYS = [
   'fueltracker-user-stations',
   'fueltracker-trip-estimates-v2',
   'fueltracker-tyre-comparisons-v2',
-  'fueltracker-maintenance-logs-v2',
+  'fueltracker-maintenance-entries-v3',
   'fueltracker-maintenance-reminders-v2'
 ];
 
@@ -136,6 +136,17 @@ export const backupService = {
             }
           });
 
+          // Analyze Maintenance Logs (Count as new records for simplicity)
+          const backupMaint = importObj.payload['fueltracker-maintenance-entries-v3'] || [];
+          const localMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+          backupMaint.forEach(bm => {
+            if (!localMaint.find(lm => lm.id === bm.id)) {
+              analysis.newRecords.push({ type: 'maintenance', data: bm });
+            }
+          });
+
+
+
           resolve(analysis);
         } catch (err) {
           reject(err);
@@ -206,11 +217,32 @@ export const backupService = {
       }
     });
 
-    // 5. Save back to localStorage
+    // 5. Merge Maintenance Logs and Reminders
+    const localMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    const backupMaint = payload['fueltracker-maintenance-entries-v3'] || [];
+    backupMaint.forEach(bm => {
+      if (!localMaint.find(lm => lm.id === bm.id)) {
+        localMaint.push(bm);
+      }
+    });
+
+    const localReminders = JSON.parse(localStorage.getItem('fueltracker-maintenance-reminders-v2') || '[]');
+    const backupReminders = payload['fueltracker-maintenance-reminders-v2'] || [];
+    backupReminders.forEach(br => {
+      if (!localReminders.find(lr => lr.id === br.id)) {
+        localReminders.push(br);
+      }
+    });
+
+    // 6. Save back to localStorage
     localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(localFillups));
     localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(localVehicles));
     localStorage.setItem('fueltracker-user-stations', JSON.stringify(localStations));
     localStorage.setItem('fueltracker-prices-v2', JSON.stringify(localPrices));
+    localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(localMaint));
+    localStorage.setItem('fueltracker-maintenance-reminders-v2', JSON.stringify(localReminders));
+
+
 
     // Reload the app
     window.location.reload();
