@@ -4,9 +4,11 @@ import { Card, PageWrapper, ConfirmModal } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { formatTyreSize } from '../utils/tyreCalculator';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 export default function TyreComparisonHistory() {
   const { tyreComparisons, deleteTyreComparison, deleteMultipleTyreComparisons } = useFuel();
+  const { t } = useTranslation();
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, isBulk: false });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -46,7 +48,7 @@ export default function TyreComparisonHistory() {
       <div className="text-center py-8 px-6 border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-3xl">
         <Circle className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium tracking-tight">
-          No tyre comparisons yet.<br />Use the calculator to compare sizes!
+          {t('untracked')}
         </p>
       </div>
     );
@@ -55,20 +57,20 @@ export default function TyreComparisonHistory() {
   return (
     <>
       <div className="flex items-center justify-between mb-3 px-1">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recent Comparisons</h3>
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('history')}</h3>
         {!isSelectionMode ? (
           <button 
             onClick={() => setIsSelectionMode(true)}
             className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 uppercase tracking-wider flex items-center gap-1"
           >
-            <CheckSquare className="w-3 h-3" /> Select
+            <CheckSquare className="w-3 h-3" /> {t('select')}
           </button>
         ) : (
           <button 
             onClick={clearSelection}
             className="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider"
           >
-            Cancel
+            {t('cancel')}
           </button>
         )}
       </div>
@@ -120,28 +122,28 @@ export default function TyreComparisonHistory() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-3">
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider font-bold">Speed Impact</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider font-bold">{t('speed_impact')}</p>
                     <p className="text-xs font-bold text-slate-900 dark:text-white">
                       {comparison.speedImpact.speedometerSpeed} → {comparison.speedImpact.actualSpeed} km/h
                     </p>
                     <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">
-                      {comparison.speedImpact.speedPercentageChange} diff
+                      {comparison.speedImpact.speedPercentageChange} {t('diff')}
                     </p>
                   </div>
                   <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-3">
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider font-bold">RPM Change</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider font-bold">{t('rpm_change')}</p>
                     <p className="text-xs font-bold text-slate-900 dark:text-white">
                       {comparison.rpmImpact.originalRPM} → {comparison.rpmImpact.newRPM}
                     </p>
                     <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-1 font-bold">
-                      {comparison.rpmImpact.rpmPercentageChange} diff
+                      {comparison.rpmImpact.rpmPercentageChange} {t('diff')}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/50 flex justify-between text-[10px] text-slate-500 italic">
-                  <span>Diameter: {comparison.original.diameter}" → {comparison.new.diameter}" ({comparison.differences.diameterDifference > 0 ? '+' : ''}{comparison.differences.diameterDifference}")</span>
-                  <span>Circ: {comparison.differences.circumferenceDifference}</span>
+                  <span>{t('diameter')}: {comparison.original.diameter}" → {comparison.new.diameter}" ({comparison.differences.diameterDifference > 0 ? '+' : ''}{comparison.differences.diameterDifference}")</span>
+                  <span>{t('circumference')}: {comparison.differences.circumferenceDifference}</span>
                 </div>
               </Card>
             </div>
@@ -161,7 +163,7 @@ export default function TyreComparisonHistory() {
                 <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-sm">
                    {selectedIds.size}
                 </div>
-                <span className="font-semibold text-sm">Selected</span>
+                <span className="font-semibold text-sm">{t('selected')}</span>
              </div>
              
              <div className="flex gap-2">
@@ -170,13 +172,13 @@ export default function TyreComparisonHistory() {
                   className="px-4 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
                 >
                   {selectedIds.size === tyreComparisons.length ? <Square className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
-                  <span>{selectedIds.size === tyreComparisons.length ? 'Deselect' : 'Select All'}</span>
+                  <span>{selectedIds.size === tyreComparisons.length ? t('deselect') : t('select_all')}</span>
                 </button>
                 <button 
                   onClick={() => setDeleteModal({ isOpen: true, id: null, isBulk: true })}
                   className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
                 >
-                  <Trash2 className="w-4 h-4" /> Delete
+                  <Trash2 className="w-4 h-4" /> {t('delete')}
                 </button>
              </div>
           </motion.div>
@@ -193,9 +195,10 @@ export default function TyreComparisonHistory() {
             setDeleteModal({ isOpen: false, id: null, isBulk: false });
           }
         }}
-        title={deleteModal.isBulk ? "Delete Comparisons" : "Delete Comparison"}
-        message={deleteModal.isBulk ? `Are you sure you want to delete ${selectedIds.size} comparisons?` : "Are you sure you want to delete this tyre comparison?"}
-        confirmText="Delete"
+        title={t('delete')}
+        message={t('delete') + "?"}
+        confirmText={t('delete')}
+        cancelText={t('cancel')}
         variant="danger"
       />
     </>

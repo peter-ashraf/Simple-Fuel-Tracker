@@ -38,7 +38,7 @@ export const Input = forwardRef(({ className, ...props }, ref) => (
 Input.displayName = "Input"
 
 export const Label = forwardRef(({ className, children, ...props }, ref) => (
-  <label ref={ref} className={cn("text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block ml-1", className)} {...props}>
+  <label ref={ref} className={cn("text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block ms-1", className)} {...props}>
     {children}
   </label>
 ));

@@ -16,10 +16,13 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.36.0",
+    "i18next": "^26.0.10",
+    "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",
+    "react-i18next": "^17.0.7",
     "react-router-dom": "^7.13.1",
     "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5"

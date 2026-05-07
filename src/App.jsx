@@ -4,6 +4,7 @@ import { Home, List, PieChart, Plus, Settings, Fuel, ChevronDown, Check, Circle,
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from './hooks/useFuelContext';
 import { useNotifications } from './hooks/useNotifications';
+import { useTranslation } from 'react-i18next';
 
 // Pages
 import Dashboard from './components/Dashboard';
@@ -19,6 +20,7 @@ import MaintenanceLogEdit from './components/MaintenanceLogEdit';
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(false);
@@ -27,6 +29,7 @@ function Header() {
 
   const isSettings = location.pathname === '/settings';
   const activeVehicle = vehicles.find(v => v.id === selectedVehicleId);
+  const isRtl = i18n.language === 'ar';
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -54,7 +57,7 @@ function Header() {
           disabled={isSettings}
           className={`flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white tracking-tight focus:outline-none transition-opacity ${isSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
         >
-           <span>{activeVehicle ? activeVehicle.name : 'Select Vehicle'}</span>
+           <span>{activeVehicle ? activeVehicle.name : t('select_vehicle')}</span>
            {!isSettings && (
               <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
                  <ChevronDown className="w-5 h-5 text-slate-400" />
@@ -69,7 +72,7 @@ function Header() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute top-12 left-12 w-48 backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left"
+              className={`absolute top-12 ${isRtl ? 'right-0' : 'left-12'} w-48 backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left`}
               style={{ background: 'color-mix(in oklab, var(--color-black) 90%, transparent)' }}
             >
               <div className="p-1">
@@ -81,7 +84,7 @@ function Header() {
                       setSelectedVehicleId(v.id);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${selectedVehicleId === v.id ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                   >
                     <span className="truncate">{v.name}</span>
                     {selectedVehicleId === v.id && <Check className="w-4 h-4" />}
@@ -100,7 +103,7 @@ function Header() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.08] rounded-xl transition-colors border-0"
         >
           <Wrench className="w-4 h-4" />
-          <span className="hidden sm:inline">Tools</span>
+          <span className="hidden sm:inline">{t('tools')}</span>
           <motion.div animate={{ rotate: featuresOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
             <ChevronDown className="w-4 h-4" />
           </motion.div>
@@ -113,7 +116,7 @@ function Header() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute top-10 right-0 w-52 bg-white/95 dark:bg-black/90 backdrop-blur-2xl border border-slate-200/50 dark:border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right"
+              className={`absolute top-10 ${isRtl ? 'left-0' : 'right-0'} w-52 bg-white/95 dark:bg-black/90 backdrop-blur-2xl border border-slate-200/50 dark:border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right`}
             >
               <div className="p-1 space-y-0.5">
                 <NavLink
@@ -122,7 +125,7 @@ function Header() {
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <RouteIcon className="w-4 h-4" />
-                  Trip Cost Estimator
+                  {t('trip_estimator')}
                 </NavLink>
                 <NavLink
                   to="/tyre-calculator"
@@ -130,7 +133,7 @@ function Header() {
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Circle className="w-4 h-4" />
-                  Tyre Size Calculator
+                  {t('tyre_size')}
                 </NavLink>
                 <NavLink
                   to="/maintenance"
@@ -138,7 +141,7 @@ function Header() {
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
                   <Wrench className="w-4 h-4" />
-                  Maintenance
+                  {t('maintenance')}
                 </NavLink>
               </div>
             </motion.div>
@@ -151,6 +154,7 @@ function Header() {
 
 export default function App() {
   const location = useLocation();
+  const { t } = useTranslation();
   const cn = (...classes) => classes.filter(Boolean).join(' ');
   
   // Check for due maintenance reminders on app open
@@ -177,18 +181,18 @@ export default function App() {
       
       <main className="flex-1 px-5 pt-0">
          <AnimatePresence mode="wait">
-           <Routes location={location} key={location.pathname}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/add" element={<FillUpForm />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/trip-estimator" element={<TripCostEstimator />} />
-              <Route path="/tyre-calculator" element={<TyreCalculator />} />
-              <Route path="/maintenance" element={<Maintenance />} />
-              <Route path="/maintenance/add" element={<MaintenanceForm />} />
-              <Route path="/maintenance/edit/:id" element={<MaintenanceLogEdit />} />
-              <Route path="/settings" element={<SettingsScreen />} />
-           </Routes>
+            <Routes location={location} key={location.pathname}>
+               <Route path="/" element={<Dashboard />} />
+               <Route path="/history" element={<History />} />
+               <Route path="/add" element={<FillUpForm />} />
+               <Route path="/analytics" element={<Analytics />} />
+               <Route path="/trip-estimator" element={<TripCostEstimator />} />
+               <Route path="/tyre-calculator" element={<TyreCalculator />} />
+               <Route path="/maintenance" element={<Maintenance />} />
+               <Route path="/maintenance/add" element={<MaintenanceForm />} />
+               <Route path="/maintenance/edit/:id" element={<MaintenanceLogEdit />} />
+               <Route path="/settings" element={<SettingsScreen />} />
+            </Routes>
          </AnimatePresence>
       </main>
       
@@ -202,7 +206,7 @@ export default function App() {
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
                        <Home className="w-[22px] h-[22px]" />
-                       <span className="text-[10px] font-semibold mt-0.5">Home</span>
+                       <span className="text-[10px] font-semibold mt-0.5">{t('dashboard')}</span>
                     </motion.div>
                     {isActive && (
                       <motion.div 
@@ -220,7 +224,7 @@ export default function App() {
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
                        <List className="w-[22px] h-[22px]" />
-                       <span className="text-[10px] font-semibold mt-0.5">History</span>
+                       <span className="text-[10px] font-semibold mt-0.5">{t('history')}</span>
                     </motion.div>
                     {isActive && (
                       <motion.div 
@@ -255,7 +259,7 @@ export default function App() {
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
                        <PieChart className="w-[22px] h-[22px]" />
-                       <span className="text-[10px] font-semibold mt-0.5">Stats</span>
+                       <span className="text-[10px] font-semibold mt-0.5">{t('stats')}</span>
                     </motion.div>
                     {isActive && (
                       <motion.div 
@@ -273,7 +277,7 @@ export default function App() {
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
                        <Settings className="w-[22px] h-[22px]" />
-                       <span className="text-[10px] font-semibold mt-0.5">Config</span>
+                       <span className="text-[10px] font-semibold mt-0.5">{t('config')}</span>
                     </motion.div>
                     {isActive && (
                       <motion.div 
