@@ -171,8 +171,8 @@ export default function Dashboard() {
   }, [stats]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden">
-      <PageWrapper className="flex-1 flex flex-col min-h-0 space-y-6">
+    <div className="flex flex-col min-h-[calc(100vh-180px)] overflow-hidden">
+      <PageWrapper className="flex-1 flex flex-col min-h-0 space-y-6 overflow-x-hidden">
         <div className="flex-shrink-0 pt-1">
           <div className="mb-4">
             <h1 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
@@ -295,7 +295,7 @@ export default function Dashboard() {
 
           {/* --- Insights Widgets --- */}
           {activeVehicleFillUps.length >= 2 && (
-            <section className="space-y-3 mb-6">
+            <section className="space-y-3 mb-6 overflow-x-hidden">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight px-1">
                 {t('insights') || 'Insights'}
               </h2>
@@ -318,13 +318,19 @@ export default function Dashboard() {
                   </div>
                   {(() => {
                     const maxVal = Math.max(...monthlySpending.map(m => m.total), 1);
-                    const barW = 28;
-                    const gap = 14;
                     const chartH = 80;
+                    const maxBarW = 32;
+                    const minGap = 8;
+                    const maxTotalW = 400; // Maximum width before scaling
+                    const idealTotalW = monthlySpending.length * (maxBarW + minGap) - minGap;
+                    const scale = Math.min(1, maxTotalW / idealTotalW);
+                    const barW = maxBarW * scale;
+                    const gap = minGap * scale;
                     const totalW = monthlySpending.length * (barW + gap) - gap;
                     return (
-                      <div className="flex justify-center">
-                        <svg width={totalW} height={chartH + 22} viewBox={`0 0 ${totalW} ${chartH + 22}`}>
+                      <div className="w-full overflow-x-auto no-scrollbar">
+                        <div className="flex justify-center min-w-full">
+                          <svg width={totalW} height={chartH + 22} viewBox={`0 0 ${totalW} ${chartH + 22}`} style={{ maxWidth: totalW }}>
                           {monthlySpending.map((m, i) => {
                             const barH = maxVal > 0 ? (m.total / maxVal) * chartH : 0;
                             const x = i * (barW + gap);
@@ -341,17 +347,18 @@ export default function Dashboard() {
                                   className="transition-all duration-300"
                                 />
                                 {isSelected && barH > 10 && (
-                                  <text x={x + barW / 2} y={chartH - barH - 6} textAnchor="middle" className="fill-emerald-500" style={{ fontSize: '9px', fontWeight: 800 }}>
+                                  <text x={x + barW / 2} y={chartH - barH - 6} textAnchor="middle" className="fill-emerald-500" style={{ fontSize: `${9 * scale}px`, fontWeight: 800 }}>
                                     {formatTo2Decimals(m.total).toFixed(0)}
                                   </text>
                                 )}
-                                <text x={x + barW / 2} y={chartH + 14} textAnchor="middle" style={{ fontSize: '9px', fontWeight: isSelected ? 800 : 600, fill: isSelected ? '#10b981' : '#94a3b8' }}>
+                                <text x={x + barW / 2} y={chartH + 14} textAnchor="middle" style={{ fontSize: `${9 * scale}px`, fontWeight: isSelected ? 800 : 600, fill: isSelected ? '#10b981' : '#94a3b8' }}>
                                   {m.label}
                                 </text>
                               </g>
                             );
                           })}
                         </svg>
+                        </div>
                       </div>
                     );
                   })()}
@@ -383,18 +390,19 @@ export default function Dashboard() {
                     const minV = Math.min(...values) * 0.9;
                     const maxV = Math.max(...values) * 1.1;
                     const range = maxV - minV || 1;
-                    const w = 280;
+                    const maxW = 320;
                     const h = 60;
                     const points = values.map((v, i) => {
-                      const x = (i / (values.length - 1)) * w;
+                      const x = (i / (values.length - 1)) * maxW;
                       const y = h - ((v - minV) / range) * h;
                       return { x, y, value: v };
                     });
                     const linePath = `M${points.map(p => `${p.x},${p.y}`).join(' L')}`;
-                    const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
+                    const areaPath = `${linePath} L${maxW},${h} L0,${h} Z`;
                     return (
-                      <div className="flex justify-center">
-                        <svg width="100%" height={h + 10} viewBox={`-4 -4 ${w + 8} ${h + 18}`} preserveAspectRatio="none">
+                      <div className="w-full overflow-x-auto no-scrollbar">
+                        <div className="flex justify-center min-w-full">
+                          <svg width={maxW} height={h + 10} viewBox={`-4 -4 ${maxW + 8} ${h + 18}`} style={{ maxWidth: maxW }}>
                           <defs>
                             <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
@@ -423,6 +431,7 @@ export default function Dashboard() {
                             );
                           })}
                         </svg>
+                        </div>
                       </div>
                     );
                   })()}
@@ -452,7 +461,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <section className="flex-1 flex flex-col min-h-0">
+        <section className="flex flex-col min-h-0 h-[250px] lg:h-[250px]">
           <div className="flex items-center justify-between mb-3 px-1 flex-shrink-0">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
               {t("history")}
@@ -461,7 +470,7 @@ export default function Dashboard() {
               to="/history"
               className="text-xs font-medium text-emerald-500 dark:text-emerald-400"
             >
-              {t("overview")}
+              {isRtl ? "عرض التفاصيل" : "See Details"}
             </Link>
           </div>
 
