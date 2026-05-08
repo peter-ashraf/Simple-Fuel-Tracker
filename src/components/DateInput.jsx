@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarBlank as CalendarIcon } from '@phosphor-icons/react';
 import { Input } from './ui';
 import { Calendar } from './Calendar';
 import { AnimatePresence } from 'framer-motion';

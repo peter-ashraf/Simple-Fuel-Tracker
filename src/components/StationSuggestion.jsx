@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Navigation, Loader2, AlertCircle, X, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react';
+import { MapPin, NavigationArrow, CircleNotch, WarningCircle, X, ArrowSquareOut, ArrowsClockwise, CaretDown } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../components/ui';
 import { gasStationService } from '../services/gasStationService';
@@ -130,14 +130,14 @@ export function StationSuggestion({
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Refresh station search"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <ArrowsClockwise weight="duotone" className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
               <button
                 onClick={onClose}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X weight="duotone" className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -148,7 +148,7 @@ export function StationSuggestion({
             {!loading && !error && stations.length === 0 && !showAddStation && (
               <div className="text-center py-8">
                 <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
-                  <MapPin className="w-6 h-6 text-amber-500" />
+                  <MapPin weight="duotone" className="w-6 h-6 text-amber-500" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-900 dark:text-white mb-2">
@@ -162,7 +162,7 @@ export function StationSuggestion({
                       onClick={() => setShowAddStation(true)}
                       className="w-full bg-emerald-500 hover:bg-emerald-400 text-white dark:text-slate-950 font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
                     >
-                      <MapPin className="w-4 h-4" />
+                      <MapPin weight="duotone" className="w-4 h-4" />
                       Add Current Location
                     </button>
                     <button
@@ -270,7 +270,7 @@ export function StationSuggestion({
             {loading && (
               <div className="text-center py-8">
                 <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                  <CircleNotch weight="duotone" className="w-6 h-6 text-emerald-500 animate-spin" />
                 </div>
                 <p className="text-sm font-medium text-slate-900 dark:text-white">
                   Finding nearby stations...
@@ -285,7 +285,7 @@ export function StationSuggestion({
             {error && (
               <div className="text-center py-8">
                 <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-6 h-6 text-red-500" />
+                  <WarningCircle weight="duotone" className="w-6 h-6 text-red-500" />
                 </div>
                 <p className="text-sm font-medium text-slate-900 dark:text-white mb-2">
                   Location Error
@@ -341,7 +341,7 @@ export function StationSuggestion({
                       </div>
                       <div className="flex items-center gap-2 ml-2">
                         <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                          <MapPin className="w-3 h-3" />
+                          <MapPin weight="duotone" className="w-3 h-3" />
                           <span className="font-medium">{station.distance}m</span>
                         </div>
                         {station.latitude && station.longitude && (
@@ -353,7 +353,7 @@ export function StationSuggestion({
                             className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                             title={`View ${station.name} on map`}
                           >
-                            <ExternalLink className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                            <ArrowSquareOut weight="duotone" className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                           </button>
                         )}
                       </div>
@@ -393,7 +393,7 @@ export function StationSuggestion({
                 disabled={loading || isRefreshing}
                 className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <ArrowsClockwise weight="duotone" className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
             </div>

@@ -1,6 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { Home, List, PieChart, Plus, Settings, Fuel, ChevronDown, Check, Circle, Wrench, Route as RouteIcon } from 'lucide-react';
+import { 
+  House, 
+  ListBullets, 
+  ChartPieSlice, 
+  Plus, 
+  GearSix, 
+  GasPump, 
+  CaretDown, 
+  Check, 
+  Circle, 
+  Wrench, 
+  Path,
+  Tire
+} from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from './hooks/useFuelContext';
 import { useNotifications } from './hooks/useNotifications';
@@ -50,7 +63,7 @@ function Header() {
       <div className="w-full max-w-lg flex items-center justify-between">
       <div className="flex items-center gap-3 relative" ref={dropdownRef}>
         <div className="bg-emerald-500/10 dark:bg-emerald-500/20 p-2 rounded-xl border-0">
-          <Fuel className="text-emerald-500 dark:text-emerald-400 w-5 h-5 neon-glow" />
+          <GasPump weight="duotone" className="text-emerald-500 dark:text-emerald-400 w-5 h-5 neon-glow" />
         </div>
         
         <button 
@@ -61,7 +74,7 @@ function Header() {
            <span>{activeVehicle ? activeVehicle.name : t('select_vehicle')}</span>
            {!isSettings && (
               <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
-                 <ChevronDown className="w-5 h-5 text-slate-400" />
+                 <CaretDown weight="duotone" className="w-5 h-5 text-slate-400" />
               </motion.div>
            )}
         </button>
@@ -102,10 +115,10 @@ function Header() {
           onClick={() => setFeaturesOpen(!featuresOpen)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.08] rounded-xl transition-colors border-0"
         >
-          <Wrench className="w-4 h-4" />
+          <Wrench weight="duotone" className="w-4 h-4" />
           <span className="hidden sm:inline">{t('tools')}</span>
           <motion.div animate={{ rotate: featuresOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
-            <ChevronDown className="w-4 h-4" />
+            <CaretDown weight="duotone" className="w-4 h-4" />
           </motion.div>
         </button>
 
@@ -124,7 +137,7 @@ function Header() {
                   onClick={() => setFeaturesOpen(false)}
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
-                  <RouteIcon className="w-4 h-4" />
+                  <Path weight="duotone" className="w-4 h-4" />
                   {t('trip_estimator')}
                 </NavLink>
                 <NavLink
@@ -132,7 +145,7 @@ function Header() {
                   onClick={() => setFeaturesOpen(false)}
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
-                  <Circle className="w-4 h-4" />
+                  <Tire weight="duotone" className="w-4 h-4" />
                   {t('tyre_size')}
                 </NavLink>
                 <NavLink
@@ -140,7 +153,7 @@ function Header() {
                   onClick={() => setFeaturesOpen(false)}
                   className={({isActive}) => `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                 >
-                  <Wrench className="w-4 h-4" />
+                  <Wrench weight="duotone" className="w-4 h-4" />
                   {t('maintenance')}
                 </NavLink>
               </div>
@@ -206,7 +219,7 @@ export default function App() {
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
-                       <Home className="w-[22px] h-[22px]" />
+                       <House weight="duotone" className="w-[22px] h-[22px]" />
                        <span className="text-[10px] font-semibold mt-0.5">{t('dashboard')}</span>
                     </motion.div>
                     {isActive && (
@@ -224,7 +237,7 @@ export default function App() {
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
-                       <List className="w-[22px] h-[22px]" />
+                       <ListBullets weight="duotone" className="w-[22px] h-[22px]" />
                        <span className="text-[10px] font-semibold mt-0.5">{t('history')}</span>
                     </motion.div>
                     {isActive && (
@@ -259,7 +272,7 @@ export default function App() {
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
-                       <PieChart className="w-[22px] h-[22px]" />
+                       <ChartPieSlice weight="duotone" className="w-[22px] h-[22px]" />
                        <span className="text-[10px] font-semibold mt-0.5">{t('stats')}</span>
                     </motion.div>
                     {isActive && (
@@ -277,7 +290,7 @@ export default function App() {
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
                     <motion.div whileTap={{ scale: 0.8 }} className="flex flex-col items-center">
-                       <Settings className="w-[22px] h-[22px]" />
+                       <GearSix weight="duotone" className="w-[22px] h-[22px]" />
                        <span className="text-[10px] font-semibold mt-0.5">{t('config')}</span>
                     </motion.div>
                     {isActive && (

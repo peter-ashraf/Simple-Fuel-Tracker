@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, Trash2, AlertCircle } from 'lucide-react';
+import { X, Warning, Trash, WarningCircle } from '@phosphor-icons/react';
 import { cn } from './index';
 
 export const Modal = ({ 
@@ -74,7 +74,7 @@ export const Modal = ({
                     className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                     aria-label="Close modal"
                   >
-                    <X className="w-5 h-5" />
+                    <X weight="duotone" className="w-5 h-5" />
                   </button>
                 )}
               </div>
@@ -109,12 +109,12 @@ export const ConfirmModal = ({
   };
 
   const defaultIcons = {
-    danger: AlertTriangle,
-    warning: AlertCircle,
-    info: AlertCircle
+    danger: Warning,
+    warning: WarningCircle,
+    info: WarningCircle
   };
 
-  const ModalIcon = Icon || defaultIcons[variant] || AlertCircle;
+  const ModalIcon = Icon || defaultIcons[variant] || WarningCircle;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="sm">
@@ -125,7 +125,7 @@ export const ConfirmModal = ({
           variant === 'warning' && 'bg-amber-100 dark:bg-amber-500/20 text-amber-500',
           variant === 'info' && 'bg-blue-100 dark:bg-blue-500/20 text-blue-500'
         )}>
-          <ModalIcon className="w-6 h-6" />
+          <ModalIcon weight="duotone" className="w-6 h-6" />
         </div>
         
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -153,7 +153,7 @@ export const ConfirmModal = ({
               variantClasses[variant]
             )}
           >
-            {variant === 'danger' && <Trash2 className="w-4 h-4" />}
+            {variant === 'danger' && <Trash weight="duotone" className="w-4 h-4" />}
             {confirmText}
           </button>
         </div>

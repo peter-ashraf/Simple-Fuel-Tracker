@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Wrench, Calendar, DollarSign, Tag, ArrowLeft } from 'lucide-react';
+import { Plus, Wrench, CalendarBlank, CurrencyDollar, Tag, CaretLeft } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, cn } from './ui';
 import { MAINTENANCE_CATEGORIES, getMaintenanceCategory } from '../data/maintenanceCategories';
@@ -58,10 +58,10 @@ export default function MaintenanceLogForm() {
         <div className="fixed-button-container">
           <div className="max-w-lg mx-auto flex gap-3">
             <button type="button" onClick={() => navigate('/maintenance')} className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
-              <ArrowLeft className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
+              <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
             </button>
             <button type="button" onClick={handleSubmit} disabled={!title.trim()} className="flex-1 px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/25 active:scale-[0.98]">
-              <Plus className="w-5 h-5" /> <span>{t('add_maintenance')}</span>
+              <Plus weight="duotone" className="w-5 h-5" /> <span>{t('add_maintenance')}</span>
             </button>
           </div>
         </div>,
@@ -108,7 +108,7 @@ export default function MaintenanceLogForm() {
                   </div>
                 </div>
                 <div>
-                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" /> Parts</Label>
+                  <Label className="flex items-center gap-2"><Tag weight="duotone" className="w-4 h-4" /> Parts</Label>
                   <Input type="text" value={parts} onChange={(e) => setParts(e.target.value)} placeholder="..." />
                 </div>
                 <div>

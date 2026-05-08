@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Modal, cn } from './ui';
-import { Check, X, AlertTriangle, ArrowRight, Save, Trash2, Layers } from 'lucide-react';
+import { Check, X, Warning, CaretRight, FloppyDisk, Trash, Stack } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ImportResolver({ analysis, onCancel, onApply }) {
@@ -62,7 +62,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
     <div className="space-y-6 py-4">
       <div className="text-center space-y-2">
         <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto">
-          <Layers className="text-blue-500 w-8 h-8" />
+          <Stack weight="duotone" className="text-blue-500 w-8 h-8" />
         </div>
         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Review Backup Data</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -83,7 +83,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
 
       <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
         <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-          <Check className="w-4 h-4" />
+          <Check weight="duotone" className="w-4 h-4" />
           {analysis.identical} records are already identical and will be skipped.
         </p>
       </div>
@@ -116,7 +116,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
         </div>
 
         <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
-          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+          <Warning weight="duotone" className="text-amber-500 shrink-0" size={20} />
           <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
             {conflict.label}
           </p>
@@ -151,7 +151,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
           <Card className={cn("p-4 border-2 transition-all border-blue-500/30 bg-blue-500/5 shadow-lg shadow-blue-500/5")}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-blue-500 uppercase">Backup Version</span>
-              <Check className="text-blue-500 w-4 h-4" />
+              <Check weight="duotone" className="text-blue-500 w-4 h-4" />
             </div>
             <div className="space-y-2">
               {isFillup ? (
@@ -176,7 +176,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
             onClick={() => handleResolve('remove_both')}
             className="w-full py-3 rounded-xl border border-red-500/20 text-red-500 text-xs font-bold hover:bg-red-500/5 transition flex items-center justify-center gap-2"
           >
-            <Trash2 size={14} /> Remove From Both
+            <Trash weight="duotone" size={14} /> Remove From Both
           </button>
         </div>
 
@@ -217,7 +217,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
           >
             <div className="flex items-center gap-3">
               <div className={cn("p-2 rounded-lg", record.action === 'add' ? "bg-emerald-500/20" : "bg-slate-200 dark:bg-slate-800")}>
-                {record.type === 'fillup' ? <ArrowRight size={16} /> : <Save size={16} />}
+                {record.type === 'fillup' ? <CaretRight weight="duotone" size={16} /> : <FloppyDisk weight="duotone" size={16} />}
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-bold">
@@ -228,7 +228,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
                 </span>
               </div>
             </div>
-            {record.action === 'add' ? <Check size={18} /> : <X size={18} />}
+            {record.action === 'add' ? <Check weight="duotone" size={18} /> : <X weight="duotone" size={18} />}
           </div>
         ))}
       </div>
@@ -238,7 +238,7 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
           onClick={() => onApply(resolutions, newRecordActions)}
           className="w-full py-4 rounded-2xl bg-emerald-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
         >
-          <Save size={18} /> Complete Import
+          <FloppyDisk weight="duotone" size={18} /> Complete Import
         </button>
       </div>
     </div>

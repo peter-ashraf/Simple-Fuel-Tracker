@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Fuel, Calendar, MapPin, Save, X, CheckSquare, Square } from 'lucide-react';
+import { Trash, GasPump, CalendarBlank, MapPin, FloppyDisk, X, CheckSquare, Square } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal, Input, Label } from './ui';
@@ -85,7 +85,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               </div>
               {fill.station && (
                 <p className="text-xs font-medium text-emerald-400 flex items-center gap-1 mt-1">
-                  <MapPin className="w-3 h-3"/> {fill.station}
+                  <MapPin weight="duotone" className="w-3 h-3"/> {fill.station}
                 </p>
               )}
               <p className="text-xs text-slate-500 mt-1">{fill.odometer.toLocaleString()} km</p>
@@ -127,7 +127,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                 <button onClick={handleSave} className="bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs">{t('save')}</button>
                 <button onClick={handleCancel} className="bg-slate-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs">{t('cancel')}</button>
               </div>
-              <button onClick={() => setDeleteModal(true)} className="text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
+              <button onClick={() => setDeleteModal(true)} className="text-red-500 p-1"><Trash weight="duotone" className="w-4 h-4" /></button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">

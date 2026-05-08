@@ -4,10 +4,10 @@ import { useFuel } from '../hooks/useFuelContext';
 import { useTheme } from '../hooks/useTheme';
 import { Card, Input, Label, cn, PageWrapper, Modal, ConfirmModal } from './ui';
 import { 
-  Trash2, Plus, CarFront, DollarSign, AlertCircle, Palette, Pencil, 
-  Check, MapPin, Navigation, Circle, Bell, Wrench, Settings2, Save,
-  Globe, Download, Upload, Database
-} from 'lucide-react';
+  Trash, Plus, Car, CurrencyDollar, WarningCircle, Palette, Pencil, 
+  Check, MapPin, NavigationArrow, Tire, Bell, Wrench, GearSix, FloppyDisk,
+  Globe, DownloadSimple, UploadSimple, Database
+} from '@phosphor-icons/react';
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
 import { SavedStations } from './SavedStations';
@@ -199,7 +199,7 @@ export default function Settings() {
       </div>
 
       <section>
-         <h3 className="text-xs font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><CarFront className="w-4 h-4"/> {t('your_garage')}</h3>
+         <h3 className="text-xs font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Car weight="duotone" className="w-4 h-4"/> {t('your_garage')}</h3>
          
          <div className="space-y-3 mb-4">
             {vehicles.map(v => (
@@ -220,7 +220,7 @@ export default function Settings() {
                            onClick={(e) => e.stopPropagation()}
                          />
                          <button onClick={() => handleSaveEdit(v.id)} className="text-emerald-500 hover:text-emerald-400 p-1.5 bg-emerald-500/10 rounded-lg">
-                            <Check className="w-4 h-4" />
+                            <Check weight="duotone" className="w-4 h-4" />
                          </button>
                        </div>
                        
@@ -237,7 +237,7 @@ export default function Settings() {
 
                        <div className="space-y-1.5">
                          <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                           <Circle className="w-3 h-3" /> {t('tyre_size')}
+                           <Tire weight="duotone" className="w-3 h-3" /> {t('tyre_size')}
                          </p>
                            <div className="flex gap-2">
                              <Input
@@ -264,13 +264,13 @@ export default function Settings() {
                   ) : (
                      <div className="flex-1 me-3 flex items-center gap-2 cursor-pointer" onClick={() => setSelectedVehicleId(v.id)}>
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${v.id === selectedVehicleId ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
-                          {v.id === selectedVehicleId && <Check className="w-3 h-3" />}
+                          {v.id === selectedVehicleId && <Check weight="duotone" className="w-3 h-3" />}
                         </div>
                         <div>
                           <span className="font-semibold text-slate-900 dark:text-slate-200 block">{v.name}</span>
                           {v.tyreSize && (
                             <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                              <Circle className="w-3 h-3" /> {v.tyreSize.width}/{v.tyreSize.aspectRatio} R{v.tyreSize.rimSize}
+                              <Tire weight="duotone" className="w-3 h-3" /> {v.tyreSize.width}/{v.tyreSize.aspectRatio} R{v.tyreSize.rimSize}
                             </span>
                           )}
                         </div>
@@ -278,7 +278,7 @@ export default function Settings() {
                           onClick={(e) => { e.stopPropagation(); startEditing(v); }}
                           className="text-slate-400 hover:text-blue-400 p-1 opacity-40 group-hover:opacity-100 transition-opacity md:opacity-40 ms-auto"
                         >
-                           <Pencil className="w-3.5 h-3.5" />
+                           <Pencil weight="duotone" className="w-3.5 h-3.5" />
                         </button>
                      </div>
                   )}
@@ -289,7 +289,7 @@ export default function Settings() {
                         disabled={vehicles.length === 1 || editingVehicleId === v.id}
                         className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 p-2 disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
                      >
-                       <Trash2 className="w-4 h-4" />
+                       <Trash weight="duotone" className="w-4 h-4" />
                      </button>
                   </div>
                </div>
@@ -305,14 +305,14 @@ export default function Settings() {
               className="py-3"
             />
             <button type="submit" disabled={!newVehicleName} className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-slate-950 px-5 rounded-2xl font-bold transition flex items-center justify-center">
-              <Plus className="w-5 h-5"/>
+              <Plus weight="duotone" className="w-5 h-5"/>
             </button>
          </form>
       </section>
 
       {/* Language Section */}
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Globe className="w-4 h-4"/> {t('language')}</h3>
+         <h3 className="text-xs font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Globe weight="duotone" className="w-4 h-4"/> {t('language')}</h3>
          <Card className="px-5 py-6">
             <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
               {[
@@ -344,7 +344,7 @@ export default function Settings() {
 
       <section className="pt-4">
           <div className="flex items-center justify-between mb-3">
-           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ms-1"><Circle className="w-4 h-4"/> {t('active_vehicle_details')}</h3>
+           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ms-1"><Tire weight="duotone" className="w-4 h-4"/> {t('active_vehicle_details')}</h3>
            {activeVehicleForm && (
              <button onClick={handleSaveActiveVehicleDetails} className="bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">{t('save_details')}</button>
            )}
@@ -390,7 +390,7 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Palette className="w-4 h-4"/> {t('theme_prefs')}</h3>
+         <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Palette weight="duotone" className="w-4 h-4"/> {t('theme_prefs')}</h3>
          <Card className="px-5 py-6">
             <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
               {['light', 'dark', 'system'].map(t_id => (
@@ -412,7 +412,7 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Navigation className="w-4 h-4"/> {t('location_services')}</h3>
+         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><NavigationArrow weight="duotone" className="w-4 h-4"/> {t('location_services')}</h3>
          <Card className="px-5 py-6">
             <div className="space-y-4">
                <div className="flex items-center justify-between">
@@ -427,7 +427,7 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Bell className="w-4 h-4"/> {t('notifications')}</h3>
+         <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Bell weight="duotone" className="w-4 h-4"/> {t('notifications')}</h3>
          <Card className="px-5 py-6">
             <div className="flex items-center justify-between">
                <p className="text-sm font-medium text-slate-900 dark:text-white">{t('maintenance')}</p>
@@ -439,7 +439,7 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><DollarSign className="w-4 h-4"/> {t('fuel_prices')}</h3>
+         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><CurrencyDollar weight="duotone" className="w-4 h-4"/> {t('fuel_prices')}</h3>
          <Card className="px-5 py-6">
             <div className="space-y-4">
                {['92', '95', 'diesel'].map(key => (
@@ -454,11 +454,11 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Database className="w-4 h-4"/> {t('backup_restore')}</h3>
+         <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Database weight="duotone" className="w-4 h-4"/> {t('backup_restore')}</h3>
          <Card className="px-5 py-6">
             <div className="grid grid-cols-2 gap-3">
-               <button onClick={() => setFormatModal({ isOpen: true, type: 'export' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><Download size={18} /> {t('export_data')}</button>
-               <button onClick={() => setFormatModal({ isOpen: true, type: 'import' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><Upload size={18} /> {t('import_data')}</button>
+               <button onClick={() => setFormatModal({ isOpen: true, type: 'export' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><DownloadSimple weight="duotone" size={18} /> {t('export_data')}</button>
+               <button onClick={() => setFormatModal({ isOpen: true, type: 'import' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><UploadSimple weight="duotone" size={18} /> {t('import_data')}</button>
             </div>
          </Card>
       </section>
@@ -479,7 +479,7 @@ export default function Settings() {
       >
         <div className="p-1 space-y-4">
           <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <WarningCircle weight="duotone" className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="space-y-2 text-xs font-bold leading-relaxed">
               {validationModal.isMissingTank && <p>{t('missing_tank_warning')}</p>}
               {validationModal.isMissingTyre && <p>{t('missing_tyre_warning')}</p>}
@@ -514,7 +514,7 @@ export default function Settings() {
              }} 
              className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
            >
-             <Database className="text-blue-500" /> 
+             <Database weight="duotone" className="text-blue-500" /> 
              <span className="text-xs font-bold">JSON</span>
            </button>
            <button 
@@ -525,7 +525,7 @@ export default function Settings() {
              }} 
              className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
            >
-             <Database className="text-emerald-500" /> 
+             <Database weight="duotone" className="text-emerald-500" /> 
              <span className="text-xs font-bold">{t('excel')}</span>
            </button>
         </div>

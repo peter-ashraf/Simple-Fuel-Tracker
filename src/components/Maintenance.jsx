@@ -1,18 +1,18 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Wrench, Plus, Bell, DollarSign, Search, Edit2, Trash2, Calendar, 
-  Settings2, ShieldAlert, ChevronDown, Check, Square, CheckSquare, 
-  X, Palette, Layout, Activity, Droplet, Shield, Battery, Car, Disc, Zap, Clock,
-  MoreVertical, ChevronRight, Save, Trash, AlertTriangle
-} from 'lucide-react';
+  Wrench, Plus, Bell, CurrencyDollar, MagnifyingGlass, Pencil, Trash, CalendarBlank, 
+  GearSix, ShieldWarning, CaretDown, Check, Square, CheckSquare, 
+  X, Palette, Layout, Pulse, Drop, Shield, BatteryCharging, Car, Disc, Lightning, Clock,
+  DotsThreeVertical, CaretRight, FloppyDisk, Warning
+} from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Card, PageWrapper, ConfirmModal, Modal, Input, Label, cn } from './ui';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-const ICON_MAP = { Zap, Disc, Droplet, Shield, Battery, Car, Wrench, Activity, Settings2 };
+const ICON_MAP = { Lightning, Disc, Drop, Shield, BatteryCharging, Car, Wrench, Pulse, GearSix };
 
 export default function Maintenance() {
   const { 
@@ -219,13 +219,13 @@ export default function Maintenance() {
             <div className="p-3 bg-white dark:bg-white/[0.03] rounded-3xl border border-slate-200 dark:border-slate-700/50">
                <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
-                    <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400`} />
+                    <MagnifyingGlass weight="duotone" className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400`} />
                     <input type="text" placeholder={t('search')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={cn("w-full py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-xl text-sm outline-none", isRtl ? "pr-9 pl-4" : "pl-9 pr-4")} />
                   </div>
                   <div className="relative" ref={categoryDropdownRef}>
                     <button onClick={() => setDropdownOpen(!dropdownOpen)} className="w-full flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-xl px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                       <span>{selectedCategory === 'all' ? t('all_categories') : t(getCategoryById(selectedCategory).id)}</span>
-                      <motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }}><ChevronDown className="w-4 h-4 text-slate-400" /></motion.div>
+                      <motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }}><CaretDown weight="duotone" className="w-4 h-4 text-slate-400" /></motion.div>
                     </button>
                     <AnimatePresence>
                       {dropdownOpen && (
@@ -257,7 +257,7 @@ export default function Maintenance() {
                             <h3 className="font-bold text-slate-900 dark:text-white">{t(category.id)}</h3>
                             <p className="text-xs text-slate-500">{format(new Date(log.timestamp), 'MMM d, yyyy')} • {log.performedAtODO.toLocaleString()} km</p>
                           </div>
-                          <Edit2 className="w-4 h-4 text-slate-400" />
+                          <Pencil weight="duotone" className="w-4 h-4 text-slate-400" />
                         </div>
                       </Card>
                     </div>
@@ -281,7 +281,7 @@ export default function Maintenance() {
                       <p className="text-[10px] text-slate-500">{system.categories.length} {t('sub_categories')}</p>
                     </div>
                   </div>
-                  <ChevronRight className={cn("w-5 h-5 text-slate-300", isRtl && "rotate-180")} />
+                  <CaretRight weight="duotone" className={cn("w-5 h-5 text-slate-300", isRtl && "rotate-180")} />
                 </Card>
               );
             })}
@@ -326,8 +326,8 @@ export default function Maintenance() {
                     <span className="text-xs font-bold">{t(cat.id) || cat.name}</span>
                   )}
                   <div className="flex gap-1">
-                    <button onClick={() => { setRenamingCatId(catId); setRenamingCatName(cat.name); }} className="p-1.5 text-slate-400"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setConfirmDeleteCat(catId)} className="p-1.5 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setRenamingCatId(catId); setRenamingCatName(cat.name); }} className="p-1.5 text-slate-400"><Pencil weight="duotone" className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setConfirmDeleteCat(catId)} className="p-1.5 text-red-500"><Trash weight="duotone" className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
               );

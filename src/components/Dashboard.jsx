@@ -1,16 +1,16 @@
 import { useState } from "react";
 import {
-  Activity,
-  TrendingUp,
-  DollarSign,
-  Fuel,
+  Pulse,
+  TrendUp,
+  CurrencyDollar,
+  GasPump,
   Wrench,
-  AlertTriangle,
+  Warning,
   Bell,
-  Settings,
-  Route,
-  ChevronRight,
-} from "lucide-react";
+  GearSix,
+  Path,
+  CaretRight,
+} from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, MetricCard, PageWrapper, Modal, cn } from "./ui";
@@ -142,7 +142,7 @@ export default function Dashboard() {
           <section className="grid grid-cols-2 gap-3 mb-6">
             <MetricCard className="flex flex-col justify-between min-h-[120px] p-4">
               <div className="flex items-center gap-1.5 mb-1">
-                <Activity className="w-3 h-3 text-emerald-500" />
+                <Pulse weight="duotone" className="w-3 h-3 text-emerald-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
                   {t('avg_km_l_short')}
                 </span>
@@ -159,7 +159,7 @@ export default function Dashboard() {
               className="flex flex-col justify-between min-h-[120px] p-4"
             >
               <div className="flex items-center gap-1.5 mb-1">
-                <TrendingUp className="w-3 h-3 text-blue-500" />
+                <TrendUp weight="duotone" className="w-3 h-3 text-blue-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
                   {t('l_100km_short')}
                 </span>
@@ -171,7 +171,7 @@ export default function Dashboard() {
 
             <MetricCard className="flex flex-col justify-between min-h-[120px] p-4">
               <div className="flex items-center gap-1.5 mb-1">
-                <DollarSign className="w-3 h-3 text-indigo-500" />
+                <CurrencyDollar weight="duotone" className="w-3 h-3 text-indigo-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
                   {t("total_spent")}
                 </span>
@@ -191,7 +191,7 @@ export default function Dashboard() {
               className="flex flex-col justify-between min-h-[120px] p-4"
             >
               <div className="flex items-center gap-1.5 mb-1">
-                <Fuel className="w-3 h-3 text-amber-500" />
+                <GasPump weight="duotone" className="w-3 h-3 text-amber-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
                   {t("history")}
                 </span>
@@ -212,12 +212,12 @@ export default function Dashboard() {
                   className="w-full flex items-center justify-between p-3 bg-red-500/10 dark:bg-red-500/20 border border-red-500/20 rounded-2xl"
                 >
                   <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-red-500" />
+                    <Bell weight="duotone" className="w-4 h-4 text-red-500" />
                     <span className="text-xs font-bold text-red-600 dark:text-red-400">
                       {maintenanceAlerts.length} {t("overdue_excl")}
                     </span>
                   </div>
-                  <ChevronRight
+                  <CaretRight weight="duotone"
                     className={cn(
                       "w-4 h-4 text-red-400",
                       isRtl && "rotate-180",
@@ -231,7 +231,7 @@ export default function Dashboard() {
                   className="w-full flex items-center justify-between p-3 bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 rounded-2xl"
                 >
                   <div className="flex items-center gap-2">
-                    <Route className="w-4 h-4 text-blue-500" />
+                    <Path weight="duotone" className="w-4 h-4 text-blue-500" />
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
                         {t("due_soon")}: {t(upcomingMaintenance[0].categoryId)}
@@ -241,7 +241,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </div>
-                  <ChevronRight
+                  <CaretRight weight="duotone"
                     className={cn(
                       "w-4 h-4 text-blue-400",
                       isRtl && "rotate-180",

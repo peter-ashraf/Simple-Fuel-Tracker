@@ -1,22 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
-  Route,
+  Path,
   Calculator,
-  TrendingUp,
-  AlertCircle,
+  TrendUp,
+  WarningCircle,
   Info,
-  ChevronDown,
+  CaretDown,
   Check,
-  ArrowLeft,
-  Trash2,
+  CaretLeft,
+  Trash,
   Clock,
   MapPin,
-  History,
+  ClockCounterClockwise,
   CheckSquare,
   Square,
   X,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, Input, Label, PageWrapper, cn, Modal } from "../ui";
 import { useFuel } from "../../hooks/useFuelContext";
@@ -133,7 +133,7 @@ export default function TripCostEstimator() {
     <div className={cn("space-y-6", isModal && "p-6")}>
       {!isModal && (
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-blue-500" />
+          <TrendUp weight="duotone" className="w-5 h-5 text-blue-500" />
           <h2 className="text-lg font-bold">{t("estimated_cost")}</h2>
         </div>
       )}
@@ -204,7 +204,7 @@ export default function TripCostEstimator() {
             exit={{ opacity: 0, height: 0 }}
             className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2"
           >
-            <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <WarningCircle weight="duotone" className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
             <div className="text-[11px] text-amber-700 dark:text-amber-400">
               <p className="font-bold mb-0.5">{t("limited_data")}</p>
               <p>{t("add_more_data_hint")}</p>
@@ -219,7 +219,7 @@ export default function TripCostEstimator() {
             exit={{ opacity: 0, height: 0 }}
             className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2"
           >
-            <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+            <Info weight="duotone" className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
             <div className="text-[11px] text-blue-700 dark:text-blue-400">
               <p>{t("estimate_hint", { count: data.sampleSize })}</p>
             </div>
@@ -231,7 +231,7 @@ export default function TripCostEstimator() {
       {data.rawData && data.rawData.length > 0 && (
         <div className="pt-4 border-t border-slate-200 dark:border-white/10">
           <div className="flex items-center gap-2 mb-3">
-            <History className="w-3.5 h-3.5 text-slate-400" />
+            <ClockCounterClockwise weight="duotone" className="w-3.5 h-3.5 text-slate-400" />
             <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               {t("recent_data_used")}
             </h3>
@@ -264,7 +264,7 @@ export default function TripCostEstimator() {
               onClick={() => navigate("/")}
               className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all"
             >
-              <ArrowLeft className={cn("w-5 h-5", isRtl && "rotate-180")} />{" "}
+              <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} />{" "}
               <span>{t("back")}</span>
             </button>
             <button
@@ -273,7 +273,7 @@ export default function TripCostEstimator() {
               disabled={!estimate}
               className="flex-1 px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/25 active:scale-[0.98]"
             >
-              <Check className="w-5 h-5" /> <span>{t("save")}</span>
+              <Check weight="duotone" className="w-5 h-5" /> <span>{t("save")}</span>
             </button>
           </div>
         </div>,
@@ -292,7 +292,7 @@ export default function TripCostEstimator() {
 
         <Card className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
-            <Calculator className="w-5 h-5 text-emerald-500" />
+            <Calculator weight="duotone" className="w-5 h-5 text-emerald-500" />
             <h2 className="text-lg font-bold">{t("overview")}</h2>
           </div>
 
@@ -313,7 +313,7 @@ export default function TripCostEstimator() {
                   className="px-4 h-full bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-xs uppercase flex items-center gap-1 min-w-[70px] justify-center"
                 >
                   {distanceUnit}{" "}
-                  <ChevronDown
+                  <CaretDown weight="duotone"
                     className={cn(
                       "w-3 h-3 transition-transform",
                       isUnitDropdownOpen && "rotate-180",
@@ -466,13 +466,13 @@ export default function TripCostEstimator() {
 
         <section className="pt-2">
           <div className="flex items-center gap-2 mb-4">
-            <History className="w-5 h-5 text-slate-500" />
+            <ClockCounterClockwise weight="duotone" className="w-5 h-5 text-slate-500" />
             <h2 className="text-lg font-bold">{t("history")}</h2>
           </div>
 
           {tripEstimates.length === 0 ? (
             <div className="text-center py-8 px-6 border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-3xl">
-              <Clock className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+              <Clock weight="duotone" className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium tracking-tight">
                 {t("untracked")}
               </p>
@@ -493,14 +493,14 @@ export default function TripCostEstimator() {
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         <div className="bg-blue-500/10 p-2 rounded-lg">
-                          <MapPin className="w-4 h-4 text-blue-500" />
+                          <MapPin weight="duotone" className="w-4 h-4 text-blue-500" />
                         </div>
                         <div>
                           <h4 className="text-sm font-bold">
                             {displayDistance.toFixed(0)} km
                           </h4>
                           <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5" />
+                            <Clock weight="duotone" className="w-2.5 h-2.5" />
                             {new Date(est.timestamp).toLocaleDateString()}
                           </p>
                         </div>
@@ -524,7 +524,7 @@ export default function TripCostEstimator() {
                         }}
                         className="text-red-400 hover:text-red-500 transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash weight="duotone" className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </Card>

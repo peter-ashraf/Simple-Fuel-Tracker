@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wrench, Plus, Filter, Calendar, DollarSign, Tag, Search, Edit2, Trash2, Bell, ChevronRight } from 'lucide-react';
+import { Wrench, Plus, Faders, CalendarBlank, CurrencyDollar, Tag, MagnifyingGlass, Pencil, Trash, Bell, CaretRight } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Card, PageWrapper, ConfirmModal, cn } from './ui';
 import { getMaintenanceCategory } from '../data/maintenanceCategories';
@@ -52,11 +52,11 @@ export default function MaintenanceLogs() {
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Card className="p-4 border border-emerald-500/10">
-          <p className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1"><Wrench className="w-3 h-3" /> {t('systems')}</p>
+          <p className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1"><Wrench weight="duotone" className="w-3 h-3" /> {t('systems')}</p>
           <p className="text-2xl font-bold">{filteredLogs.length}</p>
         </Card>
         <Card className="p-4 border border-blue-500/10">
-          <p className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1"><DollarSign className="w-3 h-3" /> {t('total_spent')}</p>
+          <p className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1"><CurrencyDollar weight="duotone" className="w-3 h-3" /> {t('total_spent')}</p>
           <p className="text-2xl font-bold">{formatCurrency2Dec(getTotalCost()).replace('L.E ', '')}</p>
         </Card>
       </div>
@@ -64,7 +64,7 @@ export default function MaintenanceLogs() {
       <Card className="p-4 mb-6">
         <div className="flex flex-col gap-4">
           <div className="relative">
-            <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400", isRtl ? "right-3" : "left-3")} />
+            <MagnifyingGlass weight="duotone" className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400", isRtl ? "right-3" : "left-3")} />
             <input type="text" placeholder={t('search')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={cn("w-full py-2 bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700/50 rounded-xl text-slate-900 dark:text-white focus:outline-none", isRtl ? "pr-10 pl-4" : "pl-10 pr-4")} />
           </div>
           <div className="flex gap-2 flex-wrap">

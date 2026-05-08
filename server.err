@@ -65,3 +65,4 @@
       at JSXParserMixin.allowInAnd (f:\Peter\Practice\Fuel-Tracker\node_modules\@babel\parser\lib\index.js:12426:12)
       at JSXParserMixin.parseMaybeAssignAllowIn (f:\Peter\Practice\Fuel-Tracker\node_modules\@babel\parser\lib\index.js:10800:17)
       at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (f:\Peter\Practice\Fuel-Tracker\node_modules\@babel\parser\lib\index.js:12493:17)
+^C^C

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { Plus, MapPin, Wrench, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Plus, MapPin, Wrench, CaretLeft, WarningCircle } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, ConfirmModal, FuelGaugeSlider, cn } from './ui';
 import { useLocationDetection } from '../hooks/useLocationDetection';
@@ -159,10 +159,10 @@ export default function FillUpForm() {
       <div className="fixed-button-container" ref={buttonContainerRef}>
         <div className="max-w-lg mx-auto flex gap-3">
           <button type="button" onClick={() => navigate('/')} className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
-            <ArrowLeft className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
+            <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
           </button>
           <button type="submit" form="fillup-form" disabled={(!liters && !moneySpent) || !odometer} className="flex-1 px-6 bg-emerald-500 text-white font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/30 active:scale-[0.98]">
-            <Plus className="w-5 h-5" /> <span>{t('save')}</span>
+            <Plus weight="duotone" className="w-5 h-5" /> <span>{t('save')}</span>
           </button>
         </div>
       </div>,
@@ -258,7 +258,7 @@ export default function FillUpForm() {
                  <Label>Station (Optional)</Label>
                  <div className="flex gap-2">
                     <Input type="text" value={station} onChange={e => setStation(e.target.value)} placeholder="..." className="flex-1" />
-                    <button type="button" onClick={() => setShowStationModal(true)} className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl"><MapPin className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => setShowStationModal(true)} className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl"><MapPin weight="duotone" className="w-4 h-4" /></button>
                  </div>
               </div>
               <div>
@@ -266,7 +266,7 @@ export default function FillUpForm() {
                  <div className="space-y-2">
                    <textarea className="input-field min-h-[80px]" rows="2" value={notes} onChange={e => setNotes(e.target.value)} placeholder="..." />
                    {notes.trim() && (
-                     <button type="button" onClick={handleConvertToMaintenanceLog} className="flex items-center gap-2 px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl text-sm"><Wrench className="w-4 h-4" /> {t('add_maintenance')}</button>
+                     <button type="button" onClick={handleConvertToMaintenanceLog} className="flex items-center gap-2 px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl text-sm"><Wrench weight="duotone" className="w-4 h-4" /> {t('add_maintenance')}</button>
                    )}
                  </div>
               </div>

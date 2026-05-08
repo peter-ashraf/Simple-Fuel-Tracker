@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { CaretLeft, CaretRight, CalendarBlank as CalendarIcon } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Calendar({ value, onChange, onClose }) {
@@ -224,7 +224,7 @@ export function Calendar({ value, onChange, onClose }) {
             whileTap={{ x: -4 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            <CaretLeft weight="duotone" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           </motion.button>
           
           <div className="text-center">
@@ -275,7 +275,7 @@ export function Calendar({ value, onChange, onClose }) {
             whileTap={{ x: 4 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            <ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            <CaretRight weight="duotone" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           </motion.button>
         </div>
 

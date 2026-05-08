@@ -5,7 +5,20 @@ import { format } from 'date-fns';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, AlertTriangle, Circle, TrendingUp, Wallet, ChevronLeft, ChevronRight, Calendar, Activity, Gauge, DollarSign, ChevronDown } from 'lucide-react';
+import { 
+  Trophy, 
+  Warning, 
+  Circle, 
+  TrendUp, 
+  Wallet, 
+  CaretLeft, 
+  CaretRight, 
+  CalendarBlank, 
+  Pulse, 
+  Gauge, 
+  CurrencyDollar, 
+  CaretDown 
+} from '@phosphor-icons/react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { formatEfficiency2Dec, formatCurrency2Dec } from '../utils/formatting';
 import { useTranslation } from 'react-i18next';
@@ -92,10 +105,10 @@ export default function Analytics() {
   const worstTrip = sortedByEfficiency[sortedByEfficiency.length - 1];
 
   const graphs = [
-    { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendingUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
+    { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
     { id: 'spending', title: t('monthly_spending'), subtitle: t('total_spent'), icon: Wallet, color: 'blue', data: monthlyGroups.map(g => g.totalCost).reverse(), labels: monthlyGroups.map(g => format(new Date(g.key + '-01'), 'MMM yy')).reverse() },
-    { id: 'price', title: t('fuel_price_evolution'), subtitle: t('price'), icon: DollarSign, color: 'indigo', data: activeVehicleFillUps.map(f => f.pricePerLiter), labels: activeVehicleFillUps.map(f => format(new Date(f.timestamp), 'MMM d')) },
-    { id: 'costs', title: t('trip_cost_distribution'), subtitle: t('total_spent'), icon: Activity, color: 'violet', data: tripData.map(t => t.tripCost), labels: tripData.map(t => t.date) },
+    { id: 'price', title: t('fuel_price_evolution'), subtitle: t('price'), icon: CurrencyDollar, color: 'indigo', data: activeVehicleFillUps.map(f => f.pricePerLiter), labels: activeVehicleFillUps.map(f => format(new Date(f.timestamp), 'MMM d')) },
+    { id: 'costs', title: t('trip_cost_distribution'), subtitle: t('total_spent'), icon: Pulse, color: 'violet', data: tripData.map(t => t.tripCost), labels: tripData.map(t => t.date) },
   ];
 
   const paginate = (newIndex) => {
@@ -117,14 +130,14 @@ export default function Analytics() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-emerald-500" />
+            <CalendarBlank weight="duotone" className="w-4 h-4 text-emerald-500" />
             <h3 className="text-sm font-bold">{t('monthly_insights')}</h3>
           </div>
           
           <div className="relative" ref={dropdownRef}>
             <button onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)} className="flex items-center gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full px-4 py-2 text-[10px] font-bold shadow-sm">
               <span>{selectedData?.monthLabel}</span>
-              <ChevronDown size={14} className={cn("text-slate-400 transition-transform", isMonthDropdownOpen && "rotate-180")} />
+              <CaretDown weight="duotone" size={14} className={cn("text-slate-400 transition-transform", isMonthDropdownOpen && "rotate-180")} />
             </button>
             <AnimatePresence>
               {isMonthDropdownOpen && (
@@ -157,17 +170,17 @@ export default function Analytics() {
                       <span className="text-sm font-bold opacity-80">EGP</span>
                    </div>
                    <div className="flex items-center gap-4 mt-6">
-                      <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl"><Activity size={14}/> <span className="text-xs font-bold">{selectedData.fills.length} {t('trips')}</span></div>
-                      <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl"><TrendingUp size={14}/> <span className="text-xs font-bold">{formatEfficiency2Dec(selectedData.avgEff)}</span></div>
+                      <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl"><Pulse weight="duotone" size={14}/> <span className="text-xs font-bold">{selectedData.fills.length} {t('trips')}</span></div>
+                      <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl"><TrendUp weight="duotone" size={14}/> <span className="text-xs font-bold">{formatEfficiency2Dec(selectedData.avgEff)}</span></div>
                    </div>
                 </div>
              </div>
              <div className="bg-white dark:bg-white/5 rounded-3xl p-5 border border-slate-200 dark:border-white/10">
-                <div className="flex items-center gap-2 mb-3"><DollarSign className="w-4 h-4 text-indigo-500"/><p className="text-[10px] font-bold text-slate-400 uppercase">{t('cost_per_km')}</p></div>
+                <div className="flex items-center gap-2 mb-3"><CurrencyDollar weight="duotone" className="w-4 h-4 text-indigo-500"/><p className="text-[10px] font-bold text-slate-400 uppercase">{t('cost_per_km')}</p></div>
                 <div className="flex items-baseline gap-1"><span className="text-2xl font-bold">{selectedData.costPerKm.toFixed(2)}</span><span className="text-[10px] text-slate-500">EGP</span></div>
              </div>
              <div className="bg-white dark:bg-white/5 rounded-3xl p-5 border border-slate-200 dark:border-white/10">
-                <div className="flex items-center gap-2 mb-3"><Gauge className="w-4 h-4 text-amber-500"/><p className="text-[10px] font-bold text-slate-400 uppercase">{t('distance')}</p></div>
+                <div className="flex items-center gap-2 mb-3"><Gauge weight="duotone" className="w-4 h-4 text-amber-500"/><p className="text-[10px] font-bold text-slate-400 uppercase">{t('distance')}</p></div>
                 <div className="flex items-baseline gap-1"><span className="text-2xl font-bold">{selectedData.distance.toLocaleString()}</span><span className="text-[10px] text-slate-500">KM</span></div>
              </div>
           </div>
@@ -176,7 +189,7 @@ export default function Analytics() {
 
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-amber-500" />
+          <Trophy weight="duotone" className="w-4 h-4 text-amber-500" />
           <h3 className="text-sm font-bold">{t('all_time_records')}</h3>
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -203,14 +216,14 @@ export default function Analytics() {
       <section className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-500" />
+            <Pulse weight="duotone" className="w-4 h-4 text-emerald-500" />
             <h3 className="text-sm font-bold">{t('trends_visualization')}</h3>
           </div>
           
           <div className="relative" ref={graphDropdownRef}>
             <button onClick={() => setIsGraphDropdownOpen(!isGraphDropdownOpen)} className="flex items-center gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full px-4 py-2 text-[10px] font-bold shadow-sm">
               <span>{currentGraph.title}</span>
-              <ChevronDown size={14} className={cn("text-slate-400 transition-transform", isGraphDropdownOpen && "rotate-180")} />
+              <CaretDown weight="duotone" size={14} className={cn("text-slate-400 transition-transform", isGraphDropdownOpen && "rotate-180")} />
             </button>
             <AnimatePresence>
               {isGraphDropdownOpen && (
@@ -259,10 +272,10 @@ export default function Analytics() {
            </Card>
            
            <button onClick={() => paginate((activeGraphIndex - 1 + graphs.length) % graphs.length)} className={cn("absolute top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-emerald-500 z-10", isRtl ? "right-[-40px]" : "left-[-40px]")}>
-             <ChevronLeft size={32} className={isRtl ? "rotate-180" : ""}/>
+             <CaretLeft weight="duotone" size={32} className={isRtl ? "rotate-180" : ""}/>
            </button>
            <button onClick={() => paginate((activeGraphIndex + 1) % graphs.length)} className={cn("absolute top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-emerald-500 z-10", isRtl ? "left-[-40px]" : "right-[-40px]")}>
-             <ChevronRight size={32} className={isRtl ? "rotate-180" : ""}/>
+             <CaretRight weight="duotone" size={32} className={isRtl ? "rotate-180" : ""}/>
            </button>
         </div>
       </section>

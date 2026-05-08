@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapPin, ExternalLink, Edit2, Trash2, Loader2, X } from 'lucide-react';
+import { MapPin, ArrowSquareOut, Pencil, Trash, CircleNotch, X } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './ui';
 import { gasStationService } from '../services/gasStationService';
@@ -88,7 +88,7 @@ export function SavedStations({ onStationUpdate }) {
   if (stations.length === 0) {
     return (
       <div className="text-center py-8">
-        <MapPin className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+        <MapPin weight="duotone" className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
         <p className="text-sm text-slate-500 dark:text-slate-400">
           No saved gas stations yet
         </p>
@@ -132,7 +132,7 @@ export function SavedStations({ onStationUpdate }) {
                   className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-slate-950 font-medium py-1 px-3 rounded-lg transition-colors flex items-center justify-center gap-1"
                 >
                   {loading ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <CircleNotch weight="duotone" className="w-3 h-3 animate-spin" />
                   ) : (
                     'Save'
                   )}
@@ -147,7 +147,7 @@ export function SavedStations({ onStationUpdate }) {
                 </h4>
                 <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                   <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
+                    <MapPin weight="duotone" className="w-3 h-3" />
                     <span>
                       {station.latitude.toFixed(4)}, {station.longitude.toFixed(4)}
                     </span>
@@ -164,21 +164,21 @@ export function SavedStations({ onStationUpdate }) {
                   className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   title="View on map"
                 >
-                  <ExternalLink className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                  <ArrowSquareOut weight="duotone" className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                 </button>
                 <button
                   onClick={() => startEdit(station)}
                   className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   title="Edit name"
                 >
-                  <Edit2 className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                  <Pencil weight="duotone" className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                 </button>
                 <button
                   onClick={() => deleteStation(station.id)}
                   className="p-1.5 rounded-lg bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors"
                   title="Delete station"
                 >
-                  <Trash2 className="w-3 h-3 text-red-500 dark:text-red-400" />
+                  <Trash weight="duotone" className="w-3 h-3 text-red-500 dark:text-red-400" />
                 </button>
               </div>
             </div>

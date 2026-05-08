@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Calculator, RotateCcw, Save, Clock, Circle, TrendingUp, AlertTriangle, Check, History, ChevronDown, Pencil, Gauge, ArrowLeft } from 'lucide-react';
+import { 
+  Calculator, 
+  ArrowCounterClockwise, 
+  FloppyDisk, 
+  Clock, 
+  Tire, 
+  TrendUp, 
+  Warning, 
+  Check, 
+  ClockCounterClockwise, 
+  CaretDown, 
+  Pencil, 
+  Gauge, 
+  CaretLeft 
+} from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, Input, Label, PageWrapper, cn } from './ui';
@@ -54,10 +68,10 @@ export default function TyreCalculator() {
         <div className="fixed-button-container-no-nav">
           <div className="max-w-lg mx-auto flex gap-3">
             <button type="button" onClick={() => navigate('/')} className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
-              <ArrowLeft className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
+              <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
             </button>
             <button type="button" onClick={() => { addTyreComparison(result); setSaved(true); setTimeout(() => setSaved(false), 3000); }} disabled={!result || saved} className="flex-1 px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/25 active:scale-[0.98]">
-              <Save className="w-5 h-5" /> <span>{saved ? t('save') : t('save')}</span>
+              <FloppyDisk weight="duotone" className="w-5 h-5" /> <span>{saved ? t('save') : t('save')}</span>
             </button>
           </div>
         </div>,
@@ -67,7 +81,7 @@ export default function TyreCalculator() {
       <PageWrapper className="space-y-6 pb-32">
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Circle className="w-6 h-6 text-emerald-500" /> {t('tyre_calculator')}
+            <Tire weight="duotone" className="w-6 h-6 text-emerald-500" /> {t('tyre_calculator')}
           </h1>
           <p className="text-sm text-slate-500 mt-1">{t('compare_tyre_subtitle')}</p>
         </div>
@@ -76,7 +90,7 @@ export default function TyreCalculator() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">{t('overview')}</h2>
             <Link to="/settings" className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors">
-              <Pencil className="w-3 h-3" /> {t('edit')}
+              <Pencil weight="duotone" className="w-3 h-3" /> {t('edit')}
             </Link>
           </div>
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 space-y-2">
@@ -90,7 +104,7 @@ export default function TyreCalculator() {
              <h2 className="text-lg font-bold text-emerald-500">{t('tires')}</h2>
              <div className="relative">
                 <button onClick={() => setSizesOpen(!sizesOpen)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1">
-                   {t('common_sizes')} <ChevronDown size={14} className={cn("transition-transform", sizesOpen && "rotate-180")} />
+                   {t('common_sizes')} <CaretDown weight="duotone" size={14} className={cn("transition-transform", sizesOpen && "rotate-180")} />
                 </button>
                 <AnimatePresence>
                    {sizesOpen && (
@@ -117,13 +131,13 @@ export default function TyreCalculator() {
 
         <div className="flex gap-3">
           <button onClick={handleCalculate} className="flex-1 bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">{t('calculate')}</button>
-          <button onClick={handleReset} className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl"><RotateCcw className="w-5 h-5" /></button>
+          <button onClick={handleReset} className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl"><ArrowCounterClockwise weight="duotone" className="w-5 h-5" /></button>
         </div>
 
         {result && (
           <div className="space-y-6">
             <Card className="space-y-6">
-              <h2 className="text-lg font-bold flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
+              <h2 className="text-lg font-bold flex items-center gap-2"><TrendUp weight="duotone" className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-blue-500 mb-1">{t('active_vehicle')}</p><p className="text-lg font-black">{formatTyreSize(result.original)}</p></div>
                 <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-emerald-500 mb-1">{t('tires')}</p><p className="text-lg font-black">{formatTyreSize(result.new)}</p></div>
@@ -131,7 +145,7 @@ export default function TyreCalculator() {
             </Card>
             
             <Card className="p-6">
-               <div className="flex items-center gap-2 mb-6"><Gauge className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
+               <div className="flex items-center gap-2 mb-6"><Gauge weight="duotone" className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
                
                {/* Tyre Specs Comparison */}
                <div className="grid grid-cols-2 gap-4 mb-6">
@@ -206,7 +220,7 @@ export default function TyreCalculator() {
         )}
 
         <section className="pt-2">
-          <div className="flex items-center gap-2 mb-4"><History className="w-5 h-5 text-slate-500" /><h2 className="text-lg font-bold">{t('history')}</h2></div>
+          <div className="flex items-center gap-2 mb-4"><ClockCounterClockwise weight="duotone" className="w-5 h-5 text-slate-500" /><h2 className="text-lg font-bold">{t('history')}</h2></div>
           <TyreComparisonHistory />
         </section>
       </PageWrapper>

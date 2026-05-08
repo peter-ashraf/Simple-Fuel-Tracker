@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Circle, Clock, ArrowRight, Trash2, Gauge, TrendingUp, RotateCcw, Check, CheckSquare, Square, X } from 'lucide-react';
+import { Tire, Clock, CaretRight, Trash, Gauge, TrendUp, ArrowCounterClockwise, Check, CheckSquare, Square, X } from '@phosphor-icons/react';
 import { Card, PageWrapper, ConfirmModal, Modal, cn } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { formatTyreSize } from '../utils/tyreCalculator';
@@ -18,7 +18,7 @@ export default function TyreComparisonHistory() {
   const ComparisonDetails = ({ result, isModal = false }) => (
     <div className={cn("space-y-6", isModal && "p-6")}>
       <Card className="space-y-6 border-0 shadow-none bg-transparent p-0">
-        <h2 className="text-lg font-bold flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
+        <h2 className="text-lg font-bold flex items-center gap-2"><TrendUp weight="duotone" className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-blue-500 mb-1">{t('active_vehicle')}</p><p className="text-lg font-black">{formatTyreSize(result.original)}</p></div>
           <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-emerald-500 mb-1">{t('tires')}</p><p className="text-lg font-black">{formatTyreSize(result.new)}</p></div>
@@ -26,7 +26,7 @@ export default function TyreComparisonHistory() {
       </Card>
       
       <Card className="p-0 border-0 shadow-none bg-transparent">
-         <div className="flex items-center gap-2 mb-6"><Gauge className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
+         <div className="flex items-center gap-2 mb-6"><Gauge weight="duotone" className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
          
          {/* Tyre Specs Comparison */}
          <div className="grid grid-cols-2 gap-4 mb-6">
@@ -94,7 +94,7 @@ export default function TyreComparisonHistory() {
          </div>
 
          <div className="mt-6 flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
-            <Clock size={12} /> {t('calculated_at')} {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <Clock weight="duotone" size={12} /> {t('calculated_at')} {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
          </div>
       </Card>
     </div>
@@ -133,7 +133,7 @@ export default function TyreComparisonHistory() {
   if (tyreComparisons.length === 0) {
     return (
       <div className="text-center py-8 px-6 border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-3xl">
-        <Circle className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+        <Tire weight="duotone" className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium tracking-tight">
           {t('untracked')}
         </p>
@@ -150,7 +150,7 @@ export default function TyreComparisonHistory() {
             onClick={() => setIsSelectionMode(true)}
             className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 uppercase tracking-wider flex items-center gap-1"
           >
-            <CheckSquare className="w-3 h-3" /> {t('select')}
+            <CheckSquare weight="duotone" className="w-3 h-3" /> {t('select')}
           </button>
         ) : (
           <button 
@@ -182,14 +182,14 @@ export default function TyreComparisonHistory() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="bg-indigo-500/10 p-2 rounded-lg">
-                      <Circle className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                      <Tire weight="duotone" className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                         {formatTyreSize(comparison.original)} → {formatTyreSize(comparison.new)}
                       </h4>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                        <Clock className="w-2.5 h-2.5" />
+                        <Clock weight="duotone" className="w-2.5 h-2.5" />
                         {new Date(comparison.timestamp).toLocaleDateString()}
                       </p>
                     </div>
@@ -202,7 +202,7 @@ export default function TyreComparisonHistory() {
                       }}
                       className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-slate-400 hover:text-red-500"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash weight="duotone" className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -258,14 +258,14 @@ export default function TyreComparisonHistory() {
                   onClick={selectAll}
                   className="px-4 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
                 >
-                  {selectedIds.size === tyreComparisons.length ? <Square className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                  {selectedIds.size === tyreComparisons.length ? <Square weight="duotone" className="w-4 h-4" /> : <CheckSquare weight="duotone" className="w-4 h-4" />}
                   <span>{selectedIds.size === tyreComparisons.length ? t('deselect') : t('select_all')}</span>
                 </button>
                 <button 
                   onClick={() => setDeleteModal({ isOpen: true, id: null, isBulk: true })}
                   className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold text-sm rounded-xl transition-all flex items-center gap-2"
                 >
-                  <Trash2 className="w-4 h-4" /> {t('delete')}
+                  <Trash weight="duotone" className="w-4 h-4" /> {t('delete')}
                 </button>
              </div>
           </motion.div>

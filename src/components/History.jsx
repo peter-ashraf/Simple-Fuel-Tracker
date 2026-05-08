@@ -1,15 +1,15 @@
 import {
-  Trash2,
-  Fuel,
-  Calendar,
+  Trash,
+  GasPump,
+  CalendarBlank,
   MapPin,
-  Edit2,
-  Save,
+  Pencil,
+  FloppyDisk,
   X,
   Check,
   Square,
   CheckSquare,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFuel } from "../hooks/useFuelContext";
@@ -73,7 +73,7 @@ export default function History() {
 
       {activeVehicleFillUps.length === 0 ? (
         <div className="text-center py-16 px-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl">
-          <Fuel className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
+          <GasPump weight="duotone" className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
           <p className="text-slate-500 dark:text-slate-400 font-medium">
             {t("untracked")}
           </p>
@@ -99,7 +99,7 @@ export default function History() {
                       onClick={() => toggleSelection(fill.id)}
                       className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 dark:border-slate-600"}`}
                     >
-                      {isSelected && <Check className="w-3.5 h-3.5" />}
+                      {isSelected && <Check weight="duotone" className="w-3.5 h-3.5" />}
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -158,16 +158,16 @@ export default function History() {
                 className="h-10 px-3 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-2xl transition-all flex items-center gap-2 border border-white/5"
               >
                 {selectedIds.size === activeVehicleFillUps.length ? (
-                  <Square className="w-4 h-4" />
+                  <Square weight="duotone" className="w-4 h-4" />
                 ) : (
-                  <CheckSquare className="w-4 h-4" />
+                  <CheckSquare weight="duotone" className="w-4 h-4" />
                 )}
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
                 className="h-10 px-3 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-2xl transition-all flex items-center gap-2"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash weight="duotone" className="w-4 h-4" />
               </button>
               <button
                 onClick={() => {
