@@ -191,7 +191,17 @@ const resources = {
       "add_system": "Add System",
       "new_system": "New System",
       "was_it_partial": "Was it a partial fill-up?",
-      "no_not_partial": "No, it wasn't"
+      "no_not_partial": "No, it wasn't",
+      "entries": "Entries",
+      "export": "Export PDF",
+      "maintenance_history": "Maintenance History",
+      "vehicle": "Vehicle",
+      "service_type": "Service Type",
+      "insights": "Insights",
+      "monthly_spending": "Monthly Spending",
+      "efficiency_trend": "Efficiency Trend",
+      "cost_per_km": "Cost / KM",
+      "last_n_fillups": "Last {{count}} fill-ups"
     }
   },
   ar: {
@@ -382,7 +392,17 @@ const resources = {
       "add_system": "إضافة نظام",
       "new_system": "نظام جديد",
       "was_it_partial": "هل كان تمويناً جزئياً؟",
-      "no_not_partial": "لا، لم يكن"
+      "no_not_partial": "لا، لم يكن",
+      "entries": "مدخلات",
+      "export": "تصدير PDF",
+      "maintenance_history": "سجل الصيانة",
+      "vehicle": "المركبة",
+      "service_type": "نوع الخدمة",
+      "insights": "إحصائيات",
+      "monthly_spending": "الإنفاق الشهري",
+      "efficiency_trend": "اتجاه الكفاءة",
+      "cost_per_km": "التكلفة / كم",
+      "last_n_fillups": "آخر {{count}} تعبئات"
     }
   }
 };

@@ -4,9 +4,10 @@ import {
   Wrench, Plus, Bell, CurrencyDollar, MagnifyingGlass, Pencil, Trash, CalendarBlank, 
   GearSix, ShieldWarning, CaretDown, Check, Square, CheckSquare, 
   X, Palette, Layout, Pulse, Drop, Shield, BatteryCharging, Car, Disc, Lightning, Clock,
-  DotsThreeVertical, CaretRight, FloppyDisk, Warning, Engine, Tire
+  DotsThreeVertical, CaretRight, FloppyDisk, Warning, Engine, Tire, FilePdf
 } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
+import { serviceHistoryPdf } from '../services/serviceHistoryPdf';
 import { Card, PageWrapper, ConfirmModal, Modal, Input, Label, cn, IconPicker, ICON_MAP_DATA } from './ui';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -230,6 +231,10 @@ export default function Maintenance() {
     return translation === key ? name : translation;
   };
 
+  const handleExportPDF = () => {
+    serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t);
+  };
+
   return (
     <PageWrapper className="pb-24">
       <div className="mb-6">
@@ -294,6 +299,18 @@ export default function Maintenance() {
                     </AnimatePresence>
                   </div>
                </div>
+               
+               {filteredEntries.length > 0 && (
+                 <div className="mt-3 flex justify-end">
+                   <button 
+                     onClick={handleExportPDF}
+                     className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-500/30"
+                   >
+                     <FilePdf weight="duotone" className="w-4 h-4" />
+                     {t('export') || 'Export PDF'}
+                   </button>
+                 </div>
+               )}
             </div>
 
             <div className="relative">

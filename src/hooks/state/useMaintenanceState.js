@@ -1,0 +1,212 @@
+import { useMemo, useEffect } from 'react';
+import { useLocalStorage } from '../useLocalStorage';
+import { MAINTENANCE_CATEGORIES } from '../../data/maintenanceCategories';
+
+export function useMaintenanceState(selectedVehicleId) {
+  const [maintenanceLogs, setMaintenanceLogs] = useLocalStorage('fueltracker-maintenance-logs-v2', []);
+  const [maintenanceReminders, setMaintenanceReminders] = useLocalStorage('fueltracker-maintenance-reminders-v2', []);
+  const [maintenanceEntries, setMaintenanceEntries] = useLocalStorage('fueltracker-maintenance-entries-v3', []);
+  const [categories, setCategories] = useLocalStorage('fueltracker-maintenance-categories-v1', Object.values(MAINTENANCE_CATEGORIES));
+  
+  const [maintenanceSystems, setMaintenanceSystems] = useLocalStorage('fueltracker-maintenance-systems-v1', [
+    { id: 'engine', name: 'Engine', icon: 'Engine', categories: ['oil_change', 'air_filter', 'spark_plugs', 'transmission_service'], color: '#ef4444' },
+    { id: 'tires', name: 'Tires', icon: 'Disc', categories: ['tire_rotation', 'tire_replacement'], color: '#3b82f6' },
+    { id: 'fluids', name: 'Fluids', icon: 'Drop', categories: ['coolant_flush', 'ac_filter', 'fuel_filter'], color: '#06b6d4' },
+    { id: 'safety', name: 'Safety', icon: 'Shield', categories: ['general_inspection'], color: '#f59e0b' },
+    { id: 'electrical', name: 'Electrical', icon: 'BatteryCharging', categories: ['battery'], color: '#8b5cf6' },
+    { id: 'body', name: 'Body', icon: 'Car', categories: ['custom'], color: '#64748b' }
+  ]);
+
+  const [maintenanceSettings, setMaintenanceSettings] = useLocalStorage('fueltracker-maintenance-settings-v2', {
+    defaultSafetyMarginKm: 2000,
+    categorySettings: {}
+  });
+
+  // Icon migration logic
+  useEffect(() => {
+    const legacyMap = { 'Zap': 'Lightning', 'Droplet': 'Drop', 'Battery': 'BatteryCharging' };
+    let hasChanges = false;
+    const migratedSystems = maintenanceSystems.map(system => {
+      if (system.id === 'engine' && (system.icon === 'Zap' || system.icon === 'Lightning')) {
+        hasChanges = true;
+        return { ...system, icon: 'Engine' };
+      }
+      if (legacyMap[system.icon]) {
+        hasChanges = true;
+        return { ...system, icon: legacyMap[system.icon] };
+      }
+      return system;
+    });
+    if (hasChanges) setMaintenanceSystems(migratedSystems);
+  }, []);
+
+  const getCategoryById = (id) => {
+    return categories.find(cat => cat.id === id) || categories.find(cat => cat.id === 'custom') || categories[0];
+  };
+
+  // --- Maintenance Logs (Legacy?) ---
+  const addMaintenanceLog = (log) => {
+    setMaintenanceLogs(prev => [...prev, { ...log, id: Date.now(), vehicleId: selectedVehicleId, timestamp: new Date().toISOString() }]);
+  };
+  const updateMaintenanceLog = (id, updatedData) => {
+    setMaintenanceLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedData } : log));
+  };
+  const deleteMaintenanceLog = (id) => {
+    setMaintenanceLogs(prev => prev.filter(log => log.id !== id));
+  };
+
+  // --- Maintenance Reminders ---
+  const addMaintenanceReminder = (reminder) => {
+    const safetyMargin = reminder.safetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+    const baseODO = reminder.performedAtOdometer ?? reminder.odometerThreshold ?? 0;
+    const interval = reminder.odometerInterval ?? 0;
+    let nextDueODO = null;
+    let alertODO = null;
+    if (baseODO > 0 && interval > 0) {
+      nextDueODO = baseODO + interval;
+      alertODO = nextDueODO - safetyMargin;
+    }
+    setMaintenanceReminders(prev => [...prev, {
+      ...reminder, id: Date.now(), vehicleId: selectedVehicleId, createdAt: new Date().toISOString(),
+      nextDueODO, alertODO, safetyMarginKm: safetyMargin
+    }]);
+  };
+
+  const updateMaintenanceReminder = (id, updatedData) => {
+    setMaintenanceReminders(prev => prev.map(reminder => {
+      if (reminder.id !== id) return reminder;
+      const updated = { ...reminder, ...updatedData };
+      if (updated.odometerThreshold || updated.safetyMarginKm !== undefined || updated.performedAtOdometer) {
+        const safetyMargin = updated.safetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+        const baseODO = updated.performedAtOdometer ?? updated.odometerThreshold ?? 0;
+        const interval = updated.odometerInterval ?? 0;
+        if (baseODO > 0 && interval > 0) {
+          updated.nextDueODO = baseODO + interval;
+          updated.alertODO = updated.nextDueODO - safetyMargin;
+        }
+      }
+      return updated;
+    }));
+  };
+
+  const deleteMaintenanceReminder = (id) => {
+    setMaintenanceReminders(prev => prev.filter(reminder => reminder.id !== id));
+  };
+
+  // --- Maintenance Entries (v3) ---
+  const addMaintenanceEntry = (entry) => {
+    const type = entry.type || 'custom';
+    const catDef = getCategoryById(type);
+    const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
+    const safetyMargin = entry.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+    const intervalKm = entry.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+    const performedAtODO = Number(entry.performedAtODO) || 0;
+    let nextDueODO = 0, alertODO = 0;
+    if (intervalKm > 0) {
+      nextDueODO = performedAtODO + intervalKm;
+      alertODO = nextDueODO - safetyMargin;
+    }
+    setMaintenanceEntries(prev => [...prev, {
+      ...entry, id: `m_${Date.now()}`, vehicleId: selectedVehicleId, timestamp: new Date().toISOString(),
+      performedAtODO, intervalKm, safetyMarginKm: safetyMargin, nextDueODO, alertODO
+    }]);
+  };
+
+  const updateMaintenanceEntry = (id, updatedData) => {
+    setMaintenanceEntries(prev => prev.map(entry => {
+      if (entry.id !== id) return entry;
+      const updated = { ...entry, ...updatedData };
+      const type = updated.type || 'custom';
+      const catDef = getCategoryById(type);
+      const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
+      const safetyMargin = updated.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+      const intervalKm = updated.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+      const performedAtODO = Number(updated.performedAtODO) || 0;
+      if (intervalKm > 0) {
+        updated.nextDueODO = performedAtODO + intervalKm;
+        updated.alertODO = updated.nextDueODO - safetyMargin;
+      }
+      return updated;
+    }));
+  };
+
+  const deleteMaintenanceEntry = (id) => {
+    setMaintenanceEntries(prev => prev.filter(entry => entry.id !== id));
+  };
+
+  const deleteMultipleMaintenanceEntries = (ids) => {
+    const idsSet = new Set(ids);
+    setMaintenanceEntries(prev => prev.filter(entry => !idsSet.has(entry.id)));
+  };
+
+  // --- Category Management ---
+  const addMaintenanceCategory = (category) => {
+    const newCategory = { ...category, id: category.id || `cat_${Date.now()}`, color: category.color || '#64748b' };
+    setCategories(prev => [...prev, newCategory]);
+    return newCategory;
+  };
+
+  const updateMaintenanceCategory = (id, updates) => {
+    setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, ...updates } : cat));
+  };
+
+  const deleteMaintenanceCategory = (id) => {
+    setCategories(prev => prev.filter(cat => cat.id !== id));
+  };
+
+  // --- Settings ---
+  const updateMaintenanceSettings = (updates) => {
+    setMaintenanceSettings(prev => ({ ...prev, ...updates }));
+  };
+
+  const updateCategorySettings = (categoryId, settings) => {
+    setMaintenanceSettings(prev => ({
+      ...prev,
+      categorySettings: {
+        ...prev.categorySettings,
+        [categoryId]: { ...prev.categorySettings[categoryId], ...settings }
+      }
+    }));
+  };
+
+  // --- Derived Active Vehicle Lists ---
+  const activeVehicleMaintenanceLogs = useMemo(() => 
+    maintenanceLogs.filter(log => log.vehicleId === selectedVehicleId)
+      .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [maintenanceLogs, selectedVehicleId]
+  );
+
+  const activeVehicleMaintenanceReminders = useMemo(() => 
+    maintenanceReminders.filter(r => r.vehicleId === selectedVehicleId)
+      .sort((a,b) => {
+        const aDue = new Date(a.nextDueDate || a.dueDate || '9999-12-31').getTime();
+        const bDue = new Date(b.nextDueDate || b.dueDate || '9999-12-31').getTime();
+        return aDue - bDue;
+      }),
+    [maintenanceReminders, selectedVehicleId]
+  );
+
+  const activeVehicleMaintenanceEntries = useMemo(() => 
+    maintenanceEntries.filter(e => e.vehicleId === selectedVehicleId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [maintenanceEntries, selectedVehicleId]
+  );
+
+  return {
+    maintenanceLogs, setMaintenanceLogs,
+    maintenanceReminders, setMaintenanceReminders,
+    maintenanceEntries, setMaintenanceEntries,
+    categories, setCategories,
+    maintenanceSystems, setMaintenanceSystems,
+    maintenanceSettings, setMaintenanceSettings,
+    getCategoryById,
+    addMaintenanceLog, updateMaintenanceLog, deleteMaintenanceLog,
+    addMaintenanceReminder, updateMaintenanceReminder, deleteMaintenanceReminder,
+    addMaintenanceEntry, updateMaintenanceEntry, deleteMaintenanceEntry, deleteMultipleMaintenanceEntries,
+    addMaintenanceCategory, updateMaintenanceCategory, deleteMaintenanceCategory,
+    updateMaintenanceSettings, updateCategorySettings,
+    activeVehicleMaintenanceLogs,
+    activeVehicleMaintenanceReminders,
+    activeVehicleMaintenanceEntries
+  };
+}

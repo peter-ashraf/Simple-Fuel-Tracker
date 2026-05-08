@@ -65,9 +65,12 @@ export default function History() {
             setSelectionMode(!selectionMode);
             if (!selectionMode) setSelectedIds(new Set());
           }}
-          className="text-xs font-medium text-slate-500 dark:text-slate-400 px-3 py-1 bg-slate-200 dark:bg-slate-800/50 rounded-full border border-slate-300 dark:border-slate-700/50"
+          className={cn(
+            "text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-3 py-1.5 bg-slate-100 dark:bg-white/[0.04] rounded-xl border border-slate-200 dark:border-white/[0.06] transition-all active:scale-95",
+            isRtl ? "mr-auto" : "ml-auto"
+          )}
         >
-          {activeVehicleFillUps.length} {t("entries").toLowerCase()}
+          {t("entries")} {activeVehicleFillUps.length}
         </button>
       </div>
 

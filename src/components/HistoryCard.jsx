@@ -3,7 +3,7 @@ import { Trash, GasPump, CalendarBlank, MapPin, FloppyDisk, X, CheckSquare, Squa
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal, Input, Label, FuelGaugeSlider, cn } from './ui';
-import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec } from '../utils/formatting';
+import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec, formatTo2Decimals } from '../utils/formatting';
 import './HistoryCard.css';
 import { useTranslation } from 'react-i18next';
 
@@ -28,9 +28,9 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   const metrics = calculateTripMetrics(fillUps, index);
   const tripCost = (fill.liters * (fill.pricePerLiter || 0)).toFixed(2);
   const kmPerLiterRaw = metrics.kmPerLiter;
-  const kmPerLiter = formatEfficiency2Dec(kmPerLiterRaw);
-  const litersPer100km = formatEfficiency2Dec(metrics.litersPer100km, 'L/100km');
-  const tripDistance = formatDistance2Dec(metrics.distance);
+  const kmPerLiter = kmPerLiterRaw > 0 ? formatTo2Decimals(kmPerLiterRaw).toFixed(2) : '-';
+  const litersPer100km = metrics.litersPer100km > 0 ? formatTo2Decimals(metrics.litersPer100km).toFixed(2) : '-';
+  const tripDistance = metrics.distance > 0 ? formatTo2Decimals(metrics.distance).toFixed(2) : '-';
   const isEstimated = metrics.isEstimated;
   
   const getEfficiencyColorStatus = (kmPerL) => {
@@ -78,39 +78,69 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     <div className={`flip-card ${isFlipped ? 'flipped' : ''} ${isRtl ? 'rtl' : ''}`}>
       <div className="flip-card-inner">
         <div className="flip-card-front">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{format(new Date(fill.timestamp), 'MMM d, yyyy')}</p>
-                <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">P{fill.fuelType || '92'}</span>
+          <div className="grid grid-cols-[1fr_auto] gap-4 items-start mb-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {format(new Date(fill.timestamp), "MMM d, yyyy")}
+                </p>
+                <span className="text-[10px] font-black bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                  P{fill.fuelType || "92"}
+                </span>
               </div>
               {fill.station && (
-                <p className="text-xs font-medium text-emerald-400 flex items-center gap-1 mt-1">
-                  <MapPin weight="duotone" className="w-3 h-3"/> {fill.station}
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <MapPin weight="fill" className="w-3 h-3 text-emerald-500" />{" "}
+                  {fill.station}
                 </p>
               )}
-              <p className="text-xs text-slate-500 mt-1">{fill.odometer.toLocaleString()} km</p>
+              <div className="flex items-center gap-1.5 opacity-60">
+                 <div className="w-1 h-1 rounded-full bg-slate-400" />
+                 <p className="text-[10px] font-bold text-slate-500">
+                   {fill.odometer.toLocaleString()} {t("unit_km_h").replace("/h", "")}
+                 </p>
+              </div>
             </div>
-            <div className="text-end cursor-pointer hover:opacity-80" onClick={handleEdit}>
-              <p className="text-lg font-bold text-slate-900 dark:text-white">{tripCost} <span className="text-[10px] text-slate-500">{t('currency')}</span></p>
-              <p className="text-[11px] text-slate-500">{fill.liters} {t('liters_abbr')} {t('at')} {fill.pricePerLiter}</p>
+            
+            <div className="text-end cursor-pointer group" onClick={handleEdit}>
+              <div className="flex items-baseline justify-end gap-1 mb-0.5">
+                <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
+                   {formatTo2Decimals(Number(tripCost)).toFixed(2)}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                   {t("currency")}
+                </span>
+              </div>
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/[0.05] px-1.5 py-0.5 rounded-md">
+                   {fill.liters} {t("liters_abbr")}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">@</span>
+                <span className="text-[10px] font-bold text-slate-500">
+                   {fill.pricePerLiter}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 grid grid-cols-3 gap-2 border border-slate-200 dark:border-slate-800/50">
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">{t('distance')}</p>
-              <p className="text-sm font-semibold">{index === 0 ? t('untracked') : (tripDistance !== "0" ? tripDistance : "-")}</p>
-            </div>
-            <div className="text-center border-s border-e border-slate-200 dark:border-slate-800/50">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">{t('avg_km_l_short')}</p>
-              <p className={`text-sm font-bold flex items-center justify-center gap-1 ${getEfficiencyColorStatus(kmPerLiterRaw)}`}>
-                {index === 0 ? t('untracked') : (kmPerLiterRaw > 0 ? kmPerLiter : "-")}
+          <div className="bg-slate-50/50 dark:bg-white/[0.02] rounded-[1.5rem] p-4 grid grid-cols-3 gap-1 border border-slate-200/60 dark:border-white/[0.05] shadow-inner">
+            <div className="text-center space-y-1">
+              <p className="text-[9px] uppercase font-black text-slate-400 tracking-[0.1em]">{t("distance")}</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white">
+                {index === 0 ? t("untracked") : (tripDistance !== "-" ? `${tripDistance} ${isRtl ? "كم" : ""}` : "-")}
               </p>
             </div>
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">{t('l_100km_short')}</p>
-              <p className="text-sm font-semibold">{index === 0 ? t('untracked') : (litersPer100km !== "0" ? litersPer100km : "-")}</p>
+            <div className="text-center space-y-1 border-s border-e border-slate-200 dark:border-white/[0.05]">
+              <p className="text-[9px] uppercase font-black text-slate-400 tracking-[0.1em]">{t("avg_km_l_short")}</p>
+              <p className={cn("text-xs font-black", getEfficiencyColorStatus(kmPerLiterRaw))}>
+                {index === 0 ? t("untracked") : kmPerLiter}
+              </p>
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-[9px] uppercase font-black text-slate-400 tracking-[0.1em]">{t("l_100km_short")}</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white">
+                {index === 0 ? t("untracked") : litersPer100km}
+              </p>
             </div>
           </div>
           
