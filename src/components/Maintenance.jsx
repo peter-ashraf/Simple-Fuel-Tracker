@@ -92,7 +92,10 @@ export default function Maintenance() {
             initial={{ strokeDashoffset: circumference }} animate={{ strokeDashoffset: offset }} transition={{ duration: 1.5 }} strokeLinecap="round"
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center">{children}</div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {children}
+          <span className="text-[10px] font-black mt-0.5" style={{ color }}>{Math.round(percentage)}%</span>
+        </div>
       </div>
     );
   };
@@ -129,7 +132,7 @@ export default function Maintenance() {
       let status = overdueCount > 0 ? 'overdue' : dueSoonCount > 0 ? 'due-soon' : trackedCategories.length === 0 ? 'untracked' : 'healthy';
       
       let desc = t(status);
-      let subDesc = status === 'due-soon' ? `${Math.min(...systemCategories.filter(c => c.isTracked).map(c => c.remainingKm)).toLocaleString()} km` : '';
+      let subDesc = status === 'due-soon' ? `${Math.min(...systemCategories.filter(c => c.isTracked).map(c => c.remainingKm)).toLocaleString()} ${t('km_left')}` : '';
       let color = status === 'overdue' ? "#ef4444" : status === 'due-soon' ? "#f59e0b" : status === 'untracked' ? "#94a3b8" : "#10b981";
 
       return { ...system, categories: systemCategories, healthScore, status, desc, subDesc, displayColor: color };
@@ -291,13 +294,16 @@ export default function Maintenance() {
           {activeSystem?.categories.map(item => (
             <Card key={item.id} className="p-4 bg-slate-50 dark:bg-white/[0.02] cursor-pointer" onClick={() => { setSelectedSystemId(null); navigate(item.isTracked ? `/maintenance/edit/${item.latestLogId}` : `/maintenance/add?type=${item.id}`); }}>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-slate-900 dark:text-white">{t(item.id)}</span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">{t(item.id)}</span>
+                  <span className="text-[10px] font-bold text-slate-400">{Math.round(100 - item.progressPercent)}% {t('healthy')}</span>
+                </div>
                 <span className={cn("text-[10px] font-black uppercase", item.status === 'overdue' ? 'text-red-500' : 'text-emerald-500')}>{t(item.status)}</span>
               </div>
               {!item.isUntracked && (
                 <div className="space-y-2">
                   <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${item.progressPercent}%` }} /></div>
-                  <p className="text-[10px] text-slate-500">{t('next_due')}: {item.remainingKm.toLocaleString()} km</p>
+                  <p className="text-[10px] text-slate-500">{t('next_due')}: {item.remainingKm.toLocaleString()} {t('km_left')}</p>
                 </div>
               )}
             </Card>

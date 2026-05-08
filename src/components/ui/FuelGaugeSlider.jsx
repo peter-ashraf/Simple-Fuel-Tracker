@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { cn } from './index';
 
-export function FuelGaugeSlider({ value, onChange }) {
+export function FuelGaugeSlider({ value, onChange, disabled = false }) {
   // Value is 0 to 100
   // Arc calculation
   // A semi-circle is 180 degrees.
@@ -27,7 +28,7 @@ export function FuelGaugeSlider({ value, onChange }) {
   // Render arc segments for background (gradient or multi-colored)
   // Instead of complex segments, we use a conic gradient or a simple arc
   return (
-    <div className="flex flex-col items-center w-full max-w-[300px] mx-auto py-4 select-none">
+    <div className={cn("flex flex-col items-center w-full max-w-[300px] mx-auto py-4 select-none transition-opacity duration-300", disabled && "opacity-40 pointer-events-none")}>
       {/* Value Display */}
       <div className="flex flex-col items-center mb-6">
          <span className="text-4xl font-black tabular-nums tracking-tighter drop-shadow-sm transition-colors duration-300" style={{ color: currentColor }}>
@@ -88,7 +89,8 @@ export function FuelGaugeSlider({ value, onChange }) {
           step="5"
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full h-3 appearance-none bg-slate-200 dark:bg-slate-800 rounded-full outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all cursor-pointer touch-none"
+          disabled={disabled}
+          className="w-full h-3 appearance-none bg-slate-200 dark:bg-slate-800 rounded-full outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all cursor-pointer touch-none disabled:cursor-not-allowed"
           style={{
             background: `linear-gradient(to right, ${currentColor} ${value}%, var(--tw-colors-slate-200) ${value}%)`
           }}

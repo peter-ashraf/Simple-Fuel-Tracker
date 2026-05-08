@@ -223,12 +223,32 @@ export default function FillUpForm() {
                  </div>
               </div>
 
-              {activeVehicle?.tankCapacity && (
-                 <div>
-                   <Label>Fuel Level After Fill</Label>
-                   <div className="bg-slate-100 dark:bg-white/[0.03] rounded-3xl p-4"><FuelGaugeSlider value={tankLevelAfter} onChange={setTankLevelAfter} /></div>
-                 </div>
-              )}
+              <div>
+                <Label>{t('fuel_level_after_fill')}</Label>
+                <div className="bg-slate-100 dark:bg-white/[0.03] rounded-3xl p-4 relative">
+                  {!activeVehicle?.tankCapacity && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center p-6 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-[2px] rounded-3xl">
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 leading-relaxed">
+                          {t('tank_capacity_required')}
+                        </p>
+                        <button 
+                          type="button" 
+                          onClick={() => navigate('/settings')}
+                          className="px-4 py-2 bg-emerald-500 text-white text-[10px] font-black uppercase rounded-lg shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                        >
+                          {t('settings')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <FuelGaugeSlider 
+                    value={tankLevelAfter} 
+                    onChange={setTankLevelAfter} 
+                    disabled={!activeVehicle?.tankCapacity}
+                  />
+                </div>
+              </div>
            </div>
         </Card>
 
@@ -256,7 +276,7 @@ export default function FillUpForm() {
     </PageWrapper>
 
     <StationSuggestion show={showStationModal} stations={stations} loading={stationLoading} error={stationError} permissionState={permissionState} onStationSelect={handleStationSelect} onDetectLocation={handleDetectStation} onAddUserStation={handleAddUserStation} onClose={() => setShowStationModal(false)} />
-    <ConfirmModal isOpen={convertModal.isOpen} onClose={() => setConvertModal({ isOpen: false })} onConfirm={confirmConvertToMaintenanceLog} title={t('add_maintenance')} message={t('healthy') + "?"} confirmText={t('save')} cancelText={t('cancel')} variant="info" />
+    <ConfirmModal isOpen={convertModal.isOpen} onClose={() => setConvertModal({ isOpen: false })} onConfirm={confirmConvertToMaintenanceLog} title={t('add_maintenance')} message={t('add_maint_confirm')} confirmText={t('save')} cancelText={t('cancel')} variant="info" />
   </>
   );
 }

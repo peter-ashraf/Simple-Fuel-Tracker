@@ -69,7 +69,7 @@ export default function TyreCalculator() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Circle className="w-6 h-6 text-emerald-500" /> {t('tyre_calculator')}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Compare tyre sizes and impacts</p>
+          <p className="text-sm text-slate-500 mt-1">{t('compare_tyre_subtitle')}</p>
         </div>
 
         <Card className="space-y-3">
@@ -90,7 +90,7 @@ export default function TyreCalculator() {
              <h2 className="text-lg font-bold text-emerald-500">{t('tires')}</h2>
              <div className="relative">
                 <button onClick={() => setSizesOpen(!sizesOpen)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1">
-                   {t('tools')} <ChevronDown size={14} className={cn("transition-transform", sizesOpen && "rotate-180")} />
+                   {t('common_sizes')} <ChevronDown size={14} className={cn("transition-transform", sizesOpen && "rotate-180")} />
                 </button>
                 <AnimatePresence>
                    {sizesOpen && (
@@ -132,19 +132,83 @@ export default function TyreCalculator() {
             
             <Card className="p-6">
                <div className="flex items-center gap-2 mb-6"><Gauge className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
-               <div className="grid grid-cols-3 gap-4 text-center">
-                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Diameter</p><p className={cn("text-xl font-black", result.differences.diameterDifference > 0 ? "text-red-500" : "text-emerald-500")}>{result.differences.diameterDifference > 0 ? '+' : ''}{result.differences.diameterDifference}"</p></div>
-                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Speed</p><p className="text-xl font-black text-amber-500">{result.speedImpact.speedPercentageChange}</p></div>
-                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Actual @ 100</p><p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">km/h</span></p></div>
+               
+               {/* Tyre Specs Comparison */}
+               <div className="grid grid-cols-2 gap-4 mb-6">
+                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 space-y-3">
+                   <h3 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">{t('original')}</h3>
+                   <div className="space-y-2">
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('diameter')}:</span>
+                       <span className="font-bold">{result.original.diameter}"</span>
+                     </div>
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('circumference')}:</span>
+                       <span className="font-bold">{result.original.circumference}"</span>
+                     </div>
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('sidewall')}:</span>
+                       <span className="font-bold">{result.original.sidewallMm} mm</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 space-y-3">
+                   <h3 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">{t('new')}</h3>
+                   <div className="space-y-2">
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('diameter')}:</span>
+                       <span className="font-bold">{result.new.diameter}"</span>
+                     </div>
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('circumference')}:</span>
+                       <span className="font-bold">{result.new.circumference}"</span>
+                     </div>
+                     <div className="flex justify-between text-[11px]">
+                       <span className="text-slate-500">{t('sidewall')}:</span>
+                       <span className="font-bold">{result.new.sidewallMm} mm</span>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-3 gap-4 text-center pb-6 border-b border-slate-100 dark:border-white/5 mb-6">
+                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('diameter')}</p><p className={cn("text-xl font-black", result.differences.diameterDifference > 0 ? "text-red-500" : "text-emerald-500")}>{result.differences.diameterDifference > 0 ? '+' : ''}{result.differences.diameterDifference}"</p></div>
+                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('speed_impact')}</p><p className="text-xl font-black text-amber-500">{result.speedImpact.speedPercentageChange}</p></div>
+                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('actual_at_100')}</p><p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">{t('unit_km_h')}</span></p></div>
+               </div>
+
+               {/* RPM Impact */}
+               <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rpm_change')} {t('rpm_at_100')}</h3>
+                    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", result.rpmImpact.newRPM > result.rpmImpact.originalRPM ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-500")}>
+                      {result.rpmImpact.rpmPercentageChange}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('original')} RPM</p>
+                      <p className="text-lg font-black">{result.rpmImpact.originalRPM}</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('new')} RPM</p>
+                      <p className="text-lg font-black">{result.rpmImpact.newRPM}</p>
+                    </div>
+                  </div>
+               </div>
+
+               <div className="mt-6 flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
+                  <Clock size={12} /> {t('calculated_at')} {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                </div>
             </Card>
-
-            <section>
-              <div className="flex items-center gap-2 mb-4"><History className="w-5 h-5 text-slate-500" /><h2 className="text-lg font-bold">{t('history')}</h2></div>
-              <TyreComparisonHistory />
-            </section>
           </div>
         )}
+
+        <section className="pt-2">
+          <div className="flex items-center gap-2 mb-4"><History className="w-5 h-5 text-slate-500" /><h2 className="text-lg font-bold">{t('history')}</h2></div>
+          <TyreComparisonHistory />
+        </section>
       </PageWrapper>
     </>
   );

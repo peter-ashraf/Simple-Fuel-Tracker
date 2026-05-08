@@ -91,8 +91,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               <p className="text-xs text-slate-500 mt-1">{fill.odometer.toLocaleString()} km</p>
             </div>
             <div className="text-end cursor-pointer hover:opacity-80" onClick={handleEdit}>
-              <p className="text-lg font-bold text-slate-900 dark:text-white">{tripCost} <span className="text-[10px] text-slate-500">EGP</span></p>
-              <p className="text-[11px] text-slate-500">{fill.liters} L @ {fill.pricePerLiter}</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{tripCost} <span className="text-[10px] text-slate-500">{t('currency')}</span></p>
+              <p className="text-[11px] text-slate-500">{fill.liters} {t('liters_abbr')} {t('at')} {fill.pricePerLiter}</p>
             </div>
           </div>
 
@@ -102,13 +102,13 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               <p className="text-sm font-semibold">{index === 0 ? t('untracked') : (tripDistance !== "0" ? tripDistance : "-")}</p>
             </div>
             <div className="text-center border-s border-e border-slate-200 dark:border-slate-800/50">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Km/L</p>
+              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">{t('avg_km_l_short')}</p>
               <p className={`text-sm font-bold flex items-center justify-center gap-1 ${getEfficiencyColorStatus(kmPerLiterRaw)}`}>
                 {index === 0 ? t('untracked') : (kmPerLiterRaw > 0 ? kmPerLiter : "-")}
               </p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">L/100</p>
+              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">{t('l_100km_short')}</p>
               <p className="text-sm font-semibold">{index === 0 ? t('untracked') : (litersPer100km !== "0" ? litersPer100km : "-")}</p>
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <Label className="text-[10px]">{t('history')}</Label>
+                <Label className="text-[10px]">{t('date')}</Label>
                 <Input type="date" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} className="py-1 px-2 text-xs" />
               </div>
               <div>

@@ -21,6 +21,7 @@ export default function Settings() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle, maintenanceSettings, updateMaintenanceSettings, updateCategorySettings } = useFuel();
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
+  const isRtl = i18n.language.startsWith('ar');
   
   const [newVehicleName, setNewVehicleName] = useState('');
   const [editingVehicleId, setEditingVehicleId] = useState(null);
@@ -51,7 +52,7 @@ export default function Settings() {
       95: Number(priceForm[95]),
       diesel: Number(priceForm.diesel)
     });
-    showToast(t('save_prices') + ' ' + t('healthy'));
+    showToast(t('prices_saved'));
   };
   
   // Active Vehicle Form State
@@ -88,7 +89,7 @@ export default function Settings() {
     if (newVehicleName.trim()) {
       addVehicle({ name: newVehicleName.trim(), type: 'car' });
       setNewVehicleName('');
-      showToast('Vehicle added');
+      showToast(t('vehicle_added'));
     }
   };
 
@@ -99,7 +100,7 @@ export default function Settings() {
         tyreSize: editingTyreSize,
         tankCapacity: editingTankCapacity ? Number(editingTankCapacity) : null
       });
-      showToast('Updated');
+      showToast(t('updated'));
     }
     setEditingVehicleId(null);
   };
@@ -160,6 +161,20 @@ export default function Settings() {
     if (isMissingTyre || isMissingTank) {
       setValidationModal({ isOpen: true, isMissingTyre, isMissingTank });
     } else {
+      // Check if anything actually changed
+      const currentTyre = activeVehicle.tyreSize || {};
+      const hasTyreChanged = 
+        tyreSize.width !== currentTyre.width || 
+        tyreSize.aspectRatio !== currentTyre.aspectRatio || 
+        tyreSize.rimSize !== currentTyre.rimSize;
+      
+      const hasTankChanged = parseFloat(tankCapacity) !== activeVehicle.tankCapacity;
+
+      if (!hasTyreChanged && !hasTankChanged) {
+        showToast(t('no_changes'));
+        return;
+      }
+
       confirmSaveActiveVehicleDetails();
     }
   };
@@ -171,7 +186,7 @@ export default function Settings() {
       tankCapacity: activeVehicleForm.tankCapacity ? parseFloat(activeVehicleForm.tankCapacity) : null
     });
     setValidationModal({ isOpen: false });
-    showToast(t('save_details') + ' ' + t('healthy'));
+    showToast(t('details_saved'));
   };
 
   const currentLanguage = i18n.language.startsWith('ar') ? 'ar' : 'en';
@@ -180,7 +195,7 @@ export default function Settings() {
     <PageWrapper className="space-y-6 pb-1">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('settings')}</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage vehicles and fuel preferences.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('settings_description')}</p>
       </div>
 
       <section>
@@ -210,7 +225,7 @@ export default function Settings() {
                        </div>
                        
                        <div className="flex-1">
-                         <Label className="text-[10px]">{t('tank_capacity')} (Liters)</Label>
+                         <Label className="text-[10px]">{t('tank_capacity')} ({t('liters')})</Label>
                          <Input
                            type="number"
                            value={editingTankCapacity}
@@ -284,7 +299,7 @@ export default function Settings() {
          <form onSubmit={handleCreateVehicle} className="flex gap-2">
             <Input 
               type="text" 
-              placeholder="New vehicle name" 
+              placeholder={t('new_vehicle_placeholder')} 
               value={newVehicleName}
               onChange={e => setNewVehicleName(e.target.value)}
               className="py-3"
@@ -306,7 +321,7 @@ export default function Settings() {
               ].map(lang => (
                  <button
                     key={lang.id}
-                    onClick={() => { i18n.changeLanguage(lang.id); showToast(`${lang.label} applied`); }}
+                    onClick={() => { i18n.changeLanguage(lang.id); showToast(t('updated')); }}
                     className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                        currentLanguage === lang.id
                        ? 'text-slate-900 dark:text-white'
@@ -328,29 +343,29 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
-         <div className="flex items-center justify-between mb-3">
-           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ms-1"><Circle className="w-4 h-4"/> {t('active_vehicle')} Details</h3>
+          <div className="flex items-center justify-between mb-3">
+           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ms-1"><Circle className="w-4 h-4"/> {t('active_vehicle_details')}</h3>
            {activeVehicleForm && (
              <button onClick={handleSaveActiveVehicleDetails} className="bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">{t('save_details')}</button>
            )}
          </div>
          <Card className="px-5 py-5 space-y-3">
             {!activeVehicle || !activeVehicleForm ? (
-              <p className="text-sm text-slate-500">No vehicle selected.</p>
+              <p className="text-sm text-slate-500">{t('no_vehicle_selected')}</p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-900 dark:text-white">{activeVehicle.name}</span>
                   {activeVehicleForm.tankCapacity && (
                     <span className="text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-lg">
-                      {activeVehicleForm.tankCapacity}L {t('tank_capacity')}
+                      {activeVehicleForm.tankCapacity}{t('liters_abbr')} {t('tank_capacity')}
                     </span>
                   )}
                 </div>
                 <div className="grid grid-cols-4 gap-2 items-start mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
                   {['width', 'aspectRatio', 'rimSize'].map(field => (
                     <div key={field} className="flex flex-col">
-                      <Label className="text-[10px] mb-1.5 h-4">{field}</Label>
+                      <Label className="text-[10px] mb-1.5 h-4">{t(field === 'rimSize' ? 'rim' : field === 'aspectRatio' ? 'ratio' : 'width')}</Label>
                       <Input
                         type="number"
                         value={activeVehicleForm.tyreSize?.[field] || ''}
@@ -360,7 +375,7 @@ export default function Settings() {
                     </div>
                   ))}
                   <div className="flex flex-col">
-                    <Label className="text-[10px] mb-1.5 h-4 text-blue-600 dark:text-blue-400 font-bold">Liters</Label>
+                    <Label className="text-[10px] mb-1.5 h-4 text-blue-600 dark:text-blue-400 font-bold">{t('liters')}</Label>
                     <Input
                       type="number"
                       value={activeVehicleForm.tankCapacity || ''}
@@ -401,12 +416,12 @@ export default function Settings() {
          <Card className="px-5 py-6">
             <div className="space-y-4">
                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">Detection</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{t('detection')}</p>
                   <button onClick={() => setLocationEnabled(!locationEnabled)} className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${locationEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${locationEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${locationEnabled ? (isRtl ? '-translate-x-5' : 'translate-x-5') : (isRtl ? '-translate-x-1' : 'translate-x-1')}`} />
                   </button>
                </div>
-               <button onClick={handleClearLocationCache} className="text-xs text-slate-500 dark:text-slate-400">Clear Cache</button>
+               <button onClick={handleClearLocationCache} className="text-xs text-slate-500 dark:text-slate-400">{t('clear_cache')}</button>
             </div>
          </Card>
       </section>
@@ -415,9 +430,9 @@ export default function Settings() {
          <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Bell className="w-4 h-4"/> {t('notifications')}</h3>
          <Card className="px-5 py-6">
             <div className="flex items-center justify-between">
-               <p className="text-sm font-medium text-slate-900 dark:text-white">Maintenance</p>
+               <p className="text-sm font-medium text-slate-900 dark:text-white">{t('maintenance')}</p>
                <button onClick={toggleNotifications} className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? (isRtl ? '-translate-x-5' : 'translate-x-5') : (isRtl ? '-translate-x-1' : 'translate-x-1')}`} />
                </button>
             </div>
          </Card>
@@ -429,7 +444,7 @@ export default function Settings() {
             <div className="space-y-4">
                {['92', '95', 'diesel'].map(key => (
                  <div key={key}>
-                   <Label>Petrol {key}</Label>
+                   <Label>{key === 'diesel' ? t('petrol_diesel') : t('petrol_' + key)}</Label>
                    <Input type="number" step="0.01" value={priceForm[key]} onChange={e => setPriceForm({...priceForm, [key]: e.target.value})} />
                  </div>
                ))}
@@ -452,16 +467,99 @@ export default function Settings() {
          <button onClick={() => setFactoryResetModal(true)} className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center">{t('reset_app')}</button>
       </section>
 
-      <ConfirmModal isOpen={deleteModal.isOpen} onClose={() => setDeleteModal({ isOpen: false })} onConfirm={() => deleteVehicle(deleteModal.vehicleId)} title={t('delete') + ' Vehicle'} message={`Are you sure?`} confirmText={t('delete')} variant="danger" />
-      <ConfirmModal isOpen={factoryResetModal} onClose={() => setFactoryResetModal(false)} onConfirm={confirmFactoryReset} title={t('reset_app')} message="Are you sure?" confirmText={t('delete')} variant="danger" />
+      <ConfirmModal isOpen={deleteModal.isOpen} onClose={() => setDeleteModal({ isOpen: false })} onConfirm={() => deleteVehicle(deleteModal.vehicleId)} title={t('delete') + ' ' + t('active_vehicle')} message={t('sure_question')} confirmText={t('delete')} variant="danger" />
+      <ConfirmModal isOpen={factoryResetModal} onClose={() => setFactoryResetModal(false)} onConfirm={confirmFactoryReset} title={t('reset_app')} message={t('sure_question')} confirmText={t('delete')} variant="danger" />
+
+      {/* Validation Modal for Active Vehicle Details */}
+      <Modal 
+        isOpen={validationModal.isOpen} 
+        onClose={() => setValidationModal({ isOpen: false })} 
+        title={t('active_vehicle_details')}
+        size="sm"
+      >
+        <div className="p-1 space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="space-y-2 text-xs font-bold leading-relaxed">
+              {validationModal.isMissingTank && <p>{t('missing_tank_warning')}</p>}
+              {validationModal.isMissingTyre && <p>{t('missing_tyre_warning')}</p>}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setValidationModal({ isOpen: false })}
+              className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
+            >
+              {t('cancel')}
+            </button>
+            <button 
+              onClick={confirmSaveActiveVehicleDetails}
+              className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/20"
+            >
+              {t('save_anyway')}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Backup Format Modal */}
       <Modal isOpen={formatModal.isOpen} onClose={() => setFormatModal({ isOpen: false })} title={formatModal.type === 'export' ? t('export_data') : t('import_data')} size="sm">
         <div className="grid grid-cols-2 gap-3 p-2">
-           <button onClick={() => { setFormatModal({ isOpen: false }); handleExport('json'); }} className="p-4 rounded-2xl border flex flex-col items-center gap-2"><Database className="text-blue-500" /> JSON</button>
-           <button onClick={() => { setFormatModal({ isOpen: false }); handleExport('excel'); }} className="p-4 rounded-2xl border flex flex-col items-center gap-2"><Database className="text-emerald-500" /> Excel</button>
+           <button 
+             onClick={() => { 
+               setFormatModal({ isOpen: false }); 
+               if (formatModal.type === 'export') handleExport('json');
+               else handleImportClick('json');
+             }} 
+             className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+           >
+             <Database className="text-blue-500" /> 
+             <span className="text-xs font-bold">JSON</span>
+           </button>
+           <button 
+             onClick={() => { 
+               setFormatModal({ isOpen: false }); 
+               if (formatModal.type === 'export') handleExport('excel');
+               else handleImportClick('excel');
+             }} 
+             className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+           >
+             <Database className="text-emerald-500" /> 
+             <span className="text-xs font-bold">{t('excel')}</span>
+           </button>
         </div>
       </Modal>
+
+      {/* Import Process Components */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p className="font-bold text-slate-900 dark:text-white">{t('analyzing_file')}</p>
+          </div>
+        </div>
+      )}
+
+      {importAnalysis && (
+        <ImportResolver 
+          analysis={importAnalysis} 
+          onCancel={() => setImportAnalysis(null)} 
+          onApply={handleApplyImport} 
+        />
+      )}
+
+      {importError && (
+        <ConfirmModal 
+          isOpen={true} 
+          onClose={() => setImportError(null)} 
+          onConfirm={() => setImportError(null)} 
+          title={t('error')} 
+          message={importError} 
+          confirmText="OK" 
+          variant="danger" 
+        />
+      )}
 
       {/* Global Setting Toast */}
       <AnimatePresence>

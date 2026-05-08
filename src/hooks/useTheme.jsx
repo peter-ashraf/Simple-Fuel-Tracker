@@ -13,10 +13,15 @@ export function ThemeProvider({ children }) {
     const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     root.classList.add(isDark ? 'dark' : 'light');
     
-    // Update theme-color meta tag for mobile status bar
+    // Update theme-color and status-bar-style for mobile/PWA
     const metaThemeColor = document.getElementById('theme-color-meta');
+    const metaAppleStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', isDark ? '#020617' : '#f8fafc');
+      metaThemeColor.setAttribute('content', isDark ? '#000000' : '#ffffff');
+    }
+    if (metaAppleStatus) {
+      metaAppleStatus.setAttribute('content', isDark ? 'black-translucent' : 'default');
     }
   }, [theme]);
 

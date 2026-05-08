@@ -130,7 +130,7 @@ export default function MaintenanceForm() {
               <div className="space-y-6">
                 <div>
                   <Label className="flex items-center gap-2"><Calendar className="w-4 h-4" /> {t('odometer')} (km) *</Label>
-                  <Input type="number" value={performedAtODO} onChange={(e) => setPerformedAtODO(e.target.value)} placeholder="Current mileage" min="0" required />
+                  <Input type="number" value={performedAtODO} onChange={(e) => setPerformedAtODO(e.target.value)} placeholder={t('current_mileage')} min="0" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -138,7 +138,7 @@ export default function MaintenanceForm() {
                     <Input type="number" value={intervalKm} onChange={(e) => setIntervalKm(e.target.value)} placeholder="e.g. 10000" min="1" required />
                   </div>
                   <div>
-                    <Label className="flex items-center gap-2"><Shield className="w-4 h-4" /> Safety Margin</Label>
+                    <Label className="flex items-center gap-2"><Shield className="w-4 h-4" /> {t('safety_margin')}</Label>
                     <Input type="number" value={safetyMarginKm} onChange={(e) => setSafetyMarginKm(e.target.value)} placeholder="2000" min="0" />
                   </div>
                 </div>

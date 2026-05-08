@@ -46,7 +46,8 @@ function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] px-5 py-4 flex items-center justify-between">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] px-5 py-4 flex items-center justify-center">
+      <div className="w-full max-w-lg flex items-center justify-between">
       <div className="flex items-center gap-3 relative" ref={dropdownRef}>
         <div className="bg-emerald-500/10 dark:bg-emerald-500/20 p-2 rounded-xl border-0">
           <Fuel className="text-emerald-500 dark:text-emerald-400 w-5 h-5 neon-glow" />
@@ -72,8 +73,7 @@ function Header() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className={`absolute top-12 ${isRtl ? 'right-0' : 'left-12'} w-48 backdrop-blur-xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left`}
-              style={{ background: 'color-mix(in oklab, var(--color-black) 90%, transparent)' }}
+              className={`absolute top-12 ${isRtl ? 'right-0' : 'left-12'} w-48 bg-white/95 dark:bg-black/90 backdrop-blur-2xl border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-xl overflow-hidden z-50 origin-top-left`}
             >
               <div className="p-1">
                 {vehicles.map(v => (
@@ -148,6 +148,7 @@ function Header() {
           )}
         </AnimatePresence>
       </div>
+      </div>
     </header>
   );
 }
@@ -179,7 +180,7 @@ export default function App() {
     <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
       <Header />
       
-      <main className="flex-1 px-5 pt-0">
+      <main className="flex-1 px-5 pt-20">
          <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
                <Route path="/" element={<Dashboard />} />
