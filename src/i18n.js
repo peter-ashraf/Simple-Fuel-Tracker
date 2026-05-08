@@ -184,7 +184,14 @@ const resources = {
       "notes": "Notes",
       "at": "@",
       "analyzing_file": "Analyzing file...",
-      "unit_egp_l": "EGP/L"
+      "unit_egp_l": "EGP/L",
+      "system_name": "System Name",
+      "delete_system": "Delete System",
+      "delete_system_warning": "Deleting this system will remove its tracking data. This action cannot be undone.",
+      "add_system": "Add System",
+      "new_system": "New System",
+      "was_it_partial": "Was it a partial fill-up?",
+      "no_not_partial": "No, it wasn't"
     }
   },
   ar: {
@@ -368,7 +375,14 @@ const resources = {
       "notes": "ملاحظات",
       "at": "عند",
       "analyzing_file": "جاري تحليل الملف...",
-      "unit_egp_l": "ج.م/لتر"
+      "unit_egp_l": "ج.م/لتر",
+      "system_name": "اسم النظام",
+      "delete_system": "حذف النظام",
+      "delete_system_warning": "حذف هذا النظام سيؤدي إلى إزالة بيانات التتبع الخاصة به. لا يمكن التراجع عن هذا الإجراء.",
+      "add_system": "إضافة نظام",
+      "new_system": "نظام جديد",
+      "was_it_partial": "هل كان تمويناً جزئياً؟",
+      "no_not_partial": "لا، لم يكن"
     }
   }
 };

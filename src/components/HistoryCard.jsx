@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Trash, GasPump, CalendarBlank, MapPin, FloppyDisk, X, CheckSquare, Square } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
-import { ConfirmModal, Input, Label } from './ui';
+import { ConfirmModal, Input, Label, FuelGaugeSlider, cn } from './ui';
 import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec } from '../utils/formatting';
 import './HistoryCard.css';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
     totalCost: fill.liters * (fill.pricePerLiter || 0),
     tankLevelAfter: fill.tankLevelAfter !== undefined ? fill.tankLevelAfter : 100
   });
+  const [showPartialSlider, setShowPartialSlider] = useState(fill.isPartialFill || (fill.tankLevelAfter < 100));
 
   const metrics = calculateTripMetrics(fillUps, index);
   const tripCost = (fill.liters * (fill.pricePerLiter || 0)).toFixed(2);
@@ -53,8 +54,8 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
       fuelType: editForm.fuelType,
       station: editForm.station.trim(),
       notes: editForm.notes.trim(),
-      tankLevelAfter: editForm.tankLevelAfter,
-      isPartialFill: editForm.tankLevelAfter < 100
+      tankLevelAfter: showPartialSlider ? editForm.tankLevelAfter : 100,
+      isPartialFill: showPartialSlider
     });
     setIsFlipped(false);
   };
@@ -126,6 +127,15 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
               <div className="flex gap-2">
                 <button onClick={handleSave} className="bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs">{t('save')}</button>
                 <button onClick={handleCancel} className="bg-slate-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs">{t('cancel')}</button>
+                <button 
+                  onClick={() => setShowPartialSlider(!showPartialSlider)} 
+                  className={cn(
+                    "font-bold px-3 py-1.5 rounded-lg text-[10px] transition-colors",
+                    showPartialSlider ? "bg-amber-500/10 text-amber-500" : "bg-slate-100 dark:bg-white/5 text-slate-500"
+                  )}
+                >
+                  {showPartialSlider ? t('no_not_partial') : t('was_it_partial')}
+                </button>
               </div>
               <button onClick={() => setDeleteModal(true)} className="text-red-500 p-1"><Trash weight="duotone" className="w-4 h-4" /></button>
             </div>
@@ -157,6 +167,16 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
                 }} className="py-1 px-2 text-xs" />
               </div>
             </div>
+
+            {showPartialSlider && (
+              <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800/50">
+                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2">{t('fuel_level_after_fill')}</p>
+                <FuelGaugeSlider 
+                  value={editForm.tankLevelAfter} 
+                  onChange={(val) => setEditForm({...editForm, tankLevelAfter: val})} 
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

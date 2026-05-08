@@ -4,15 +4,21 @@ import {
   Wrench, Plus, Bell, CurrencyDollar, MagnifyingGlass, Pencil, Trash, CalendarBlank, 
   GearSix, ShieldWarning, CaretDown, Check, Square, CheckSquare, 
   X, Palette, Layout, Pulse, Drop, Shield, BatteryCharging, Car, Disc, Lightning, Clock,
-  DotsThreeVertical, CaretRight, FloppyDisk, Warning
+  DotsThreeVertical, CaretRight, FloppyDisk, Warning, Engine, Tire
 } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
-import { Card, PageWrapper, ConfirmModal, Modal, Input, Label, cn } from './ui';
+import { Card, PageWrapper, ConfirmModal, Modal, Input, Label, cn, IconPicker, ICON_MAP_DATA } from './ui';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-const ICON_MAP = { Lightning, Disc, Drop, Shield, BatteryCharging, Car, Wrench, Pulse, GearSix };
+const ICON_MAP = { 
+  ...ICON_MAP_DATA,
+  Zap: ICON_MAP_DATA.Lightning, 
+  Droplet: ICON_MAP_DATA.Drop, 
+  Battery: ICON_MAP_DATA.BatteryCharging,
+  Disc: ICON_MAP_DATA.Tire
+};
 
 export default function Maintenance() {
   const { 
@@ -40,9 +46,13 @@ export default function Maintenance() {
   // Modals & Editing State
   const [editingSystemId, setEditingSystemId] = useState(null);
   const [editSystemName, setEditSystemName] = useState('');
+  const [editSystemIcon, setEditSystemIcon] = useState('Wrench');
   const [newSubCatName, setNewSubCatName] = useState('');
+  const [isPickingIcon, setIsPickingIcon] = useState(false);
   const [renamingCatId, setRenamingCatId] = useState(null);
   const [renamingCatName, setRenamingCatName] = useState('');
+  const [justSavedCatId, setJustSavedCatId] = useState(null);
+  const [systemSaveFeedback, setSystemSaveFeedback] = useState(false);
   
   // Confirm Modals
   const [confirmDeleteSystem, setConfirmDeleteSystem] = useState(null); // stores id
@@ -144,12 +154,40 @@ export default function Maintenance() {
 
   const handleSaveSystemName = () => {
     if (!editingSystemId || !editSystemName.trim()) return;
-    setMaintenanceSystems(prev => prev.map(s => s.id === editingSystemId ? { ...s, name: editSystemName } : s));
+    
+    const currentSystem = maintenanceSystems.find(s => s.id === editingSystemId);
+    if (currentSystem?.name === editSystemName.trim() && currentSystem?.icon === editSystemIcon) {
+      setSystemSaveFeedback('no-change');
+      setTimeout(() => {
+        setSystemSaveFeedback(false);
+        setEditingSystemId(null);
+      }, 1000);
+      return;
+    }
+
+    setMaintenanceSystems(prev => prev.map(s => s.id === editingSystemId ? { ...s, name: editSystemName, icon: editSystemIcon } : s));
+    setSystemSaveFeedback('saved');
+    setTimeout(() => {
+      setSystemSaveFeedback(false);
+      setEditingSystemId(null);
+    }, 1000);
   };
 
   const handleRenameCategory = (catId, newName) => {
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      setRenamingCatId(null);
+      return;
+    }
+    
+    const cat = getCategoryById(catId);
+    if (cat.name === newName.trim()) {
+      setRenamingCatId(null);
+      return;
+    }
+
     updateMaintenanceCategory(catId, { name: newName });
+    setJustSavedCatId(catId);
+    setTimeout(() => setJustSavedCatId(null), 2000);
     setRenamingCatId(null);
   };
 
@@ -164,6 +202,21 @@ export default function Maintenance() {
     const newCat = addMaintenanceCategory({ name: newSubCatName, color: editingSystem.color });
     setMaintenanceSystems(prev => prev.map(s => s.id === editingSystemId ? { ...s, categories: [...s.categories, newCat.id] } : s));
     setNewSubCatName('');
+  };
+
+  const handleAddSystem = () => {
+    const newId = `system_${Date.now()}`;
+    const newSystem = {
+      id: newId,
+      name: t('new_system'),
+      icon: 'Wrench',
+      categories: [],
+      color: '#3b82f6'
+    };
+    setMaintenanceSystems(prev => [...prev, newSystem]);
+    setEditingSystemId(newId);
+    setEditSystemName(newSystem.name);
+    setEditSystemIcon(newSystem.icon);
   };
 
   const handleDeleteSubCategory = () => {
@@ -273,7 +326,7 @@ export default function Maintenance() {
             {maintenanceSystems.map(system => {
               const Icon = ICON_MAP[system.icon] || Wrench;
               return (
-                <Card key={system.id} className="p-4 flex items-center justify-between cursor-pointer" onClick={() => { setEditingSystemId(system.id); setEditSystemName(system.name); }}>
+                <Card key={system.id} className="p-4 flex items-center justify-between cursor-pointer" onClick={() => { setEditingSystemId(system.id); setEditSystemName(system.name); setEditSystemIcon(system.icon || 'Wrench'); }}>
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: system.color }}><Icon className="w-5 h-5" /></div>
                     <div>
@@ -285,6 +338,14 @@ export default function Maintenance() {
                 </Card>
               );
             })}
+            
+            <button 
+              onClick={handleAddSystem} 
+              className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center gap-3 text-slate-400 hover:text-emerald-500 hover:border-emerald-500/50 transition-all active:scale-[0.98]"
+            >
+              <Plus weight="bold" className="w-5 h-5" />
+              <span className="text-sm font-bold">{t('add_system')}</span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -313,7 +374,29 @@ export default function Maintenance() {
 
       <Modal isOpen={!!editingSystemId} onClose={() => setEditingSystemId(null)} title={t('edit') + ' ' + t('systems')}>
         <div className="space-y-6">
-          <Input value={editSystemName} onChange={(e) => setEditSystemName(e.target.value)} placeholder={t('systems')} />
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsPickingIcon(true)}
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 hover:opacity-90 transition-opacity relative group overflow-hidden" 
+              style={{ backgroundColor: editingSystem?.color }}
+            >
+              {(() => {
+                const Icon = ICON_MAP[editSystemIcon] || Wrench;
+                return <Icon weight="duotone" className="w-7 h-7" />;
+              })()}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Pencil weight="bold" className="w-4 h-4 text-white" />
+              </div>
+              <div className="absolute top-1 right-1 w-4 h-4 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <Pencil weight="bold" className="w-2.5 h-2.5 text-white" />
+              </div>
+            </button>
+            <div className="flex-1">
+              <Label>{t('system_name')}</Label>
+              <Input value={editSystemName} onChange={(e) => setEditSystemName(e.target.value)} placeholder={t('systems')} />
+            </div>
+          </div>
+          
           <div className="space-y-2">
             {editingSystem?.categories.map(catId => {
               const cat = getCategoryById(catId);
@@ -326,19 +409,82 @@ export default function Maintenance() {
                     <span className="text-xs font-bold">{t(cat.id) || cat.name}</span>
                   )}
                   <div className="flex gap-1">
-                    <button onClick={() => { setRenamingCatId(catId); setRenamingCatName(cat.name); }} className="p-1.5 text-slate-400"><Pencil weight="duotone" className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setConfirmDeleteCat(catId)} className="p-1.5 text-red-500"><Trash weight="duotone" className="w-3.5 h-3.5" /></button>
+                    <button 
+                      onClick={() => { 
+                        if (isRenaming) {
+                          handleRenameCategory(catId, renamingCatName);
+                        } else {
+                          setRenamingCatId(catId); 
+                          setRenamingCatName(cat.name); 
+                        }
+                      }} 
+                      className={cn("p-1.5 transition-colors", isRenaming || justSavedCatId === catId ? "text-emerald-500" : "text-slate-400")}
+                    >
+                      {isRenaming ? (
+                        <Check weight="bold" className="w-3.5 h-3.5" />
+                      ) : justSavedCatId === catId ? (
+                        <Check weight="bold" className="w-3.5 h-3.5" />
+                      ) : (
+                        <Pencil weight="duotone" className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button onClick={() => setConfirmDeleteCat(catId)} className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                      <Trash weight="duotone" className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
-          <button onClick={handleSaveSystemName} className="w-full py-3 bg-emerald-500 text-white rounded-2xl font-bold">{t('save')}</button>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setConfirmDeleteSystem(editingSystemId)} className="p-4 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl transition-all active:scale-[0.98]">
+              <Trash weight="duotone" className="w-6 h-6" />
+            </button>
+            <button 
+              onClick={handleSaveSystemName} 
+              className={cn(
+                "flex-1 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
+                systemSaveFeedback === 'saved' ? "bg-emerald-500 text-white" : 
+                systemSaveFeedback === 'no-change' ? "bg-slate-200 dark:bg-slate-800 text-slate-500" :
+                "bg-slate-900 dark:bg-white text-white dark:text-slate-900"
+              )}
+            >
+              {systemSaveFeedback === 'saved' ? (
+                <>
+                  <Check weight="bold" className="w-5 h-5" />
+                  <span>{t('saved')}</span>
+                </>
+              ) : systemSaveFeedback === 'no-change' ? (
+                <>
+                  <X weight="bold" className="w-5 h-5" />
+                  <span>{t('no_changes')}</span>
+                </>
+              ) : (
+                <span>{t('save')}</span>
+              )}
+            </button>
+          </div>
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={!!confirmDeleteSystem} onClose={() => setConfirmDeleteSystem(null)} onConfirm={handleDeleteSystem} title={t('delete')} message={t('delete') + "?"} confirmText={t('delete')} variant="danger" />
+      <ConfirmModal 
+        isOpen={!!confirmDeleteSystem} 
+        onClose={() => setConfirmDeleteSystem(null)} 
+        onConfirm={handleDeleteSystem} 
+        title={t('delete_system')} 
+        message={t('delete_system_warning') || "Deleting this system will remove its tracking data. This action cannot be undone."} 
+        confirmText={t('delete')} 
+        variant="danger" 
+      />
       <ConfirmModal isOpen={!!confirmDeleteCat} onClose={() => setConfirmDeleteCat(null)} onConfirm={handleDeleteSubCategory} title={t('delete')} message={t('delete') + "?"} confirmText={t('delete')} variant="danger" />
+
+      <IconPicker 
+        isOpen={isPickingIcon} 
+        onClose={() => setIsPickingIcon(false)} 
+        currentIcon={editSystemIcon} 
+        onSelect={setEditSystemIcon} 
+      />
     </PageWrapper>
   );
 }

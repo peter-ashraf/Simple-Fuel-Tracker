@@ -45,6 +45,7 @@ export const Label = forwardRef(({ className, children, ...props }, ref) => (
 Label.displayName = "Label"
 
 export { Modal, ConfirmModal } from './Modal';
+export { IconPicker, ICON_MAP_DATA } from './IconPicker';
 export { FuelGaugeSlider } from './FuelGaugeSlider';
 
 export const PageWrapper = ({ children, className }) => (

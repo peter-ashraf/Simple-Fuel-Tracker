@@ -37,12 +37,12 @@ export function FuelProvider({ children }) {
   const [categories, setCategories] = useLocalStorage('fueltracker-maintenance-categories-v1', Object.values(MAINTENANCE_CATEGORIES));
 
   const [maintenanceSystems, setMaintenanceSystems] = useLocalStorage('fueltracker-maintenance-systems-v1', [
-    { id: 'engine', name: 'Engine', icon: 'Zap', categories: ['oil_change', 'air_filter', 'spark_plugs', 'transmission_service'], color: '#ef4444' },
+    { id: 'engine', name: 'Engine', icon: 'Lightning', categories: ['oil_change', 'air_filter', 'spark_plugs', 'transmission_service'], color: '#ef4444' },
     { id: 'tires', name: 'Tires', icon: 'Disc', categories: ['tire_rotation', 'tire_replacement'], color: '#3b82f6' },
-    { id: 'fluids', name: 'Fluids', icon: 'Droplet', categories: ['coolant_flush', 'ac_filter', 'fuel_filter'], color: '#3b82f6' },
-    { id: 'safety', name: 'Safety', icon: 'Shield', categories: ['general_inspection'], color: '#3b82f6' },
-    { id: 'electrical', name: 'Electrical', icon: 'Battery', categories: ['battery'], color: '#3b82f6' },
-    { id: 'body', name: 'Body', icon: 'Car', categories: ['custom'], color: '#3b82f6' }
+    { id: 'fluids', name: 'Fluids', icon: 'Drop', categories: ['coolant_flush', 'ac_filter', 'fuel_filter'], color: '#06b6d4' },
+    { id: 'safety', name: 'Safety', icon: 'Shield', categories: ['general_inspection'], color: '#f59e0b' },
+    { id: 'electrical', name: 'Electrical', icon: 'BatteryCharging', categories: ['battery'], color: '#8b5cf6' },
+    { id: 'body', name: 'Body', icon: 'Car', categories: ['custom'], color: '#64748b' }
   ]);
 
   
@@ -54,8 +54,34 @@ export function FuelProvider({ children }) {
     defaultSafetyMarginKm: 2000,
 
     categorySettings: {}
-
   });
+
+  // Migration for legacy icon names
+  useEffect(() => {
+    const legacyMap = {
+      'Zap': 'Lightning',
+      'Droplet': 'Drop',
+      'Battery': 'BatteryCharging'
+    };
+    
+    let hasChanges = false;
+    const migratedSystems = maintenanceSystems.map(system => {
+      // Specifically force Engine icon for the engine system if it's still Zap/Lightning
+      if (system.id === 'engine' && (system.icon === 'Zap' || system.icon === 'Lightning')) {
+        hasChanges = true;
+        return { ...system, icon: 'Engine' };
+      }
+      if (legacyMap[system.icon]) {
+        hasChanges = true;
+        return { ...system, icon: legacyMap[system.icon] };
+      }
+      return system;
+    });
+    
+    if (hasChanges) {
+      setMaintenanceSystems(migratedSystems);
+    }
+  }, []);
 
 
 
