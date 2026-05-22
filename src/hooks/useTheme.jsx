@@ -6,6 +6,15 @@ const ThemeContext = createContext();
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useLocalStorage('fueltracker-theme', 'system');
 
+  // Update theme-color meta tag for PWA and iOS status bar
+  const updateThemeColorMeta = (isDark) => {
+    const metaThemeColor = document.getElementById('theme-color-meta');
+    if (metaThemeColor) {
+      // Use actual CSS background colors: slate-50 (#f8fafc) for light, black (#000000) for dark
+      metaThemeColor.setAttribute('content', isDark ? '#000000' : '#f8fafc');
+    }
+  };
+
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
@@ -13,16 +22,8 @@ export function ThemeProvider({ children }) {
     const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     root.classList.add(isDark ? 'dark' : 'light');
     
-    // Update theme-color and status-bar-style for mobile/PWA
-    const metaThemeColor = document.getElementById('theme-color-meta');
-    const metaAppleStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-    
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', isDark ? '#000000' : '#ffffff');
-    }
-    if (metaAppleStatus) {
-      metaAppleStatus.setAttribute('content', isDark ? 'black-translucent' : 'default');
-    }
+    // Update theme-color for iOS status bar and PWA
+    updateThemeColorMeta(isDark);
   }, [theme]);
 
   useEffect(() => {
@@ -33,6 +34,8 @@ export function ThemeProvider({ children }) {
       const root = window.document.documentElement;
       root.classList.remove('light', 'dark');
       root.classList.add(e.matches ? 'dark' : 'light');
+      // Update theme-color when system theme changes
+      updateThemeColorMeta(e.matches);
     };
     
     mediaQuery.addEventListener('change', handleChange);
