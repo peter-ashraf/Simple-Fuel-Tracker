@@ -189,6 +189,8 @@ export default function App() {
   const [showMigrationModal, setShowMigrationModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationLoadingAction, setMigrationLoadingAction] = useState(null);
+  const [migrationResult, setMigrationResult] = useState(null);
   
   // Check for due maintenance reminders on app open
   const { maintenanceReminders, activeVehicleFillUps } = useFuel();
@@ -252,38 +254,68 @@ export default function App() {
   // Handle migration decision
   const handleMigrationDecision = async (decision) => {
     setMigrationLoading(true);
+    setMigrationLoadingAction(decision);
+    setMigrationResult(null);
     
     try {
       const userId = await cloudSyncService.getUserId();
       
+      let result;
       switch (decision) {
         case 'upload':
-          await cloudSyncService.uploadLocalDataToCloud(userId);
+          result = await cloudSyncService.uploadLocalDataToCloud(userId);
           break;
         case 'download':
-          await cloudSyncService.downloadCloudDataToLocal(userId);
+          result = await cloudSyncService.downloadCloudDataToLocal(userId);
           break;
         case 'merge':
-          await cloudSyncService.mergeLocalDataToCloud(userId);
+          result = await cloudSyncService.mergeLocalDataToCloud(userId);
           break;
         case 'keep-local':
           localStorage.setItem('fueltracker-migration-decision', 'keep-local');
           localStorage.setItem('fueltracker-migration-complete', 'true');
+          result = {
+            success: true,
+            action: 'keep-local',
+            message: 'Local data preserved. Cloud sync disabled.',
+            details: []
+          };
           break;
       }
       
-      // Continue sync after decision
-      await cloudSyncService.continueSyncAfterDecision(userId, decision);
+      // Continue sync after decision (only for upload/download/merge)
+      if (decision !== 'keep-local' && result?.success) {
+        await cloudSyncService.continueSyncAfterDecision(userId, decision);
+      }
       
-      setShowMigrationModal(false);
-      setSyncStatus(null);
+      setMigrationResult(result);
     } catch (error) {
       console.error('Migration decision error:', error);
-      // Still close modal on error to prevent blocking
-      setShowMigrationModal(false);
-      setSyncStatus(null);
+      setMigrationResult({
+        success: false,
+        action: decision,
+        message: 'Migration failed due to an unexpected error.',
+        details: [`Exception: ${error.message}`]
+      });
     } finally {
       setMigrationLoading(false);
+      setMigrationLoadingAction(null);
+    }
+  };
+  
+  const handleMigrationResultClose = () => {
+    if (migrationResult?.success) {
+      setShowMigrationModal(false);
+      setSyncStatus(null);
+      setMigrationResult(null);
+    } else {
+      setMigrationResult(null);
+    }
+  };
+  
+  const handleMigrationRetry = () => {
+    if (migrationResult?.action) {
+      handleMigrationDecision(migrationResult.action);
     }
   };
   
@@ -447,6 +479,12 @@ export default function App() {
             syncStatus={syncStatus}
             onDecision={handleMigrationDecision}
             onCancel={handleMigrationCancel}
+            loading={migrationLoading}
+            loadingAction={migrationLoadingAction}
+            result={migrationResult}
+            onCloseResult={handleMigrationResultClose}
+            onRetry={handleMigrationRetry}
+            disableClose={migrationLoading}
           />
         )}
       </AnimatePresence>
