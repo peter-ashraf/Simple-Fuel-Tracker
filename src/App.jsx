@@ -18,6 +18,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useFuel } from './hooks/useFuelContext';
 import { useNotifications } from './hooks/useNotifications';
 import { useTranslation } from 'react-i18next';
+import { authService } from './services/authService';
+import { cloudSyncService } from './services/cloudSyncService';
+import { supabase } from './lib/supabaseClient';
+
+// Check if supabase client is properly initialized
+if (!supabase) {
+  console.error('Supabase client not initialized');
+}
 
 // Pages
 import Dashboard from './components/Dashboard';
@@ -30,6 +38,8 @@ import TyreCalculator from './components/TyreCalculator';
 import Maintenance from './components/Maintenance';
 import MaintenanceForm from './components/MaintenanceForm';
 import MaintenanceLogEdit from './components/MaintenanceLogEdit';
+import LoginScreen from './components/LoginScreen';
+import DataMigrationModal from './components/DataMigrationModal';
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
@@ -171,9 +181,117 @@ export default function App() {
   const { t } = useTranslation();
   const cn = (...classes) => classes.filter(Boolean).join(' ');
   
+  // Auth state
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Migration modal state
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  
   // Check for due maintenance reminders on app open
   const { maintenanceReminders, activeVehicleFillUps } = useFuel();
   const { checkMaintenanceReminders } = useNotifications();
+  
+  useEffect(() => {
+    // Check for existing session on app load
+    const checkSession = async () => {
+      console.log('[App] Starting session check');
+      const currentSession = await authService.getSession();
+      setSession(currentSession);
+      
+      if (currentSession) {
+        // Initialize cloud sync if logged in
+        try {
+          const status = await cloudSyncService.initialize();
+          
+          // If sync status is returned, show migration modal
+          if (status && status.hasLocalData) {
+            console.log('[App] Migration decision needed, showing modal');
+            setSyncStatus(status);
+            setShowMigrationModal(true);
+          }
+        } catch (syncError) {
+          console.error('Cloud sync initialization error:', syncError);
+        }
+      }
+      
+      console.log('[App] loading false after initial restore');
+      setLoading(false);
+    };
+    
+    checkSession();
+    
+    // Listen for auth state changes
+    const subscription = authService.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        if (currentSession) {
+          try {
+            const status = await cloudSyncService.initialize();
+            
+            // If sync status is returned, show migration modal
+            if (status && status.hasLocalData) {
+              console.log('[App] Migration decision needed, showing modal');
+              setSyncStatus(status);
+              setShowMigrationModal(true);
+            }
+          } catch (syncError) {
+            console.error('Cloud sync initialization error:', syncError);
+          }
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
+  // Handle migration decision
+  const handleMigrationDecision = async (decision) => {
+    setMigrationLoading(true);
+    
+    try {
+      const userId = await cloudSyncService.getUserId();
+      
+      switch (decision) {
+        case 'upload':
+          await cloudSyncService.uploadLocalDataToCloud(userId);
+          break;
+        case 'download':
+          await cloudSyncService.downloadCloudDataToLocal(userId);
+          break;
+        case 'merge':
+          await cloudSyncService.mergeLocalDataToCloud(userId);
+          break;
+        case 'keep-local':
+          localStorage.setItem('fueltracker-migration-decision', 'keep-local');
+          localStorage.setItem('fueltracker-migration-complete', 'true');
+          break;
+      }
+      
+      // Continue sync after decision
+      await cloudSyncService.continueSyncAfterDecision(userId, decision);
+      
+      setShowMigrationModal(false);
+      setSyncStatus(null);
+    } catch (error) {
+      console.error('Migration decision error:', error);
+      // Still close modal on error to prevent blocking
+      setShowMigrationModal(false);
+      setSyncStatus(null);
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
+  
+  const handleMigrationCancel = () => {
+    console.log('[App] Migration cancelled');
+    setShowMigrationModal(false);
+    setSyncStatus(null);
+  };
   
   useEffect(() => {
     // Get current odometer
@@ -188,6 +306,20 @@ export default function App() {
     
     return () => clearTimeout(timer);
   }, [maintenanceReminders, activeVehicleFillUps, checkMaintenanceReminders]);
+  
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-black">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  
+  // Show login screen if not authenticated
+  if (!session) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
@@ -307,6 +439,17 @@ export default function App() {
          </div>
       </nav>
       )}
+      
+      {/* Data Migration Modal */}
+      <AnimatePresence>
+        {showMigrationModal && syncStatus && (
+          <DataMigrationModal
+            syncStatus={syncStatus}
+            onDecision={handleMigrationDecision}
+            onCancel={handleMigrationCancel}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
