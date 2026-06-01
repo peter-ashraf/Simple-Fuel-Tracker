@@ -208,8 +208,9 @@ export default function App() {
         try {
           const status = await cloudSyncService.initialize();
           
-          // If sync status is returned, show migration modal
-          if (status && status.hasLocalData) {
+          // Always show migration modal if no decision exists, regardless of local data counts
+          // This ensures user explicitly chooses migration action before any sync occurs
+          if (status !== null) {
             console.log('[App] Migration decision needed, showing modal');
             setSyncStatus(status);
             setShowMigrationModal(true);
@@ -233,8 +234,9 @@ export default function App() {
           try {
             const status = await cloudSyncService.initialize();
             
-            // If sync status is returned, show migration modal
-            if (status && status.hasLocalData) {
+            // Always show migration modal if no decision exists, regardless of local data counts
+            // This ensures user explicitly chooses migration action before any sync occurs
+            if (status !== null) {
               console.log('[App] Migration decision needed, showing modal');
               setSyncStatus(status);
               setShowMigrationModal(true);

@@ -1026,6 +1026,19 @@ export const cloudSyncService = {
       const migrationComplete = localStorage.getItem(MIGRATION_FLAG_KEY);
 
       if (migrationComplete && migrationDecision) {
+        // Safeguard: If decision was 'download' but local data now exists (e.g., from import),
+        // show modal again to let user decide whether to preserve the imported data
+        if (migrationDecision === 'download') {
+          const localData = this.hasLocalData();
+          if (localData.hasData) {
+            // Local data appeared after download decision - likely from import
+            // Clear decision and show modal to protect imported data
+            localStorage.removeItem(MIGRATION_DECISION_KEY);
+            localStorage.removeItem(MIGRATION_FLAG_KEY);
+            const syncStatus = await this.getSyncStatus(userId);
+            return syncStatus;
+          }
+        }
         
         // Setup online listener that respects the decision
         this.setupOnlineSyncListener(userId, { decision: migrationDecision });
@@ -1046,23 +1059,9 @@ export const cloudSyncService = {
       // Get sync status to determine if migration modal is needed
       const syncStatus = await this.getSyncStatus(userId);
       
-      // If no local data, just sync from cloud normally
-      if (!syncStatus.hasLocalData) {
-        localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-        localStorage.setItem(MIGRATION_DECISION_KEY, 'download');
-        
-        // Setup online listener with download decision
-        this.setupOnlineSyncListener(userId, { decision: 'download' });
-        
-        if (this.isOnline()) {
-          await this.syncFromCloud(userId);
-          await this.processQueue(userId);
-        }
-
-        return null; // No migration needed
-      }
-
-      // If local data exists, return sync status for UI to show migration modal
+      // Always return sync status for UI to show migration modal
+      // Never auto-download or auto-set migration decision
+      // User must explicitly choose a migration action
       return syncStatus;
     } catch (error) {
       // Always return cleanly, never hang

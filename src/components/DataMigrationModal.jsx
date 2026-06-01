@@ -168,67 +168,82 @@ export default function DataMigrationModal({ syncStatus, onDecision, onCancel, l
           {!loading && !result && (
             <>
           {/* Scenario: Local data exists, cloud is empty */}
-          {!hasCloudData && hasLocalData && (
+          {!hasCloudData && (
             <div className="space-y-4">
               <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
                 <CloudArrowUp weight="duotone" className="text-blue-500 w-6 h-6 mt-0.5 flex-shrink-0" />
                 <div>
                   <h3 className="font-semibold text-blue-900 dark:text-blue-400 mb-1">
-                    Local Data Found
+                    {hasLocalData ? 'Local Data Found' : 'No Local Data'}
                   </h3>
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    You have data on this device. Would you like to upload it to your cloud account?
+                    {hasLocalData 
+                      ? 'You have data on this device. Would you like to upload it to your cloud account?'
+                      : 'You have no local data. Would you like to download your cloud data or start fresh?'}
                   </p>
                 </div>
               </div>
 
               {/* Local Data Summary */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                  Your Local Data
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      {localCounts.vehicles} Vehicles
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      {localCounts.fillups} Fill-ups
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      {localCounts.maintenance} Maintenance
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      {localCounts.tripEstimates} Trips
-                    </span>
+              {hasLocalData && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                    Your Local Data
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        {localCounts.vehicles} Vehicles
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        {localCounts.fillups} Fill-ups
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        {localCounts.maintenance} Maintenance
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        {localCounts.tripEstimates} Trips
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Actions */}
               <div className="space-y-3">
-                <button
-                  onClick={handleUpload}
-                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
-                >
-                  <CloudArrowUp weight="duotone" className="w-5 h-5" />
-                  Upload Local Data to Cloud
-                </button>
+                {hasLocalData && (
+                  <button
+                    onClick={handleUpload}
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                  >
+                    <CloudArrowUp weight="duotone" className="w-5 h-5" />
+                    Upload Local Data to Cloud
+                  </button>
+                )}
+                {hasCloudData && (
+                  <button
+                    onClick={handleDownload}
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                  >
+                    <CloudArrowDown weight="duotone" className="w-5 h-5" />
+                    Download Cloud Data
+                  </button>
+                )}
                 <button
                   onClick={handleKeepLocal}
                   className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
                 >
-                  Keep Local Only for Now
+                  {hasLocalData ? 'Keep Local Only for Now' : 'Start Fresh (No Sync)'}
                 </button>
               </div>
             </div>
