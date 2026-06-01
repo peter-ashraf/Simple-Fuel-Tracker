@@ -6,7 +6,7 @@ import { Card, Input, Label, cn, PageWrapper, Modal, ConfirmModal } from './ui';
 import { 
   Trash, Plus, Car, CurrencyDollar, WarningCircle, Palette, Pencil, 
   Check, MapPin, NavigationArrow, Tire, Bell, Wrench, GearSix, FloppyDisk,
-  Globe, DownloadSimple, UploadSimple, Database
+  Globe, DownloadSimple, UploadSimple, Database, SignOut
 } from '@phosphor-icons/react';
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
@@ -16,6 +16,7 @@ import { excelService } from '../services/excelService';
 import ImportResolver from './ImportResolver';
 import { useNotifications } from '../hooks/useNotifications';
 import { useTranslation } from 'react-i18next';
+import { authService } from '../services/authService';
 
 export default function Settings() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle, maintenanceSettings, updateMaintenanceSettings, updateCategorySettings } = useFuel();
@@ -150,6 +151,16 @@ export default function Settings() {
   const handleApplyImport = (resolutions, newRecords) => {
     backupService.applyImport(importAnalysis.payload, resolutions, newRecords);
     setImportAnalysis(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+      showToast('Logout failed');
+    }
   };
 
   const handleSaveActiveVehicleDetails = () => {
@@ -464,6 +475,10 @@ export default function Settings() {
       </section>
 
       <section className="pt-8 mb-2">
+         <button onClick={handleLogout} className="w-full py-4 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition flex justify-center gap-2 items-center mb-3">
+            <SignOut weight="duotone" className="w-5 h-5" />
+            {t('logout')}
+         </button>
          <button onClick={() => setFactoryResetModal(true)} className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center">{t('reset_app')}</button>
       </section>
 
