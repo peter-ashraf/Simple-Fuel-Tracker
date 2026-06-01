@@ -4,6 +4,9 @@ import { CloudArrowUp, CloudArrowDown, ArrowsMerge, X, Warning, CheckCircle, XCi
 export default function DataMigrationModal({ syncStatus, onDecision, onCancel, loading, loadingAction, result, onCloseResult, onRetry, disableClose }) {
   const { hasLocalData, hasCloudData, localCounts, cloudCounts } = syncStatus;
 
+  // Detect imported data scenario: local exists, cloud empty
+  const isImportedData = hasLocalData && !hasCloudData;
+
   const handleUpload = async () => {
     onDecision('upload');
   };
@@ -170,16 +173,18 @@ export default function DataMigrationModal({ syncStatus, onDecision, onCancel, l
           {/* Scenario: Local data exists, cloud is empty */}
           {!hasCloudData && (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
-                <CloudArrowUp weight="duotone" className="text-blue-500 w-6 h-6 mt-0.5 flex-shrink-0" />
+              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isImportedData ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20' : 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20'}`}>
+                <CloudArrowUp weight="duotone" className={`${isImportedData ? 'text-amber-500' : 'text-blue-500'} w-6 h-6 mt-0.5 flex-shrink-0`} />
                 <div>
-                  <h3 className="font-semibold text-blue-900 dark:text-blue-400 mb-1">
-                    {hasLocalData ? 'Local Data Found' : 'No Local Data'}
+                  <h3 className={`font-semibold mb-1 ${isImportedData ? 'text-amber-900 dark:text-amber-400' : 'text-blue-900 dark:text-blue-400'}`}>
+                    {isImportedData ? 'Imported Data Detected' : (hasLocalData ? 'Local Data Found' : 'No Local Data')}
                   </h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {hasLocalData 
-                      ? 'You have data on this device. Would you like to upload it to your cloud account?'
-                      : 'You have no local data. Would you like to download your cloud data or start fresh?'}
+                  <p className={`text-sm ${isImportedData ? 'text-amber-700 dark:text-amber-300' : 'text-blue-700 dark:text-blue-300'}`}>
+                    {isImportedData
+                      ? 'You have local data that has not been synced to the cloud yet. Please upload it to ensure your data is backed up.'
+                      : (hasLocalData 
+                        ? 'You have data on this device. Would you like to upload it to your cloud account?'
+                        : 'You have no local data. Would you like to download your cloud data or start fresh?')}
                   </p>
                 </div>
               </div>
@@ -224,10 +229,10 @@ export default function DataMigrationModal({ syncStatus, onDecision, onCancel, l
                 {hasLocalData && (
                   <button
                     onClick={handleUpload}
-                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                    className={`w-full py-3.5 ${isImportedData ? 'bg-amber-500 hover:bg-amber-400' : 'bg-emerald-500 hover:bg-emerald-400'} text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2`}
                   >
                     <CloudArrowUp weight="duotone" className="w-5 h-5" />
-                    Upload Local Data to Cloud
+                    {isImportedData ? 'Upload to Cloud (Recommended)' : 'Upload Local Data to Cloud'}
                   </button>
                 )}
                 {hasCloudData && (

@@ -17,6 +17,7 @@ const LOCALSTORAGE_KEYS = [
 const SYNC_QUEUE_KEY = 'fueltracker-sync-queue';
 const MIGRATION_FLAG_KEY = 'fueltracker-migration-complete';
 const MIGRATION_DECISION_KEY = 'fueltracker-migration-decision';
+const CLOUD_SYNCED_FLAG_KEY = 'fueltracker-cloud-synced-timestamp';
 
 // Store online listener reference to prevent duplicates
 let onlineListener = null;
@@ -277,6 +278,8 @@ export const cloudSyncService = {
         result.details.push(`Successfully uploaded: ${result.counts.vehicles} vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance, ${result.counts.tripEstimates} trips`);
         localStorage.setItem(MIGRATION_DECISION_KEY, 'upload');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+        // Set cloud synced flag to indicate local data is now in cloud
+        localStorage.setItem(CLOUD_SYNCED_FLAG_KEY, new Date().toISOString());
       } else if (totalRecords > 0) {
         result.success = false;
         result.message = `Upload partially succeeded. ${totalRecords} records uploaded, ${totalErrors} failed.`;
@@ -428,6 +431,8 @@ export const cloudSyncService = {
         result.details.push(`Successfully downloaded: ${result.counts.vehicles} vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance`);
         localStorage.setItem(MIGRATION_DECISION_KEY, 'download');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+        // Set cloud synced flag to indicate local data is now in sync with cloud
+        localStorage.setItem(CLOUD_SYNCED_FLAG_KEY, new Date().toISOString());
       } else if (totalRecords > 0) {
         result.success = false;
         result.message = `Download partially succeeded. ${totalRecords} records loaded, some operations failed.`;
@@ -624,6 +629,8 @@ export const cloudSyncService = {
         result.message = `Merge complete. ${totalMerged} new records merged, ${skipped} duplicates skipped.`;
         localStorage.setItem(MIGRATION_DECISION_KEY, 'merge');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+        // Set cloud synced flag to indicate local data is now in sync with cloud
+        localStorage.setItem(CLOUD_SYNCED_FLAG_KEY, new Date().toISOString());
       } else if (totalMerged > 0) {
         result.success = false;
         result.message = `Merge partially succeeded. ${totalMerged} records merged, ${totalErrors} failed.`;
@@ -1039,20 +1046,44 @@ export const cloudSyncService = {
             return syncStatus;
           }
         }
-        
+
+        // Check if local data exists but cloud sync flag is missing
+        // This indicates imported data that hasn't been uploaded yet
+        const cloudSynced = localStorage.getItem(CLOUD_SYNCED_FLAG_KEY);
+        const localData = this.hasLocalData();
+        const cloudSummary = await this.getCloudDataSummary(userId);
+
+        if (localData.hasData && !cloudSynced && !cloudSummary.hasCloudData) {
+          // Imported data detected: local exists, cloud empty, no sync flag
+          // Clear decision to force modal for upload
+          localStorage.removeItem(MIGRATION_DECISION_KEY);
+          localStorage.removeItem(MIGRATION_FLAG_KEY);
+          const syncStatus = await this.getSyncStatus(userId);
+          return syncStatus;
+        }
+
         // Setup online listener that respects the decision
         this.setupOnlineSyncListener(userId, { decision: migrationDecision });
 
-        // Sync behavior depends on stored decision
-        if (migrationDecision === 'keep-local') {
-          // No syncFromCloud call - preserve local data as-is
-        } else {
-          // For upload, download, merge: normal sync is safe
+        // CRITICAL: Never call syncFromCloud() before user explicitly chooses download
+        // Only sync from cloud if user explicitly chose download AND we have a sync flag
+        // This prevents overwriting imported local data
+        if (migrationDecision === 'download' && cloudSynced) {
+          // User explicitly chose download and data was previously synced
+          // Safe to sync from cloud
           if (this.isOnline()) {
             await this.syncFromCloud(userId);
             await this.processQueue(userId);
           }
+        } else if (migrationDecision === 'upload' || migrationDecision === 'merge') {
+          // For upload/merge, only process queue (upload local changes)
+          // Never syncFromCloud to preserve local data
+          if (this.isOnline()) {
+            await this.processQueue(userId);
+          }
         }
+        // keep-local: no sync at all
+
         return null; // No migration needed
       }
 
@@ -1087,16 +1118,17 @@ export const cloudSyncService = {
 
       switch (decision) {
         case 'upload':
-          // Upload local data first, then sync from cloud to align
+          // CRITICAL: Do NOT call syncFromCloud after upload to preserve local data
+          // Only process queue to upload any pending local changes
           if (this.isOnline()) {
-            await this.syncFromCloud(userId);
             await this.processQueue(userId);
           }
-          result.message = 'Sync continued after upload.';
+          result.message = 'Sync continued after upload. Local data preserved.';
           break;
 
         case 'download':
           // User explicitly chose to overwrite local with cloud
+          // Safe to sync from cloud since user made this choice
           if (this.isOnline()) {
             await this.syncFromCloud(userId);
             await this.processQueue(userId);
@@ -1105,12 +1137,12 @@ export const cloudSyncService = {
           break;
 
         case 'merge':
-          // Merge already happened, sync from cloud to refresh local state
+          // CRITICAL: Do NOT call syncFromCloud after merge to preserve local data
+          // Only process queue to upload any pending local changes
           if (this.isOnline()) {
-            await this.syncFromCloud(userId);
             await this.processQueue(userId);
           }
-          result.message = 'Sync continued after merge.';
+          result.message = 'Sync continued after merge. Local data preserved.';
           break;
 
         case 'keep-local':
