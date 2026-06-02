@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { MAINTENANCE_CATEGORIES } from '../../data/maintenanceCategories';
+import { cloudSyncService } from '../../services/cloudSyncService';
 
 export function useMaintenanceState(selectedVehicleId) {
   const [maintenanceLogs, setMaintenanceLogs] = useLocalStorage('fueltracker-maintenance-logs-v2', []);
@@ -45,18 +46,33 @@ export function useMaintenanceState(selectedVehicleId) {
   };
 
   // --- Maintenance Logs (Legacy?) ---
-  const addMaintenanceLog = (log) => {
+  const addMaintenanceLog = async (log) => {
     setMaintenanceLogs(prev => [...prev, { ...log, id: Date.now(), vehicleId: selectedVehicleId, timestamp: new Date().toISOString() }]);
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
-  const updateMaintenanceLog = (id, updatedData) => {
+  const updateMaintenanceLog = async (id, updatedData) => {
     setMaintenanceLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedData } : log));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
-  const deleteMaintenanceLog = (id) => {
+  const deleteMaintenanceLog = async (id) => {
     setMaintenanceLogs(prev => prev.filter(log => log.id !== id));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   // --- Maintenance Reminders ---
-  const addMaintenanceReminder = (reminder) => {
+  const addMaintenanceReminder = async (reminder) => {
     const safetyMargin = reminder.safetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
     const baseODO = reminder.performedAtOdometer ?? reminder.odometerThreshold ?? 0;
     const interval = reminder.odometerInterval ?? 0;
@@ -70,9 +86,14 @@ export function useMaintenanceState(selectedVehicleId) {
       ...reminder, id: Date.now(), vehicleId: selectedVehicleId, createdAt: new Date().toISOString(),
       nextDueODO, alertODO, safetyMarginKm: safetyMargin
     }]);
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const updateMaintenanceReminder = (id, updatedData) => {
+  const updateMaintenanceReminder = async (id, updatedData) => {
     setMaintenanceReminders(prev => prev.map(reminder => {
       if (reminder.id !== id) return reminder;
       const updated = { ...reminder, ...updatedData };
@@ -87,14 +108,24 @@ export function useMaintenanceState(selectedVehicleId) {
       }
       return updated;
     }));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteMaintenanceReminder = (id) => {
+  const deleteMaintenanceReminder = async (id) => {
     setMaintenanceReminders(prev => prev.filter(reminder => reminder.id !== id));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   // --- Maintenance Entries (v3) ---
-  const addMaintenanceEntry = (entry) => {
+  const addMaintenanceEntry = async (entry) => {
     const type = entry.type || 'custom';
     const catDef = getCategoryById(type);
     const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
@@ -110,9 +141,14 @@ export function useMaintenanceState(selectedVehicleId) {
       ...entry, id: `m_${Date.now()}`, vehicleId: selectedVehicleId, timestamp: new Date().toISOString(),
       performedAtODO, intervalKm, safetyMarginKm: safetyMargin, nextDueODO, alertODO
     }]);
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const updateMaintenanceEntry = (id, updatedData) => {
+  const updateMaintenanceEntry = async (id, updatedData) => {
     setMaintenanceEntries(prev => prev.map(entry => {
       if (entry.id !== id) return entry;
       const updated = { ...entry, ...updatedData };
@@ -128,30 +164,60 @@ export function useMaintenanceState(selectedVehicleId) {
       }
       return updated;
     }));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteMaintenanceEntry = (id) => {
+  const deleteMaintenanceEntry = async (id) => {
     setMaintenanceEntries(prev => prev.filter(entry => entry.id !== id));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteMultipleMaintenanceEntries = (ids) => {
+  const deleteMultipleMaintenanceEntries = async (ids) => {
     const idsSet = new Set(ids);
     setMaintenanceEntries(prev => prev.filter(entry => !idsSet.has(entry.id)));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   // --- Category Management ---
-  const addMaintenanceCategory = (category) => {
+  const addMaintenanceCategory = async (category) => {
     const newCategory = { ...category, id: category.id || `cat_${Date.now()}`, color: category.color || '#64748b' };
     setCategories(prev => [...prev, newCategory]);
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
     return newCategory;
   };
 
-  const updateMaintenanceCategory = (id, updates) => {
+  const updateMaintenanceCategory = async (id, updates) => {
     setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, ...updates } : cat));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteMaintenanceCategory = (id) => {
+  const deleteMaintenanceCategory = async (id) => {
     setCategories(prev => prev.filter(cat => cat.id !== id));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   // --- Settings ---

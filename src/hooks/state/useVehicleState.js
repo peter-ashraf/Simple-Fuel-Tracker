@@ -1,39 +1,77 @@
 import { useMemo } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
+import { v4 as uuidv4 } from 'uuid';
+import { cloudSyncService } from '../../services/cloudSyncService';
 
 export function useVehicleState() {
   const [vehicles, setVehicles] = useLocalStorage('fueltracker-vehicles-v2', [{ id: 'default', name: 'My Car', type: 'car' }]);
   const [selectedVehicleId, setSelectedVehicleId] = useLocalStorage('fueltracker-active-vehicle-v2', 'default');
 
   const activeVehicle = useMemo(() => 
-    vehicles.find(v => v.id === selectedVehicleId) || vehicles[0], 
+    vehicles.find(v => v.id === selectedVehicleId && !v.deletedAt) || vehicles.find(v => !v.deletedAt) || vehicles[0], 
     [vehicles, selectedVehicleId]
   );
 
-  const addVehicle = (vehicle) => {
+  const addVehicle = async (vehicle) => {
     const id = `v_${Date.now()}`;
-    const newVehicle = { ...vehicle, id };
+    const stableKey = uuidv4(); // Generate stable key for new vehicles
+    const newVehicle = { ...vehicle, id, stableKey };
     setVehicles(prev => [...prev, newVehicle]);
     setSelectedVehicleId(id);
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
     return newVehicle;
   };
 
-  const editVehicle = (id, updates) => {
+  const editVehicle = async (id, updates) => {
     setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
+    // Trigger silent background sync after mutation
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   const internalDeleteVehicle = (id) => {
     if (vehicles.length <= 1) return false;
     
-    setVehicles(prev => prev.filter(v => v.id !== id));
+    // Mark vehicle as deleted (tombstone) instead of hard delete
+    const deletedAt = new Date().toISOString();
+    setVehicles(prev => prev.map(v => v.id === id ? { ...v, deletedAt } : v));
     
     if (selectedVehicleId === id) {
-      const remaining = vehicles.find(v => v.id !== id);
+      const remaining = vehicles.find(v => v.id !== id && !v.deletedAt);
       if (remaining) {
         setSelectedVehicleId(remaining.id);
       }
     }
+    console.log(`[Sync][delete] Marked local vehicle ${id} deleted`);
     return true;
+  };
+
+  const deleteVehicle = async (id) => {
+    // Cascade tombstone to dependent fillups
+    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+    const deletedAt = new Date().toISOString();
+    
+    // Mark all fillups for this vehicle as deleted
+    const updatedFillups = fillups.map(f => f.vehicleId === id ? { ...f, deletedAt } : f);
+    localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(updatedFillups));
+    
+    // Mark vehicle as deleted
+    const result = internalDeleteVehicle(id);
+    if (result) {
+      console.log(`[Sync][delete] Cascaded tombstone to fillups for vehicle ${id}`);
+      // Trigger silent background sync after mutation
+      const userId = await cloudSyncService.getUserId();
+      if (userId) {
+        cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      }
+    }
+    return result;
   };
 
   return {
@@ -44,6 +82,7 @@ export function useVehicleState() {
     activeVehicle,
     addVehicle,
     editVehicle,
-    internalDeleteVehicle
+    internalDeleteVehicle,
+    deleteVehicle
   };
 }

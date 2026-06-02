@@ -52,17 +52,17 @@ export const authService = {
    * @returns {Promise<Object|null>} Session or null
    */
   async getSession() {
-    console.log('[Auth] getSession start');
+    console.log('[Auth][session] getSession start');
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
-        console.error('[Auth] getSession error:', error);
+        console.error('[Auth][session] getSession error:', error);
         return null;
       }
-      console.log('[Auth] getSession result:', session ? 'session found' : 'no session');
+      console.log('[Auth][session] getSession result:', session ? 'session found' : 'no session');
       return session;
     } catch (error) {
-      console.error('[Auth] getSession exception:', error);
+      console.error('[Auth][session] getSession exception:', error);
       return null;
     }
   },
@@ -85,7 +85,7 @@ export const authService = {
   onAuthStateChange(callback) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('[Auth] auth change event:', event, session ? 'session exists' : 'no session');
+        console.log('[Auth][session] Auth state change event:', event, session ? 'session exists' : 'no session');
         callback(event, session);
       }
     );

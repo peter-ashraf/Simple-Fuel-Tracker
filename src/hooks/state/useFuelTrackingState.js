@@ -2,42 +2,103 @@ import { useMemo } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { calculateTripMetrics } from '../../utils/calculations';
 import { formatTo2Decimals } from '../../utils/formatting';
+import { cloudSyncService } from '../../services/cloudSyncService';
+import { v4 as uuidv4 } from 'uuid';
 
 export function useFuelTrackingState(selectedVehicleId) {
   const [fuelPrices, setFuelPrices] = useLocalStorage('fueltracker-prices-v2', { 92: 22.25, 95: 25.00, diesel: 20.50 });
   const [fillUps, setFillUps] = useLocalStorage('fueltracker-fillups-v2', []);
 
+  // --- APP-WIDE FILTERING ---
+  // Any record with deletedAt or lastAction 'DELETE' is considered non-existent for the UI
+  const activeFillUps = useMemo(() => 
+    fillUps.filter(f => !f.deletedAt && f.lastAction !== 'DELETE'),
+    [fillUps]
+  );
+
   // Filter for active vehicle - sorted by timestamp for display
   const activeVehicleFillUps = useMemo(() => 
-    fillUps
+    activeFillUps
       .filter(f => f.vehicleId === selectedVehicleId)
       .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
-    [fillUps, selectedVehicleId]
+    [activeFillUps, selectedVehicleId]
   );
 
   // Filter for active vehicle - sorted by odometer for calculations
   const activeVehicleFillUpsByOdometer = useMemo(() => 
-    fillUps
+    activeFillUps
       .filter(f => f.vehicleId === selectedVehicleId)
       .sort((a,b) => a.odometer - b.odometer),
-    [fillUps, selectedVehicleId]
+    [activeFillUps, selectedVehicleId]
   );
 
-  const addFillUp = (entry) => {
-    setFillUps(prev => [...prev, { ...entry, id: Date.now(), vehicleId: selectedVehicleId }]);
+  const addFillUp = async (entry) => {
+    const now = new Date().toISOString();
+    const newRecord = { 
+      ...entry, 
+      id: Date.now(), 
+      vehicleId: selectedVehicleId,
+      stableKey: uuidv4(),
+      updatedAt: now,
+      createdAt: now,
+      syncStatus: 'pending',
+      lastAction: 'CREATE',
+      retryCount: 0
+    };
+    
+    setFillUps(prev => [...prev, newRecord]);
+    
+    // Trigger background sync
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteFillUp = (id) => {
-    setFillUps(prev => prev.filter(f => f.id !== id));
+  const deleteFillUp = async (id) => {
+    const now = new Date().toISOString();
+    setFillUps(prev => prev.map(f => 
+      f.id === id 
+        ? { ...f, deletedAt: now, lastAction: 'DELETE', syncStatus: 'pending', retryCount: 0 } 
+        : f
+    ));
+    
+    // Trigger background sync
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const deleteMultipleFillUps = (ids) => {
+  const deleteMultipleFillUps = async (ids) => {
+    const now = new Date().toISOString();
     const idsSet = new Set(ids);
-    setFillUps(prev => prev.filter(f => !idsSet.has(f.id)));
+    setFillUps(prev => prev.map(f => 
+      idsSet.has(f.id) 
+        ? { ...f, deletedAt: now, lastAction: 'DELETE', syncStatus: 'pending', retryCount: 0 } 
+        : f
+    ));
+    
+    // Trigger background sync
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
-  const updateFillUp = (id, updatedData) => {
-    setFillUps(prev => prev.map(f => f.id === id ? { ...f, ...updatedData } : f));
+  const updateFillUp = async (id, updatedData) => {
+    const now = new Date().toISOString();
+    setFillUps(prev => prev.map(f => 
+      f.id === id 
+        ? { ...f, ...updatedData, updatedAt: now, lastAction: 'UPDATE', syncStatus: 'pending', retryCount: 0 } 
+        : f
+    ));
+    
+    // Trigger background sync
+    const userId = await cloudSyncService.getUserId();
+    if (userId) {
+      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+    }
   };
 
   const stats = useMemo(() => {

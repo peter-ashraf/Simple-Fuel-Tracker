@@ -47,6 +47,17 @@ export const backupService = {
              }
           }
           
+          // Ensure vehicles have stable_key for identity preservation
+          if (key === 'fueltracker-vehicles-v2' && Array.isArray(data)) {
+            data = data.map(vehicle => {
+              if (!vehicle.stableKey) {
+                // Generate stable key for vehicles without one
+                vehicle.stableKey = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
+              }
+              return vehicle;
+            });
+          }
+          
           payload[key] = data;
         } catch (e) {
           payload[key] = value; // Fallback for non-JSON strings like theme
@@ -117,14 +128,36 @@ export const backupService = {
             }
           });
 
-          // Analyze Vehicles
+          // Analyze Vehicles (match by stable_key for identity preservation)
           const backupVehicles = importObj.payload['fueltracker-vehicles-v2'] || [];
           const localVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
 
           backupVehicles.forEach(backupVeh => {
-            const localVeh = localVehicles.find(lv => lv.id === backupVeh.id);
+            // First try to match by stable_key
+            const localVeh = localVehicles.find(lv => lv.stableKey && backupVeh.stableKey && lv.stableKey === backupVeh.stableKey);
+            
             if (!localVeh) {
-              analysis.newRecords.push({ type: 'vehicle', data: backupVeh });
+              // Fallback to ID match for legacy backups
+              const legacyMatch = localVehicles.find(lv => lv.id === backupVeh.id);
+              if (legacyMatch) {
+                // Legacy match found - preserve stable_key from backup if it exists
+                if (backupVeh.stableKey && !legacyMatch.stableKey) {
+                  analysis.newRecords.push({ type: 'vehicle', data: { ...legacyMatch, stableKey: backupVeh.stableKey } });
+                } else if (JSON.stringify(legacyMatch) !== JSON.stringify(backupVeh)) {
+                  analysis.conflicts.push({
+                    type: 'vehicle',
+                    id: backupVeh.id,
+                    label: `Vehicle: ${backupVeh.name}`,
+                    local: legacyMatch,
+                    backup: backupVeh
+                  });
+                } else {
+                  analysis.identical++;
+                }
+              } else {
+                // No match at all - new vehicle
+                analysis.newRecords.push({ type: 'vehicle', data: backupVeh });
+              }
             } else if (JSON.stringify(localVeh) !== JSON.stringify(backupVeh)) {
               analysis.conflicts.push({
                 type: 'vehicle',
@@ -133,6 +166,8 @@ export const backupService = {
                 local: localVeh,
                 backup: backupVeh
               });
+            } else {
+              analysis.identical++;
             }
           });
 
@@ -142,6 +177,42 @@ export const backupService = {
           backupMaint.forEach(bm => {
             if (!localMaint.find(lm => lm.id === bm.id)) {
               analysis.newRecords.push({ type: 'maintenance', data: bm });
+            }
+          });
+
+          // Analyze Maintenance Reminders (Count as new records for simplicity)
+          const backupReminders = importObj.payload['fueltracker-maintenance-reminders-v2'] || [];
+          const localReminders = JSON.parse(localStorage.getItem('fueltracker-maintenance-reminders-v2') || '[]');
+          backupReminders.forEach(br => {
+            if (!localReminders.find(lr => lr.id === br.id)) {
+              analysis.newRecords.push({ type: 'maintenance-reminder', data: br });
+            }
+          });
+
+          // Analyze Trip Estimates (Count as new records for simplicity)
+          const backupTrips = importObj.payload['fueltracker-trip-estimates-v2'] || [];
+          const localTrips = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+          backupTrips.forEach(bt => {
+            if (!localTrips.find(lt => lt.id === bt.id)) {
+              analysis.newRecords.push({ type: 'trip-estimate', data: bt });
+            }
+          });
+
+          // Analyze Tyre Comparisons (Count as new records for simplicity)
+          const backupTyres = importObj.payload['fueltracker-tyre-comparisons-v2'] || [];
+          const localTyres = JSON.parse(localStorage.getItem('fueltracker-tyre-comparisons-v2') || '[]');
+          backupTyres.forEach(bt => {
+            if (!localTyres.find(lt => lt.id === bt.id)) {
+              analysis.newRecords.push({ type: 'tyre-comparison', data: bt });
+            }
+          });
+
+          // Analyze Prices (Simple merge - count as new if local is empty)
+          const backupPrices = importObj.payload['fueltracker-prices-v2'] || {};
+          const localPrices = JSON.parse(localStorage.getItem('fueltracker-prices-v2') || '{}');
+          Object.keys(backupPrices).forEach(key => {
+            if (!localPrices[key]) {
+              analysis.newRecords.push({ type: 'price', data: { key, value: backupPrices[key] } });
             }
           });
 
@@ -169,6 +240,10 @@ export const backupService = {
     const localVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
     const localStations = JSON.parse(localStorage.getItem('fueltracker-user-stations') || '[]');
     const localPrices = JSON.parse(localStorage.getItem('fueltracker-prices-v2') || '{}');
+    const localMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    const localReminders = JSON.parse(localStorage.getItem('fueltracker-maintenance-reminders-v2') || '[]');
+    const localTrips = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+    const localTyres = JSON.parse(localStorage.getItem('fueltracker-tyre-comparisons-v2') || '[]');
 
     // 2. Process Conflicts
     resolvedConflicts.forEach(resolution => {
@@ -199,6 +274,16 @@ export const backupService = {
           localFillups.push(record.data);
         } else if (record.type === 'vehicle') {
           localVehicles.push(record.data);
+        } else if (record.type === 'maintenance') {
+          localMaint.push(record.data);
+        } else if (record.type === 'maintenance-reminder') {
+          localReminders.push(record.data);
+        } else if (record.type === 'trip-estimate') {
+          localTrips.push(record.data);
+        } else if (record.type === 'tyre-comparison') {
+          localTyres.push(record.data);
+        } else if (record.type === 'price') {
+          localPrices[record.data.key] = record.data.value;
         }
       }
     });
@@ -218,7 +303,6 @@ export const backupService = {
     });
 
     // 5. Merge Maintenance Logs and Reminders
-    const localMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
     const backupMaint = payload['fueltracker-maintenance-entries-v3'] || [];
     backupMaint.forEach(bm => {
       if (!localMaint.find(lm => lm.id === bm.id)) {
@@ -226,7 +310,6 @@ export const backupService = {
       }
     });
 
-    const localReminders = JSON.parse(localStorage.getItem('fueltracker-maintenance-reminders-v2') || '[]');
     const backupReminders = payload['fueltracker-maintenance-reminders-v2'] || [];
     backupReminders.forEach(br => {
       if (!localReminders.find(lr => lr.id === br.id)) {
@@ -234,15 +317,38 @@ export const backupService = {
       }
     });
 
-    // 6. Save back to localStorage
+    // 6. Merge Trip Estimates
+    const backupTrips = payload['fueltracker-trip-estimates-v2'] || [];
+    backupTrips.forEach(bt => {
+      if (!localTrips.find(lt => lt.id === bt.id)) {
+        localTrips.push(bt);
+      }
+    });
+
+    // 7. Merge Tyre Comparisons
+    const backupTyres = payload['fueltracker-tyre-comparisons-v2'] || [];
+    backupTyres.forEach(bt => {
+      if (!localTyres.find(lt => lt.id === bt.id)) {
+        localTyres.push(bt);
+      }
+    });
+
+    // 8. Save back to localStorage
     localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(localFillups));
     localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(localVehicles));
     localStorage.setItem('fueltracker-user-stations', JSON.stringify(localStations));
     localStorage.setItem('fueltracker-prices-v2', JSON.stringify(localPrices));
     localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(localMaint));
     localStorage.setItem('fueltracker-maintenance-reminders-v2', JSON.stringify(localReminders));
+    localStorage.setItem('fueltracker-trip-estimates-v2', JSON.stringify(localTrips));
+    localStorage.setItem('fueltracker-tyre-comparisons-v2', JSON.stringify(localTyres));
 
-
+    // 7. Clear migration flags to force re-evaluation on next app load
+    console.log('[Import][localStorage] Clearing migration flags before reload');
+    localStorage.removeItem('fueltracker-migration-decision');
+    localStorage.removeItem('fueltracker-migration-complete');
+    localStorage.removeItem('fueltracker-cloud-synced-timestamp');
+    console.log('[Import][localStorage] Migration flags cleared, reloading app');
 
     // Reload the app
     window.location.reload();

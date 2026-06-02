@@ -6,17 +6,19 @@ import { Card, Input, Label, cn, PageWrapper, Modal, ConfirmModal } from './ui';
 import { 
   Trash, Plus, Car, CurrencyDollar, WarningCircle, Palette, Pencil, 
   Check, MapPin, NavigationArrow, Tire, Bell, Wrench, GearSix, FloppyDisk,
-  Globe, DownloadSimple, UploadSimple, Database, SignOut
+  Globe, DownloadSimple, UploadSimple, Database, SignOut, CloudArrowUp, Spinner
 } from '@phosphor-icons/react';
 import { useLocationDetection } from '../hooks/useLocationDetection';
 import { gasStationService } from '../services/gasStationService';
 import { SavedStations } from './SavedStations';
 import { backupService } from '../services/backupService';
 import { excelService } from '../services/excelService';
+import { cloudSyncService } from '../services/cloudSyncService';
 import ImportResolver from './ImportResolver';
 import { useNotifications } from '../hooks/useNotifications';
 import { useTranslation } from 'react-i18next';
 import { authService } from '../services/authService';
+import { isNoOpSync, getResultTitle, getResultMessage } from '../utils/syncResultHelpers.js';
 
 export default function Settings() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId, fuelPrices, setFuelPrices, addVehicle, editVehicle, deleteVehicle, activeVehicle, maintenanceSettings, updateMaintenanceSettings, updateCategorySettings } = useFuel();
@@ -78,6 +80,10 @@ export default function Settings() {
   const [importAnalysis, setImportAnalysis] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
+
+  // Manual upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
 
   const [toastMessage, setToastMessage] = useState('');
   const showToast = (msg) => {
@@ -160,6 +166,33 @@ export default function Settings() {
     } catch (error) {
       console.error('Logout error:', error);
       showToast('Logout failed');
+    }
+  };
+
+  const handleManualUpload = async () => {
+    setIsUploading(true);
+    setUploadResult(null);
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        setUploadResult({
+          success: false,
+          message: 'You must be logged in to upload data to the cloud.'
+        });
+        setIsUploading(false);
+        return;
+      }
+
+      const result = await cloudSyncService.uploadLocalDataToCloud(userId);
+      setUploadResult(result);
+    } catch (error) {
+      setUploadResult({
+        success: false,
+        message: 'Upload failed due to an unexpected error.',
+        details: [error.message]
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -467,10 +500,11 @@ export default function Settings() {
       <section className="pt-4">
          <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1"><Database weight="duotone" className="w-4 h-4"/> {t('backup_restore')}</h3>
          <Card className="px-5 py-6">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-3">
                <button onClick={() => setFormatModal({ isOpen: true, type: 'export' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><DownloadSimple weight="duotone" size={18} /> {t('export_data')}</button>
                <button onClick={() => setFormatModal({ isOpen: true, type: 'import' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><UploadSimple weight="duotone" size={18} /> {t('import_data')}</button>
             </div>
+            <button onClick={handleManualUpload} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"><CloudArrowUp weight="duotone" size={18} /> Upload to Cloud</button>
          </Card>
       </section>
 
@@ -574,6 +608,62 @@ export default function Settings() {
           confirmText="OK" 
           variant="danger" 
         />
+      )}
+
+      {/* Manual Upload Loading Modal */}
+      {isUploading && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <p className="font-bold text-slate-900 dark:text-white">Uploading to Cloud...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Upload Result Modal */}
+      {uploadResult && (
+        <Modal 
+          isOpen={true} 
+          onClose={() => setUploadResult(null)} 
+          title={getResultTitle(uploadResult)}
+          size="sm"
+        >
+          <div className="p-1 space-y-4">
+            <div className={`flex items-start gap-3 p-4 rounded-2xl border ${uploadResult.success ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20'}`}>
+              {uploadResult.success ? (
+                <Check weight="duotone" className="text-emerald-500 w-6 h-6 mt-0.5 flex-shrink-0" />
+              ) : (
+                <WarningCircle weight="duotone" className="text-red-500 w-6 h-6 mt-0.5 flex-shrink-0" />
+              )}
+              <div>
+                <p className={`font-semibold mb-1 ${uploadResult.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400'}`}>
+                  {getResultMessage(uploadResult)}
+                </p>
+                {uploadResult.success && isNoOpSync(uploadResult) && (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    No action is needed.
+                  </p>
+                )}
+                {uploadResult.counts && (uploadResult.counts.vehicles > 0 || uploadResult.counts.fillups > 0 || uploadResult.counts.maintenance > 0 || uploadResult.counts.tripEstimates > 0) && (
+                  <div className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+                    <div className="space-y-1">
+                      {uploadResult.counts.vehicles > 0 && <div>• {uploadResult.counts.vehicles} vehicle{uploadResult.counts.vehicles !== 1 ? 's' : ''} uploaded</div>}
+                      {uploadResult.counts.fillups > 0 && <div>• {uploadResult.counts.fillups} fill-up{uploadResult.counts.fillups !== 1 ? 's' : ''} synced</div>}
+                      {uploadResult.counts.maintenance > 0 && <div>• {uploadResult.counts.maintenance} maintenance record{uploadResult.counts.maintenance !== 1 ? 's' : ''} uploaded</div>}
+                      {uploadResult.counts.tripEstimates > 0 && <div>• {uploadResult.counts.tripEstimates} trip estimate{uploadResult.counts.tripEstimates !== 1 ? 's' : ''} uploaded</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <button 
+              onClick={() => setUploadResult(null)}
+              className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
       )}
 
       {/* Global Setting Toast */}
