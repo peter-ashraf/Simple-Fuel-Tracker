@@ -69,6 +69,10 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
+    // --- ADDED ESBUILD DROP CONFIGURATION ---
+    esbuild: isProd ? {
+      drop: ['console', 'debugger']
+    } : {},
     build: {
       rollupOptions: {
         output: {

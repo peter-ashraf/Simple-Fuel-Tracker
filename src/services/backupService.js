@@ -3,6 +3,8 @@
  * Handles exporting localStorage data to JSON and importing/merging backups.
  */
 
+import { v4 as uuidv4 } from 'uuid';
+
 const APP_KEYS = [
   'fueltracker-vehicles-v2',
   'fueltracker-active-vehicle-v2',
@@ -52,7 +54,7 @@ export const backupService = {
             data = data.map(vehicle => {
               if (!vehicle.stableKey) {
                 // Generate stable key for vehicles without one
-                vehicle.stableKey = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
+                vehicle.stableKey = crypto.randomUUID ? crypto.randomUUID() : uuidv4();
               }
               return vehicle;
             });

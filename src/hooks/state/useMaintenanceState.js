@@ -129,18 +129,40 @@ export function useMaintenanceState(selectedVehicleId) {
     const type = entry.type || 'custom';
     const catDef = getCategoryById(type);
     const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
-    const safetyMargin = entry.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
-    const intervalKm = entry.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
-    const performedAtODO = Number(entry.performedAtODO) || 0;
-    let nextDueODO = 0, alertODO = 0;
+    
+    const safetyMargin = entry.safetyMarginKm ?? entry.safety ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+    const intervalKm = entry.intervalKm ?? entry.distance ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+    
+    // Support both naming schemes gracefully
+    const odometer = Number(entry.odometer ?? entry.performedAtODO) || 0;
+    
+    let next_due_odometer = 0;
     if (intervalKm > 0) {
-      nextDueODO = performedAtODO + intervalKm;
-      alertODO = nextDueODO - safetyMargin;
+      next_due_odometer = odometer + intervalKm;
     }
+
     setMaintenanceEntries(prev => [...prev, {
-      ...entry, id: `m_${Date.now()}`, vehicleId: selectedVehicleId, timestamp: new Date().toISOString(),
-      performedAtODO, intervalKm, safetyMarginKm: safetyMargin, nextDueODO, alertODO
+      ...entry, 
+      id: `m_${Date.now()}`, 
+      vehicleId: selectedVehicleId, 
+      timestamp: new Date().toISOString(),
+      
+      // 🟢 Standarized for Cloud Engine and UI Form parity
+      odometer,
+      performedAtODO: odometer, // Backwards compatibility fallback for UI views
+      
+      distance: intervalKm,
+      intervalKm,              // Fallback
+      
+      safety: safetyMargin,
+      safetyMarginKm: safetyMargin, // Fallback
+      
+      next_due_odometer,
+      nextDueODO: next_due_odometer, // Fallback
+      
+      description: entry.description || entry.notes || ''
     }]);
+
     // Trigger silent background sync after mutation
     const userId = await cloudSyncService.getUserId();
     if (userId) {
@@ -155,15 +177,29 @@ export function useMaintenanceState(selectedVehicleId) {
       const type = updated.type || 'custom';
       const catDef = getCategoryById(type);
       const catSettings = maintenanceSettings?.categorySettings?.[type] || {};
-      const safetyMargin = updated.safetyMarginKm ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
-      const intervalKm = updated.intervalKm ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
-      const performedAtODO = Number(updated.performedAtODO) || 0;
+      
+      const safetyMargin = updated.safetyMarginKm ?? updated.safety ?? catSettings.safetyMarginKm ?? catDef.defaultSafetyMarginKm ?? 2000;
+      const intervalKm = updated.intervalKm ?? updated.distance ?? catSettings.intervalKm ?? catDef.defaultInterval?.value ?? 0;
+      
+      const odometer = Number(updated.odometer ?? updated.performedAtODO) || 0;
+      
       if (intervalKm > 0) {
-        updated.nextDueODO = performedAtODO + intervalKm;
-        updated.alertODO = updated.nextDueODO - safetyMargin;
+        updated.next_due_odometer = odometer + intervalKm;
+        updated.nextDueODO = updated.next_due_odometer;
       }
-      return updated;
+      
+      return {
+        ...updated,
+        odometer,
+        performedAtODO: odometer,
+        distance: intervalKm,
+        intervalKm,
+        safety: safetyMargin,
+        safetyMarginKm: safetyMargin,
+        description: updated.description || updated.notes || ''
+      };
     }));
+
     // Trigger silent background sync after mutation
     const userId = await cloudSyncService.getUserId();
     if (userId) {

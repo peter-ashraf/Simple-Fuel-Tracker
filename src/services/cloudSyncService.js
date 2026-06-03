@@ -89,7 +89,7 @@ async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
  * @param {Object} maintenance - Maintenance record to test
  * @returns {Promise<Object>} Test result with full error details
  */
-async function debugSingleMaintenanceUpload(userId, maintenance) {
+async function debugSingleMaintenanceUpload(userId, maintenance, vehicleIdMap) {
   
   // Apply same date normalization as main upload
   let normalizedDate = null;
@@ -104,8 +104,7 @@ async function debugSingleMaintenanceUpload(userId, maintenance) {
   }
   
   const mappedMaintenanceVehicleId =
-    remappedToCloudIdMap.get(maintenance.vehicleId) ||
-    vehicleIdMap.get(maintenance.vehicleId) ||
+    (vehicleIdMap && vehicleIdMap.get(maintenance.vehicleId)) ||
     maintenance.vehicleId;
 
   const payload = {
@@ -438,24 +437,28 @@ function detectChanges(localData, cloudData) {
  * @param {Array} existingFillups - Existing cloud fillups
  * @returns {Object} { isDuplicate: boolean, existingId: string | null }
  */
-function detectDuplicateFillupByFields(fillup, existingFillups) {
+function detectDuplicateFillupByFields(fillup, existingFillups, userId) {
   const normalized = {
-    user_id: fillup.userId,
-    vehicle_id: fillup.vehicleId,
+    user_id: userId || fillup.userId || fillup.user_id,
+    vehicle_id: fillup.vehicleId || fillup.vehicle_id,
     date: fillup.date,
-    odometer: fillup.odometer,
-    liters: fillup.liters,
-    price_per_liter: fillup.pricePerLiter
+    odometer: Number(fillup.odometer),
+    liters: Number(fillup.liters),
+    price_per_liter: Number(fillup.pricePerLiter || fillup.price_per_liter)
   };
   
   for (const existing of existingFillups) {
+    const existingOdo = Number(existing.odometer);
+    const existingLiters = Number(existing.liters);
+    const existingPrice = Number(existing.price_per_liter);
+
     if (
       existing.user_id === normalized.user_id &&
       existing.vehicle_id === normalized.vehicle_id &&
       existing.date === normalized.date &&
-      existing.odometer === normalized.odometer &&
-      existing.liters === normalized.liters &&
-      existing.price_per_liter === normalized.price_per_liter
+      Math.abs(existingOdo - normalized.odometer) < 0.01 &&
+      Math.abs(existingLiters - normalized.liters) < 0.01 &&
+      Math.abs(existingPrice - normalized.price_per_liter) < 0.001
     ) {
       return { isDuplicate: true, existingId: existing.id };
     }
@@ -534,8 +537,17 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
   if (fillup.date) {
     // Use explicit date field if present
     normalizedDate = fillup.date;
-  } else {
-    return { normalized: null, skipped: true, reason: 'missing date (date, timestamp, and createdAt all absent)' };
+  } else if (fillup.timestamp || fillup.createdAt) {
+    // 2 & 3. Fallback to timestamp or createdAt, converting them to YYYY-MM-DD
+    const rawTarget = fillup.timestamp || fillup.createdAt;
+    
+    // Handle both numeric UNIX timestamps and ISO strings safely
+    const parsedDate = new Date(isNaN(Number(rawTarget)) ? rawTarget : Number(rawTarget));
+    
+    if (!isNaN(parsedDate.getTime())) {
+      // Formats safely to YYYY-MM-DD
+      normalizedDate = parsedDate.toISOString().split('T')[0];
+    }
   }
 
   // Validate the extracted date is in correct format
@@ -640,7 +652,8 @@ function remapLegacyIds(vehicles, fillups, maintenance, tripEstimates) {
   
   // Remap maintenance IDs and vehicle references
   const remappedMaintenance = maintenance.map(entry => {
-    const oldId = entry.id;
+    // Use case-agnostic properties to ensure compatibility
+    const oldId = entry.id || entry.idx;
     let newId = oldId;
     
     // Remap maintenance ID if invalid
@@ -653,16 +666,44 @@ function remapLegacyIds(vehicles, fillups, maintenance, tripEstimates) {
       preservedMaintenanceUuids++;
     }
     
-    // Remap vehicleId reference if needed
-    const oldVehicleId = entry.vehicleId;
+    // Extract vehicle reference defensively checking both camelCase and snake_case
+    const oldVehicleId = entry.vehicleId || entry.vehicle_id;
+    let vehicleIdToAssign = oldVehicleId;
+
     if (vehicleIdMap.has(oldVehicleId)) {
-      const newVehicleId = vehicleIdMap.get(oldVehicleId);
+      vehicleIdToAssign = vehicleIdMap.get(oldVehicleId);
       remappedForeignKeys++;
-      console.log(`[Sync][uuid] Maintenance vehicleId remapped from "${oldVehicleId}" to "${newVehicleId}"`);
-      return { ...entry, id: newId, vehicleId: newVehicleId };
+      console.log(`[Sync][uuid] Maintenance vehicleId remapped from "${oldVehicleId}" to "${vehicleIdToAssign}"`);
     }
     
-    return { ...entry, id: newId };
+    // Return the complete object matching both paradigms to survive downstream operations safely
+    return {
+      ...entry,
+      id: newId,
+      idx: entry.idx !== undefined ? entry.idx : newId,
+      
+      // Assign mapped values to both casing properties so subsequent components don't read undefined
+      vehicleId: vehicleIdToAssign,
+      vehicle_id: vehicleIdToAssign,
+      
+      stableKey: entry.stableKey || entry.stable_key || newId,
+      stable_key: entry.stableKey || entry.stable_key || newId,
+      
+      // Ensure numbers don't inadvertently cast to strings or drop out
+      cost: entry.cost !== undefined && entry.cost !== null ? Number(entry.cost) : null,
+      odometer: entry.odometer !== undefined && entry.odometer !== null ? Number(entry.odometer) : null,
+      distance: entry.distance !== undefined && entry.distance !== null ? Number(entry.distance) : null,
+      safety: entry.safety !== undefined && entry.safety !== null ? Number(entry.safety) : null,
+      
+      // Explicitly pass descriptions/notes along
+      notes: entry.notes || entry.description || null,
+      description: entry.description || entry.notes || null,
+      
+      nextDueDate: entry.nextDueDate || entry.next_due_date || null,
+      next_due_date: entry.nextDueDate || entry.next_due_date || null,
+      nextDueOdometer: entry.nextDueOdometer || entry.next_due_odometer || null,
+      next_due_odometer: entry.nextDueOdometer || entry.next_due_odometer || null
+    };
   });
   
   // Remap trip estimate IDs and vehicle references
@@ -749,10 +790,10 @@ export const cloudSyncService = {
    * Check if local data exists
    */
   hasLocalData() {
-    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]').filter(v => !v.deleted_at);
-    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]').filter(f => !f.deleted_at);
-    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]').filter(m => !m.deleted_at);
-    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]').filter(t => !t.deleted_at);
+    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]').filter(v => !v.deletedAt && !v.deleted_at);
+    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]').filter(f => !f.deletedAt && !f.deleted_at);
+    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]').filter(m => !m.deletedAt && !m.deleted_at);
+    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]').filter(t => !t.deletedAt && !t.deleted_at);
     
     return {
       hasData: vehicles.length > 0 || fillups.length > 0 || maintenance.length > 0 || tripEstimates.length > 0,
@@ -769,10 +810,10 @@ export const cloudSyncService = {
    * Get local data summary
    */
   getLocalDataSummary() {
-    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
-    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
-    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
-    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]').filter(v => !v.deletedAt && !v.deleted_at);
+    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]').filter(f => !f.deletedAt && !f.deleted_at);
+    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]').filter(m => !m.deletedAt && !m.deleted_at);
+    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]').filter(t => !t.deletedAt && !t.deleted_at);
     
     console.log('[Sync][getLocalDataSummary] Local counts - vehicles:', vehicles.length, 'fillups:', fillups.length, 'maintenance:', maintenance.length, 'trips:', tripEstimates.length);
     
@@ -877,12 +918,19 @@ export const cloudSyncService = {
 
       result.details.push(`Authenticated as user: ${userId}`);
 
-      const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
-      const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
-      const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
-      const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+      // Load ALL records (including soft-deleted) for tombstone sync purposes
+      const allVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
+      const allFillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+      const allMaintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+      const allTripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
 
-      result.details.push(`Local records found: ${vehicles.length} vehicles, ${fillups.length} fillups, ${maintenance.length} maintenance, ${tripEstimates.length} trips`);
+      // Only upload ACTIVE records (exclude soft-deleted tombstones)
+      const vehicles = allVehicles.filter(v => !v.deletedAt && !v.deleted_at && v.lastAction !== 'DELETE');
+      const fillups = allFillups.filter(f => !f.deletedAt && !f.deleted_at && f.lastAction !== 'DELETE');
+      const maintenance = allMaintenance.filter(m => !m.deletedAt && !m.deleted_at && m.lastAction !== 'DELETE');
+      const tripEstimates = allTripEstimates.filter(t => !t.deletedAt && !t.deleted_at && t.lastAction !== 'DELETE');
+
+      result.details.push(`Local records found: ${vehicles.length} vehicles, ${fillups.length} fillups, ${maintenance.length} maintenance, ${tripEstimates.length} trips (${allVehicles.length - vehicles.length} deleted vehicles excluded)`);
 
       // Backfill stable keys for vehicles BEFORE remapping (to preserve identity)
       const vehiclesWithStableKeys = backfillStableKeys(vehicles);
@@ -892,6 +940,7 @@ export const cloudSyncService = {
 
       // Backfill stable keys for maintenance BEFORE remapping (to preserve identity)
       const maintenanceWithStableKeys = backfillStableKeysForMaintenance(maintenance);
+
 
       // Fetch existing cloud vehicles for deduplication (filter out deleted records)
       const { data: existingCloudVehicles, error: cloudVehiclesError } = await supabase.from('vehicles').select('*').eq('user_id', userId).is('deleted_at', null);
@@ -1127,13 +1176,6 @@ export const cloudSyncService = {
             continue;
           }
           
-          // Fallback duplicate detection for historical bad data
-          if (isDuplicate) {
-            fillupSkipped++;
-            fillupSkippedByFallback++;
-            continue;
-          }
-          
           const { normalized, skipped, reason, computedTotal } = normalizeFillupForCloud(fillup, vehicleIdMap);
           
           if (skipped) {
@@ -1144,6 +1186,14 @@ export const cloudSyncService = {
           
           if (computedTotal) {
             fillupComputedTotal++;
+          }
+          
+          // Fallback duplicate detection for historical bad data
+          const duplicateCheck = detectDuplicateFillupByFields(normalized, existingFillups, userId);
+          if (duplicateCheck.isDuplicate) {
+            fillupSkipped++;
+            fillupSkippedByFallback++;
+            continue;
           }
           
 
@@ -1166,7 +1216,7 @@ export const cloudSyncService = {
       // Upload maintenance with deduplication
       if (remappedMaintenance.length > 0) {
         const existingMaintenanceIds = new Set(existingMaintenance?.map(m => m.id) || []);
-        const existingMaintenanceStableKeys = new Map(); // stable_key -> maintenance
+        const existingMaintenanceStableKeys = new Map();
         existingMaintenance?.forEach(m => {
           if (m.stable_key) {
             existingMaintenanceStableKeys.set(m.stable_key, m);
@@ -1174,34 +1224,39 @@ export const cloudSyncService = {
         });
 
         for (const entry of remappedMaintenance) {
-          // CRITICAL FIX: Use stable_key as the primary identity for maintenance
-          // If stable_key exists in cloud, use the existing cloud ID for upsert
-          // This prevents 409 conflicts from unique constraint on stable_key
           let cloudIdToUse = entry.id;
           let matchedByStableKey = false;
 
           if (entry.stableKey && existingMaintenanceStableKeys.has(entry.stableKey)) {
-            const existingMaintenance = existingMaintenanceStableKeys.get(entry.stableKey);
-            cloudIdToUse = existingMaintenance.id;
+            const existingMaintenanceRec = existingMaintenanceStableKeys.get(entry.stableKey);
+            cloudIdToUse = existingMaintenanceRec.id;
             matchedByStableKey = true;
           } else if (existingMaintenanceIds.has(entry.id)) {
             continue;
           }
 
-          // CRITICAL FIX: Preserve original maintenance date (same logic as fill-ups)
-          // Priority order: date > timestamp > createdAt
+          // --- CRITICAL DATE FIX FOR MAINTENANCE ---
           let normalizedMaintenanceDate = null;
           if (entry.date) {
             normalizedMaintenanceDate = entry.date;
-          } else {
+          } else if (entry.timestamp || entry.createdAt) {
+            const rawTarget = entry.timestamp || entry.createdAt;
+            const parsedDate = new Date(isNaN(Number(rawTarget)) ? rawTarget : Number(rawTarget));
+            if (!isNaN(parsedDate.getTime())) {
+              normalizedMaintenanceDate = parsedDate.toISOString().split('T')[0];
+            }
+          }
+
+          if (!normalizedMaintenanceDate) {
             maintenanceErrors++;
-            result.details.push(`Maintenance upload failed (${entry.id}): missing date (date, timestamp, and createdAt all absent)`);
+            console.error(`[Sync][maintenance] Entry ${entry.id} skipped: Missing/unparseable date context.`);
+            result.details.push(`Maintenance upload failed (${entry.id}): missing or unparseable date`);
             continue;
           }
 
-          // Validate date format
-          if (!normalizedMaintenanceDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedMaintenanceDate)) {
-            console.error(`[Sync][maintenance] Maintenance ${entry.id}: CRITICAL - Invalid date format: ${normalizedMaintenanceDate}. Rejecting record.`);
+          // Validate date format alignment
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedMaintenanceDate)) {
+            console.error(`[Sync][maintenance] Maintenance ${entry.id}: CRITICAL - Invalid date format: ${normalizedMaintenanceDate}`);
             maintenanceErrors++;
             result.details.push(`Maintenance upload failed (${entry.id}): invalid date format: ${normalizedMaintenanceDate}`);
             continue;
@@ -1226,19 +1281,15 @@ export const cloudSyncService = {
             next_due_odometer: entry.nextDueOdometer || null,
             created_at: entry.createdAt || new Date().toISOString()
           };
-          
 
-          
-
-          // CRITICAL FIX: Use upsert with onConflict targeting stable_key to prevent 409 conflicts
-          // This handles both new inserts and updates to existing records by stable_key
-          // Note: onConflict parameter may need adjustment based on actual table constraints
           const { error, data: maintenanceData } = await supabase.from('maintenance').upsert(payload, {
-            onConflict: 'stable_key,user_id'  // Try composite constraint first
+            onConflict: 'user_id,stable_key'
           });
 
           if (error) {
             maintenanceErrors++;
+            // --- CRITICAL LOGGER TO CAPTURE DB MISALIGNMENT ---
+            console.error(`[Sync][MAINTENANCE CRITICAL] Supabase rejection details:`, error);
             result.details.push(`Maintenance upload failed (${entry.id}): ${error.message} (code: ${error.code})`);
           } else {
             result.counts.maintenance++;
@@ -1255,10 +1306,15 @@ export const cloudSyncService = {
             continue;
           }
           
+          const mappedTripVehicleId =
+            remappedToCloudIdMap.get(estimate.vehicleId) ||
+            vehicleIdMap.get(estimate.vehicleId) ||
+            estimate.vehicleId;
+
           const { error } = await supabase.from('trip_estimates').upsert({
             id: estimate.id,
             user_id: userId,
-            vehicle_id: estimate.vehicleId,
+            vehicle_id: mappedTripVehicleId,
             name: estimate.name || null,
             distance: estimate.distance || null,
             notes: estimate.notes || null,
@@ -2945,6 +3001,15 @@ export const cloudSyncService = {
       fillup: {
         odometer: 'odometer', liters: 'liters', pricePerLiter: 'price_per_liter',
         totalCost: 'total_cost', station: 'station', notes: 'notes', fullTank: 'full_tank'
+      },
+      maintenance: {
+        type: 'type',
+        date: 'date',
+        cost: 'cost',
+        odometer: 'odometer',
+        description: 'description',
+        next_due_date: 'nextDueDate',
+        next_due_odometer: 'nextDueOdometer'
       }
       // Add other entities as needed
     };
@@ -3282,7 +3347,7 @@ export const cloudSyncService = {
       case 'maintenance':
         if (typeof this.uploadSingleMaintenance !== 'function') {
           const error = `uploadSingleMaintenance handler does not exist for entity type: ${type}`;
-          console.error(`[Sync][uploadSingle] ${error}`);
+          
           throw new Error(error);
         }
         return this.uploadSingleMaintenance(record, userId);
@@ -3567,100 +3632,172 @@ export const cloudSyncService = {
    * @returns {Promise<void>}
    */
   async uploadSingleMaintenance(maintenance, userId) {
-    // Validate inputs before making request
-    if (!userId) {
-      const error = 'userId is required but was undefined';
-      console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
-      throw new Error(error);
-    }
-    if (!this.isValidUuid(userId)) {
-      const error = `userId is not a valid UUID: ${userId}`;
-      console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
-      throw new Error(error);
-    }
-    if (!maintenance.id) {
-      const error = 'id is required but was undefined';
-      console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
-      throw new Error(error);
-    }
+  // 1. Initial Validation Inputs
+  if (!userId) {
+    const error = 'userId is required but was undefined';
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
+    throw new Error(error);
+  }
+  if (!this.isValidUuid(userId)) {
+    const error = `userId is not a valid UUID: ${userId}`;
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
+    throw new Error(error);
+  }
 
-    // Preflight validation: vehicle_id must be a valid UUID or mappable
-    if (maintenance.vehicleId) {
-      if (maintenance.vehicleId === 'default' || maintenance.vehicleId === '' || !this.isValidUuid(maintenance.vehicleId)) {
-        // Try to map local vehicle ID to cloud vehicle UUID
-        
-        const vehicleIdMap = await this.buildVehicleIdMap(userId);
-        const cloudVehicleId = remappedToCloudIdMap.get(maintenance.vehicleId) ||
-          vehicleIdMap.get(maintenance.vehicleId) ||
-          maintenance.vehicleId;
-        
-        if (!cloudVehicleId) {
-          const error = `Cannot map vehicleId "${maintenance.vehicleId}" to a valid cloud vehicle UUID. Vehicle must be synced first.`;
-          
-          throw new Error(error);
-        }
-        
-        maintenance.vehicleId = cloudVehicleId;
-        
+  const recordId = maintenance.id || maintenance.idx || 'unknown';
+  if (!maintenance.id && !maintenance.idx && maintenance.id !== 0) {
+    const error = 'id or idx is required but was undefined';
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
+    throw new Error(error);
+  }
+
+  // Extract keys defensively supporting both camelCase and snake_case variants
+  let vehicleId = maintenance.vehicleId || maintenance.vehicle_id;
+  const stableKey = maintenance.stableKey || maintenance.stable_key;
+  const maintenanceDate = maintenance.date;
+  const maintenanceType = maintenance.type || null;
+  const createdAt = maintenance.createdAt || maintenance.created_at;
+  const updatedAt = maintenance.updatedAt || maintenance.updated_at;
+  const deletedAt = maintenance.deletedAt || maintenance.deleted_at || null;
+
+  // 2. Preflight validation: vehicle_id must be a valid UUID or mapped
+  if (vehicleId) {
+    if (vehicleId === 'default' || vehicleId === '' || !this.isValidUuid(vehicleId)) {
+      const vehicleIdMap = await this.buildVehicleIdMap(userId);
+      const cloudVehicleId = vehicleIdMap.get(vehicleId) || vehicleId;
+      
+      if (!cloudVehicleId || cloudVehicleId === 'default' || !this.isValidUuid(cloudVehicleId)) {
+        const error = `Cannot map vehicleId "${vehicleId}" to a valid cloud vehicle UUID. Vehicle must be synced first.`;
+        throw new Error(error);
       }
+      
+      vehicleId = cloudVehicleId;
     }
+  }
 
-    const now = new Date().toISOString();
+  // 3. Structural Validation Checks
+  if (!maintenanceDate || String(maintenanceDate).trim() === '') {
+    const error = `maintenance.date is required but missing for record ${recordId}`;
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`, maintenance);
+    throw new Error(error);
+  }
+
+  if (!stableKey) {
+    const error = `maintenance.stableKey/stable_key is required but missing for record ${recordId}`;
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`, maintenance);
+    throw new Error(error);
+  }
+
+  // --- 🛠️ DETAILED FIELD EXTRACTION FALLBACK ENGINE ---
+  // If the values are stringified or hidden inside a nested metadata tree, let's extract them
+  let nestedMeta = {};
+  if (typeof maintenance.metadata === 'string') {
+    try { nestedMeta = JSON.parse(maintenance.metadata); } catch(e) {}
+  } else if (typeof maintenance.metadata === 'object' && maintenance.metadata !== null) {
+    nestedMeta = maintenance.metadata;
+  }
+
+  // Capture Odometer from any variant name used by the form view
+  const odometerVal = maintenance.odometer !== undefined && maintenance.odometer !== null ? Number(maintenance.odometer) :
+                      nestedMeta.odometer !== undefined && nestedMeta.odometer !== null ? Number(nestedMeta.odometer) :
+                      maintenance.current_odometer !== undefined && maintenance.current_odometer !== null ? Number(maintenance.current_odometer) : null;
+
+  // Capture Distance/Interval
+  const distanceVal = maintenance.distance !== undefined && maintenance.distance !== null ? Number(maintenance.distance) :
+                      nestedMeta.distance !== undefined && nestedMeta.distance !== null ? Number(nestedMeta.distance) :
+                      maintenance.interval !== undefined && maintenance.interval !== null ? Number(maintenance.interval) : null;
+
+  // Capture Safety Margin
+  const safetyVal = maintenance.safety !== undefined && maintenance.safety !== null ? Number(maintenance.safety) :
+                    nestedMeta.safety !== undefined && nestedMeta.safety !== null ? Number(nestedMeta.safety) : null;
+
+  // 4. Force calculate the absolute next due value for the database schema
+  let calculatedNextDueOdometer = maintenance.nextDueOdometer || maintenance.next_due_odometer || nestedMeta.next_due_odometer || null;
+  
+  if (odometerVal !== null && distanceVal !== null && !calculatedNextDueOdometer) {
+    calculatedNextDueOdometer = odometerVal + distanceVal;
+  }
+
+  // Package layout fields together inside description metadata payload string safely
+  const trackingMetadata = {
+    distance: distanceVal,
+    safety: safetyVal,
+    notes: maintenance.description || maintenance.notes || ''
+  };
+
+  const now = new Date().toISOString();
+
+  // 5. Assemble perfectly normalized database representation schema
+  const normalized = {
+    user_id: userId,
+    vehicle_id: vehicleId,
+    stable_key: stableKey,
+    date: maintenanceDate,
+    type: maintenanceType,
     
-    // First, check if a row exists with this stable_key and user_id (use stable_key instead of id for legacy records)
-    const { data: existingRow, error: fetchErr } = await supabase
+    // Store custom frontend layout config fields safely inside description
+    description: JSON.stringify(trackingMetadata),
+    
+    cost: maintenance.cost !== undefined && maintenance.cost !== null ? Number(maintenance.cost) : null,
+    odometer: odometerVal,
+    next_due_date: maintenance.nextDueDate || maintenance.next_due_date || null,
+    next_due_odometer: calculatedNextDueOdometer,
+    created_at: createdAt || now,
+    updated_at: updatedAt || now,
+    deleted_at: deletedAt
+  };
+
+  console.log(
+    '[Sync][maintenance] Uploading with structured metadata',
+    JSON.stringify(normalized, null, 2)
+  );  
+
+  // 6. Fetch checking for matching row via stable_key matching engine
+  const { data: existingRow, error: fetchErr } = await supabase
+    .from('maintenance')
+    .select('id')
+    .eq('stable_key', stableKey)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error(`[Sync][uploadSingleMaintenance] Fetch existing row failed for ${recordId} (code: ${fetchErr.code}):`, fetchErr.message);
+    throw new Error(`Failed to check existing maintenance ${recordId}: ${fetchErr.message}`);
+  }
+
+  // 7. Write to Supabase using exact Primary Key assignments if matched
+  if (existingRow) {
+    const { error: updateErr } = await supabase
       .from('maintenance')
-      .select('id')
-      .eq('stable_key', maintenance.stableKey)
-      .eq('user_id', userId)
-      .maybeSingle();
+      .update(normalized)
+      .eq('id', existingRow.id);
 
-    if (fetchErr) {
-      console.error(`[Sync][uploadSingleMaintenance] Fetch existing row failed for ${maintenance.id} (code: ${fetchErr.code}):`, fetchErr.message);
-      throw new Error(`Failed to check existing maintenance ${maintenance.id}: ${fetchErr.message}`);
+    if (updateErr) {
+      console.error('[Sync][maintenance] UPDATE ERROR', {
+        code: updateErr.code,
+        message: updateErr.message,
+        maintenance,
+        normalized
+      });
+      throw new Error(`Failed to update maintenance ${recordId}: ${updateErr.message}`);
     }
-
-    const normalized = {
-      user_id: userId,
-      vehicle_id: maintenance.vehicleId,
-      date: maintenance.date,
-      type: maintenance.type || null,
-      description: maintenance.description || null,
-      cost: maintenance.cost || null,
-      odometer: maintenance.odometer || null,
-      next_due_date: maintenance.nextDueDate || null,
-      next_due_odometer: maintenance.nextDueOdometer || null,
-      created_at: maintenance.createdAt || now,
-      updated_at: maintenance.updatedAt || now,
-      deleted_at: maintenance.deletedAt || null
-    };
-
     
+  } else {
+    const { error: insertErr } = await supabase
+      .from('maintenance')
+      .insert(normalized);
 
-    if (existingRow) {
-      // Row exists - UPDATE by id (the primary key)
-      
-      const { error: updateErr } = await supabase
-        .from('maintenance')
-        .update(normalized)
-        .eq('id', existingRow.id);
-
-      if (updateErr) {
-        console.error(`[Sync][uploadSingleMaintenance] UPDATE failed for ${maintenance.id} (code: ${updateErr.code}):`, updateErr.message);
-        throw new Error(`Failed to update maintenance ${maintenance.id}: ${updateErr.message}`);
-      }
-      
-    } else {
-      // Row doesn't exist - INSERT without id (let database generate it)
-      
-      const { error: insertErr } = await supabase.from('maintenance').insert(normalized);
-      if (insertErr) {
-        console.error(`[Sync][uploadSingleMaintenance] INSERT failed for ${maintenance.id} (code: ${insertErr.code}):`, insertErr.message);
-        throw new Error(`Failed to insert maintenance ${maintenance.id}: ${insertErr.message}`);
-      }
-      
+    if (insertErr) {
+      console.error('[Sync][maintenance] INSERT ERROR', {
+        code: insertErr.code,
+        message: insertErr.message,
+        maintenance,
+        normalized
+      });
+      throw new Error(`Failed to insert maintenance ${recordId}: ${insertErr.message}`);
     }
-  },
+  }
+},
 
   /**
    * Upload a single trip estimate to cloud
@@ -3846,7 +3983,11 @@ export const cloudSyncService = {
       tankCapacity: cloudVehicle.tank_capacity,
       licensePlate: cloudVehicle.license_plate,
       stableKey: cloudVehicle.stable_key,
-      tyreSize: null
+      tyreSize: {
+        width: cloudVehicle.tyre_width || '',
+        aspectRatio: cloudVehicle.tyre_ratio || '',
+        rimSize: cloudVehicle.tyre_rim || ''
+      }
     };
     
     // Replace or add the vehicle
@@ -3867,12 +4008,45 @@ export const cloudSyncService = {
     const localKey = 'fueltracker-maintenance-entries-v3';
     const maintenance = JSON.parse(localStorage.getItem(localKey) || '[]');
     
+    // Fallback variables matching your field UI state
+    let extractedDistance = null;
+    let extractedSafety = null;
+    let extractedNotes = cloudMaintenance.description || '';
+
+    // --- STRATEGIC FIX: Deconstruct text metadata string back into frontend layout object ---
+    if (cloudMaintenance.description) {
+      try {
+        const trimmedDesc = String(cloudMaintenance.description).trim();
+        // Check if description is our JSON string container
+        if (trimmedDesc.startsWith('{') && trimmedDesc.endsWith('}')) {
+          const parsedConfig = JSON.parse(trimmedDesc);
+          extractedDistance = parsedConfig.distance !== undefined ? parsedConfig.distance : null;
+          extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
+          extractedNotes = parsedConfig.notes || '';
+        }
+      } catch (e) {
+        // Fallback if the record was written manually in DB or legacy plain text format
+        console.log('[Sync] Parsing description as normal text notes string.');
+      }
+    }
+
+    // Direct fallback calculation if distance metadata wasn't populated
+    if (extractedDistance === null && cloudMaintenance.next_due_odometer && cloudMaintenance.odometer) {
+      extractedDistance = Number(cloudMaintenance.next_due_odometer) - Number(cloudMaintenance.odometer);
+    }
+
     const mappedMaintenance = {
       id: cloudMaintenance.id,
       vehicleId: cloudMaintenance.vehicle_id,
       date: cloudMaintenance.date,
       type: cloudMaintenance.type,
-      description: cloudMaintenance.description,
+      
+      // Map properties matching your state initialization structure
+      description: extractedNotes,
+      notes: extractedNotes,
+      distance: extractedDistance,
+      safety: extractedSafety,
+      
       cost: cloudMaintenance.cost,
       odometer: cloudMaintenance.odometer,
       nextDueDate: cloudMaintenance.next_due_date,
@@ -3883,7 +4057,7 @@ export const cloudSyncService = {
       deletedAt: cloudMaintenance.deleted_at
     };
     
-    // Replace or add the maintenance record
+    // Replace or add the maintenance record safely
     const index = maintenance.findIndex(m => m.id === cloudMaintenance.id);
     if (index >= 0) {
       maintenance[index] = mappedMaintenance;
@@ -4354,7 +4528,7 @@ export const cloudSyncService = {
       case 'keep-cloud':
         this.downloadSingle(cloud, type);
         break;
-      case 'merge-auto':
+      case 'merge-auto': {
         // For now, auto-merge is just keep newer, but we could do field-level later
         const localTime = new Date(local.updatedAt || local.updated_at || local.timestamp).getTime();
         const cloudTime = new Date(cloud.updated_at || cloud.created_at).getTime();
@@ -4364,6 +4538,7 @@ export const cloudSyncService = {
           this.downloadSingle(cloud, type);
         }
         break;
+      }
     }
   },
 
