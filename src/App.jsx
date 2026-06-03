@@ -241,15 +241,36 @@ export default function App() {
 
     const runSync = async (session) => {
       if (!session) return;
+
       try {
         const status = await cloudSyncService.initialize();
-        // Fencing: initialize() returns null when already done or run is stale
-        if (status !== null) {
+
+        if (status) {
+          const migrationComplete = localStorage.getItem('fueltracker-migration-complete') === 'true';
+          const migrationDecision = localStorage.getItem('fueltracker-migration-decision');
+
+          const countsMatch =
+            status.localCounts?.vehicles === status.cloudCounts?.vehicles &&
+            status.localCounts?.fillups === status.cloudCounts?.fillups &&
+            status.localCounts?.maintenance === status.cloudCounts?.maintenance;
+
+          const hasConflicts = status.detailedDiff?.conflicts?.length > 0;
+
+          const shouldShowModal =
+            !migrationComplete &&
+            !migrationDecision &&
+            (!countsMatch || hasConflicts);
+
           setSyncStatus(status);
-          setShowMigrationModal(true);
+          setShowMigrationModal(shouldShowModal);
+        } else {
+          setSyncStatus(null);
+          setShowMigrationModal(false);
         }
       } catch (error) {
         console.error("[App][sync] Sync initialization error:", error);
+        setSyncStatus(null);
+        setShowMigrationModal(false);
       }
     };
 
@@ -307,6 +328,10 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const refreshAppFromLocalStorage = () => {
+    window.location.reload();
+  };
+
   const handleMigrationDecision = async (decision) => {
     setMigrationLoading(true);
     setMigrationLoadingAction(decision);
@@ -324,6 +349,12 @@ export default function App() {
         setSyncStatus(result);
         setMigrationLoading(false);
         return;
+      }
+
+      if (result.success && (decision === "download" || decision === "merge")) {
+        setTimeout(() => {
+          refreshAppFromLocalStorage();
+        }, 300);
       }
 
       setMigrationResult(result);

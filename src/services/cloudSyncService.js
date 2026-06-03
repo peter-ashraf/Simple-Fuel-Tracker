@@ -20,6 +20,7 @@ const MIGRATION_DECISION_KEY = 'fueltracker-migration-decision';
 const CLOUD_SYNCED_FLAG_KEY = 'fueltracker-cloud-synced-timestamp';
 const BACKGROUND_SYNC_LOCK_KEY = 'fueltracker-background-sync-lock';
 const COUNTS_MATCHED_NO_CONFLICT_KEY = 'fueltracker-counts-matched-no-conflict';
+const PENDING_SYNC_STATUS_KEY = 'fueltracker-pending-sync-status';
 
 // Store online listener reference to prevent duplicates
 let onlineListener = null;
@@ -28,10 +29,13 @@ let onlineListener = null;
 let backgroundSyncInProgress = false;
 let backgroundSyncPromise = null;
 
-// Initialization state guards
+// Initialization state
 let initializationInProgress = false;
 let initializationPromise = null;
 let latestInitializationId = 0;
+
+// Pending migration state (in-memory cache)
+let pendingSyncStatus = null;
 
 /**
  * Validate if a string is a valid UUID (any version)
@@ -45,6 +49,128 @@ function isValidUuid(value) {
   if (typeof value !== 'string') return false;
   const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
   return UUID_REGEX.test(value.trim());
+}
+
+/**
+ * DEBUG: Test single fill-up upload with detailed logging
+ * @param {string} userId - User ID
+ * @param {Object} fillup - Fillup record to test
+ * @param {Map} vehicleIdMap - Vehicle ID mapping
+ * @returns {Promise<Object>} Test result with full error details
+ */
+async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
+  console.log('[DEBUG][fillup] ========== SINGLE FILL-UP DEBUG TEST ==========');
+  console.log('[DEBUG][fillup] Raw local record:', JSON.stringify(fillup, null, 2));
+  
+  const { normalized, skipped, reason } = normalizeFillupForCloud(fillup, vehicleIdMap);
+  
+  if (skipped) {
+    console.log('[DEBUG][fillup] Fillup was skipped during normalization:', reason);
+    return { success: false, skipped: true, reason };
+  }
+  
+  console.log('[DEBUG][fillup] Normalized payload:', JSON.stringify(normalized, null, 2));
+  
+  const payload = {
+    ...normalized,
+    stable_key: fillup.stableKey,
+    user_id: userId
+  };
+  
+  console.log('[DEBUG][fillup] Final payload with user_id:', JSON.stringify(payload, null, 2));
+  
+  const { error, data } = await supabase.from('fillups').upsert(payload);
+  
+  if (error) {
+    console.log('[DEBUG][fillup] UPSERT FAILED');
+    console.log('[DEBUG][fillup] Full error object:', JSON.stringify(error, null, 2));
+    console.log('[DEBUG][fillup] Error structure:', {
+      name: error.name,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      statusCode: error.statusCode
+    });
+    return { success: false, error, payload };
+  }
+  
+  console.log('[DEBUG][fillup] UPSERT SUCCESS');
+  console.log('[DEBUG][fillup] Returned data:', data);
+  return { success: true, data, payload };
+}
+
+/**
+ * DEBUG: Test single maintenance upload with detailed logging
+ * @param {string} userId - User ID
+ * @param {Object} maintenance - Maintenance record to test
+ * @returns {Promise<Object>} Test result with full error details
+ */
+async function debugSingleMaintenanceUpload(userId, maintenance) {
+  console.log('[DEBUG][maintenance] ========== SINGLE MAINTENANCE DEBUG TEST ==========');
+  console.log('[DEBUG][maintenance] Raw local record:', JSON.stringify(maintenance, null, 2));
+  
+  // Apply same date normalization as main upload
+  let normalizedDate = null;
+  if (maintenance.date) {
+    normalizedDate = maintenance.date;
+  } else if (maintenance.timestamp) {
+    normalizedDate = maintenance.timestamp.split('T')[0];
+  } else if (maintenance.createdAt) {
+    normalizedDate = maintenance.createdAt.split('T')[0];
+  } else {
+    console.log('[DEBUG][maintenance] No date field found, skipping');
+    return { success: false, skipped: true, reason: 'missing date' };
+  }
+  
+  const mappedMaintenanceVehicleId =
+    remappedToCloudIdMap.get(maintenance.vehicleId) ||
+    vehicleIdMap.get(maintenance.vehicleId) ||
+    maintenance.vehicleId;
+
+  const payload = {
+    id: maintenance.id,
+    user_id: userId,
+    vehicle_id: mappedMaintenanceVehicleId,
+    date: normalizedDate,
+    type: maintenance.type || null,
+    description: maintenance.description || null,
+    cost: maintenance.cost || null,
+    odometer: maintenance.odometer || null,
+    next_due_date: maintenance.nextDueDate || null,
+    stable_key: maintenance.stableKey,
+    next_due_odometer: maintenance.nextDueOdometer || null,
+    created_at: maintenance.createdAt || new Date().toISOString()
+  };
+  
+  console.log('[DEBUG][maintenance] Normalized payload:', JSON.stringify(payload, null, 2));
+  console.log('[Sync][maintenance] vehicle mapping check', {
+    originalVehicleId: maintenance.vehicleId,
+    mappedVehicleId: payload.vehicle_id,
+    maintenanceId: payload.id
+  });
+  
+  const { error, data } = await supabase.from('maintenance').upsert(payload, {
+    onConflict: 'stable_key,user_id'
+  });
+  
+  if (error) {
+    console.log('[DEBUG][maintenance] UPSERT FAILED');
+    console.log('[DEBUG][maintenance] Full error object:', JSON.stringify(error, null, 2));
+    console.log('[DEBUG][maintenance] Error structure:', {
+      name: error.name,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      statusCode: error.statusCode
+    });
+    return { success: false, error, payload };
+  }
+  
+  console.log('[DEBUG][maintenance] UPSERT SUCCESS');
+  console.log('[DEBUG][maintenance] Returned data:', data);
+  return { success: true, data, payload };
 }
 
 /**
@@ -114,6 +240,32 @@ function backfillStableKeysForFillups(fillups) {
   console.log(`[Sync][fillup] Persisted ${updatedFillups.length} fillups with stable keys to localStorage`);
   
   return updatedFillups;
+}
+
+/**
+ * Backfill stable keys for legacy maintenance and persist to localStorage
+ * @param {Array} maintenance - Maintenance records
+ * @returns {Array} Maintenance with stable keys
+ */
+function backfillStableKeysForMaintenance(maintenance) {
+  console.log('[Sync][maintenance] Backfilling stable keys for legacy maintenance');
+  
+  const updatedMaintenance = maintenance.map(entry => {
+    if (entry.stableKey && isValidUuid(entry.stableKey)) {
+      console.log(`[Sync][maintenance] Maintenance ${entry.id} already has stable key: ${entry.stableKey}`);
+      return entry;
+    }
+    
+    const stableKey = generateStableKey(entry);
+    console.log(`[Sync][maintenance] Backfilled stable key for maintenance ${entry.id}: ${stableKey}`);
+    return { ...entry, stableKey };
+  });
+  
+  // Persist updated maintenance with stable keys to localStorage immediately
+  localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(updatedMaintenance));
+  console.log(`[Sync][maintenance] Persisted ${updatedMaintenance.length} maintenance with stable keys to localStorage`);
+  
+  return updatedMaintenance;
 }
 
 /**
@@ -438,12 +590,45 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
     totalCost = Number(totalCost);
   }
 
+  // CRITICAL FIX: Preserve original fill-up date
+  // Priority order for date source:
+  // 1. fillup.date (explicit date field in YYYY-MM-DD format)
+  // 2. fillup.timestamp (legacy timestamp field - extract date portion)
+  // 3. fillup.createdAt (record creation time - extract date portion as fallback)
+  // 4. Only as absolute last resort: reject the record if no date can be determined
+  let normalizedDate = null;
+  const originalDateSource = fillup.date || fillup.timestamp || fillup.createdAt;
+  
+  if (fillup.date) {
+    // Use explicit date field if present
+    normalizedDate = fillup.date;
+    console.log(`[Sync][fillup] Fillup ${id}: Using fillup.date = ${fillup.date}`);
+  } else if (fillup.timestamp) {
+    // Extract date from timestamp for legacy records
+    normalizedDate = fillup.timestamp.split('T')[0];
+    console.log(`[Sync][fillup] Fillup ${id}: Extracted date from timestamp = ${normalizedDate} (original timestamp: ${fillup.timestamp})`);
+  } else if (fillup.createdAt) {
+    // Extract date from createdAt as fallback
+    normalizedDate = fillup.createdAt.split('T')[0];
+    console.log(`[Sync][fillup] Fillup ${id}: Extracted date from createdAt = ${normalizedDate} (original createdAt: ${fillup.createdAt})`);
+  } else {
+    // CRITICAL: Reject record with no date information
+    console.error(`[Sync][fillup] Fillup ${id}: CRITICAL - No date field found (date, timestamp, createdAt all missing). Rejecting record to prevent data corruption.`);
+    return { normalized: null, skipped: true, reason: 'missing date (date, timestamp, and createdAt all absent)' };
+  }
+
+  // Validate the extracted date is in correct format
+  if (!normalizedDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    console.error(`[Sync][fillup] Fillup ${id}: CRITICAL - Invalid date format: ${normalizedDate}. Rejecting record.`);
+    return { normalized: null, skipped: true, reason: `invalid date format: ${normalizedDate}` };
+  }
+
   // Build normalized payload
   const normalized = {
     id: fillup.id,
     user_id: null, // Will be set by caller
     vehicle_id: newVehicleId,
-    date: fillup.date || new Date().toISOString().split('T')[0],
+    date: normalizedDate,
     odometer: odometer,
     liters: liters,
     price_per_liter: pricePerLiter,
@@ -454,7 +639,7 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
     created_at: fillup.createdAt || new Date().toISOString()
   };
 
-  console.log(`[Sync][fillup] Final payload for fillup ${id}: vehicleId=${newVehicleId}, totalCost=${totalCost}${computedTotal ? ' (computed)' : ''}`);
+  console.log(`[Sync][fillup] Final payload for fillup ${id}: vehicleId=${newVehicleId}, date=${normalizedDate} (source: ${fillup.date ? 'date' : fillup.timestamp ? 'timestamp' : 'createdAt'}), totalCost=${totalCost}${computedTotal ? ' (computed)' : ''}`);
 
   return { normalized, skipped: false, reason: null, computedTotal };
 }
@@ -669,6 +854,8 @@ export const cloudSyncService = {
     const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
     const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
     
+    console.log('[Sync][getLocalDataSummary] Local counts - vehicles:', vehicles.length, 'fillups:', fillups.length, 'maintenance:', maintenance.length, 'trips:', tripEstimates.length);
+    
     return {
       hasLocalData: vehicles.length > 0 || fillups.length > 0 || maintenance.length > 0 || tripEstimates.length > 0,
       localCounts: {
@@ -685,17 +872,21 @@ export const cloudSyncService = {
    */
   async getCloudDataSummary(userId) {
     try {
+      console.log('[Sync][getCloudDataSummary] Fetching cloud data summary for userId:', userId);
+      
       const [vehiclesResult, fillupsResult, maintenanceResult, tripEstimatesResult] = await Promise.all([
-        supabase.from('vehicles').select('id').eq('user_id', userId),
-        supabase.from('fillups').select('id').eq('user_id', userId),
-        supabase.from('maintenance').select('id').eq('user_id', userId),
-        supabase.from('trip_estimates').select('id').eq('user_id', userId)
+        supabase.from('vehicles').select('id').eq('user_id', userId).is('deleted_at', null),
+        supabase.from('fillups').select('id').eq('user_id', userId).is('deleted_at', null),
+        supabase.from('maintenance').select('id').eq('user_id', userId).is('deleted_at', null),
+        supabase.from('trip_estimates').select('id').eq('user_id', userId).is('deleted_at', null)
       ]);
 
       const vehicles = vehiclesResult.data || [];
       const fillups = fillupsResult.data || [];
       const maintenance = maintenanceResult.data || [];
       const tripEstimates = tripEstimatesResult.data || [];
+
+      console.log('[Sync][getCloudDataSummary] Cloud counts - vehicles:', vehicles.length, 'fillups:', fillups.length, 'maintenance:', maintenance.length, 'trips:', tripEstimates.length);
 
       return {
         hasCloudData: vehicles.length > 0 || fillups.length > 0 || maintenance.length > 0 || tripEstimates.length > 0,
@@ -707,6 +898,7 @@ export const cloudSyncService = {
         }
       };
     } catch (error) {
+      console.error('[Sync][getCloudDataSummary] Error fetching cloud data summary:', error);
       return {
         hasCloudData: false,
         cloudCounts: {
@@ -781,10 +973,14 @@ export const cloudSyncService = {
       // Backfill stable keys for fillups BEFORE remapping (to preserve identity)
       const fillupsWithStableKeys = backfillStableKeysForFillups(fillups);
 
+      // Backfill stable keys for maintenance BEFORE remapping (to preserve identity)
+      const maintenanceWithStableKeys = backfillStableKeysForMaintenance(maintenance);
+
       // Fetch existing cloud vehicles for deduplication (filter out deleted records)
       const { data: existingCloudVehicles, error: cloudVehiclesError } = await supabase.from('vehicles').select('*').eq('user_id', userId).is('deleted_at', null);
-      const { data: existingFillups, error: cloudFillupsError } = await supabase.from('fillups').select('*').eq('user_id', userId).is('deleted_at', null);
-      const { data: existingMaintenance, error: cloudMaintenanceError } = await supabase.from('maintenance').select('*').eq('user_id', userId).is('deleted_at', null);
+      const { data: existingFillups, error: cloudFillupsError } = await supabase.from('fillups').select('*').eq('user_id', userId);
+      // Fetch ALL maintenance records (including deleted) to check for stable_key conflicts
+      const { data: existingMaintenance, error: cloudMaintenanceError } = await supabase.from('maintenance').select('*').eq('user_id', userId);
       const { data: existingTripEstimates, error: cloudTripsError } = await supabase.from('trip_estimates').select('*').eq('user_id', userId).is('deleted_at', null);
       
       if (cloudVehiclesError) result.details.push(`Cloud vehicles fetch failed: ${cloudVehiclesError.message}`);
@@ -849,7 +1045,7 @@ export const cloudSyncService = {
       }
 
       // Remap legacy IDs to UUIDs AFTER matching (preserve matched cloud IDs)
-      const { vehicles: remappedVehicles, fillups: remappedFillups, maintenance: remappedMaintenance, tripEstimates: remappedTripEstimates, summary } = remapLegacyIds(vehiclesWithStableKeys, fillupsWithStableKeys, maintenance, tripEstimates);
+      const { vehicles: remappedVehicles, fillups: remappedFillups, maintenance: remappedMaintenance, tripEstimates: remappedTripEstimates, summary } = remapLegacyIds(vehiclesWithStableKeys, fillupsWithStableKeys, maintenanceWithStableKeys, tripEstimates);
       result.uuidSummary = summary;
       result.details.push(`UUID remapping: ${summary.preservedUuids} preserved, ${summary.regeneratedIds} regenerated, ${summary.remappedForeignKeys} foreign keys remapped`);
 
@@ -918,6 +1114,14 @@ export const cloudSyncService = {
       const vehicleIdMap = new Map();
       remappedToCloudIdMap.forEach((cloudId, remappedLocalId) => {
         vehicleIdMap.set(remappedLocalId, cloudId);
+      });
+      
+      // DEBUG: Log vehicle ID mapping for verification
+      console.log('[Sync][upload] DEBUG: Vehicle ID mapping:');
+      console.log('[Sync][upload] DEBUG: remappedToCloudIdMap size:', remappedToCloudIdMap.size);
+      console.log('[Sync][upload] DEBUG: vehicleIdMap size:', vehicleIdMap.size);
+      remappedToCloudIdMap.forEach((cloudId, remappedLocalId) => {
+        console.log(`[Sync][upload] DEBUG:   ${remappedLocalId} -> ${cloudId}`);
       });
 
       // Upload vehicles with deduplication
@@ -1007,6 +1211,11 @@ export const cloudSyncService = {
             vehicleInserts++;
             result.counts.vehicles++;
             
+            // CRITICAL FIX: Update vehicleIdMap for newly inserted vehicles
+            // This ensures fill-ups can reference the correct cloud vehicle ID
+            vehicleIdMap.set(remappedVehicle.id, remappedVehicle.id);
+            console.log(`[Sync][upload] Updated vehicleIdMap for new vehicle: ${remappedVehicle.id} -> ${remappedVehicle.id}`);
+            
             // Verify the inserted row from Supabase
             const { data: insertedRow, error: verifyError } = await supabase
               .from('vehicles')
@@ -1068,28 +1277,43 @@ export const cloudSyncService = {
             fillupComputedTotal++;
           }
           
-          const { error } = await supabase.from('fillups').upsert({
+          // DEBUG: Log full payload and verify vehicle_id exists in cloud
+          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - vehicle_id in payload: ${normalized.vehicle_id}`);
+          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - Checking if vehicle_id exists in cloud vehicles...`);
+          const vehicleExists = existingCloudVehicles?.some(v => v.id === normalized.vehicle_id);
+          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - vehicle_id exists in cloud: ${vehicleExists}`);
+          if (!vehicleExists) {
+            console.error(`[Sync][upload] CRITICAL: Fillup ${fillup.id} references non-existent vehicle_id ${normalized.vehicle_id}`);
+          }
+          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - Full payload:`, JSON.stringify(normalized, null, 2));
+
+          const { error, data: fillupData } = await supabase.from('fillups').upsert({
             ...normalized,
             stable_key: fillup.stableKey,
             user_id: userId
           });
           if (error) {
             fillupErrors++;
-            console.error('[Sync][upload] Fillup insert failed', {
+            console.error('[Sync][upload] Fillup upsert FAILED - FULL ERROR OBJECT:', JSON.stringify(error, null, 2));
+            console.error('[Sync][upload] Fillup upsert FAILED - structured:', {
               fillupId: fillup.id,
               stableKey: fillup.stableKey,
               payload: normalized,
+              vehicleId: normalized.vehicle_id,
+              vehicleExistsInCloud: vehicleExists,
               error: {
+                name: error.name,
                 code: error.code,
                 message: error.message,
                 details: error.details,
-                hint: error.hint
+                hint: error.hint,
+                statusCode: error.statusCode
               }
             });
             result.details.push(`Fillup upload failed (${fillup.id}): ${error.message} (code: ${error.code})`);
           } else {
             result.counts.fillups++;
-            console.log(`[Sync][upload] Uploaded fillup ${fillup.id} with stable_key ${fillup.stableKey}`);
+            console.log(`[Sync][upload] Uploaded fillup ${fillup.id} with stable_key ${fillup.stableKey}, vehicle_id ${normalized.vehicle_id}`);
           }
         }
         
@@ -1099,32 +1323,133 @@ export const cloudSyncService = {
       // Upload maintenance with deduplication
       if (remappedMaintenance.length > 0) {
         const existingMaintenanceIds = new Set(existingMaintenance?.map(m => m.id) || []);
-        
+        const existingMaintenanceStableKeys = new Map(); // stable_key -> maintenance
+        existingMaintenance?.forEach(m => {
+          if (m.stable_key) {
+            existingMaintenanceStableKeys.set(m.stable_key, m);
+          }
+        });
+
         for (const entry of remappedMaintenance) {
-          // Skip if maintenance already exists in cloud
-          if (existingMaintenanceIds.has(entry.id)) {
-            console.log(`[Sync][upload] Skipping existing maintenance ${entry.id}`);
+          // CRITICAL FIX: Use stable_key as the primary identity for maintenance
+          // If stable_key exists in cloud, use the existing cloud ID for upsert
+          // This prevents 409 conflicts from unique constraint on stable_key
+          let cloudIdToUse = entry.id;
+          let matchedByStableKey = false;
+
+          if (entry.stableKey && existingMaintenanceStableKeys.has(entry.stableKey)) {
+            const existingMaintenance = existingMaintenanceStableKeys.get(entry.stableKey);
+            cloudIdToUse = existingMaintenance.id;
+            matchedByStableKey = true;
+            console.log(`[Sync][upload] Maintenance ${entry.id}: Matched by stable_key ${entry.stableKey} to cloud ${cloudIdToUse}`);
+          } else if (existingMaintenanceIds.has(entry.id)) {
+            console.log(`[Sync][upload] Maintenance ${entry.id}: Already exists in cloud by ID`);
             continue;
           }
-          
-          const { error } = await supabase.from('maintenance').upsert({
-            id: entry.id,
+
+          // CRITICAL FIX: Preserve original maintenance date (same logic as fill-ups)
+          // Priority order: date > timestamp > createdAt
+          let normalizedMaintenanceDate = null;
+          if (entry.date) {
+            normalizedMaintenanceDate = entry.date;
+            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Using entry.date = ${entry.date}`);
+          } else if (entry.timestamp) {
+            normalizedMaintenanceDate = entry.timestamp.split('T')[0];
+            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Extracted date from timestamp = ${normalizedMaintenanceDate} (original timestamp: ${entry.timestamp})`);
+          } else if (entry.createdAt) {
+            normalizedMaintenanceDate = entry.createdAt.split('T')[0];
+            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Extracted date from createdAt = ${normalizedMaintenanceDate} (original createdAt: ${entry.createdAt})`);
+          } else {
+            console.error(`[Sync][maintenance] Maintenance ${entry.id}: CRITICAL - No date field found (date, timestamp, createdAt all missing). Rejecting record.`);
+            maintenanceErrors++;
+            result.details.push(`Maintenance upload failed (${entry.id}): missing date (date, timestamp, and createdAt all absent)`);
+            continue;
+          }
+
+          // Validate date format
+          if (!normalizedMaintenanceDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedMaintenanceDate)) {
+            console.error(`[Sync][maintenance] Maintenance ${entry.id}: CRITICAL - Invalid date format: ${normalizedMaintenanceDate}. Rejecting record.`);
+            maintenanceErrors++;
+            result.details.push(`Maintenance upload failed (${entry.id}): invalid date format: ${normalizedMaintenanceDate}`);
+            continue;
+          }
+
+          const mappedEntryVehicleId =
+            remappedToCloudIdMap.get(entry.vehicleId) ||
+            vehicleIdMap.get(entry.vehicleId) ||
+            entry.vehicleId;
+
+          const payload = {
+            id: cloudIdToUse,
             user_id: userId,
-            vehicle_id: entry.vehicleId,
-            date: entry.date || new Date().toISOString().split('T')[0],
+            vehicle_id: mappedEntryVehicleId,
+            date: normalizedMaintenanceDate,
             type: entry.type || null,
             description: entry.description || null,
             cost: entry.cost || null,
             odometer: entry.odometer || null,
             next_due_date: entry.nextDueDate || null,
+            stable_key: entry.stableKey,
             next_due_odometer: entry.nextDueOdometer || null,
             created_at: entry.createdAt || new Date().toISOString()
+          };
+          
+          console.log(`[Sync][maintenance] Maintenance ${entry.id} upload payload:`, {
+            id: cloudIdToUse,
+            stableKey: entry.stableKey,
+            date: normalizedMaintenanceDate,
+            vehicleId: entry.vehicleId,
+            matchedByStableKey
           });
+
+          console.log('[Sync][maintenance] vehicle mapping check', {
+            originalVehicleId: entry.vehicleId,
+            mappedVehicleId: payload.vehicle_id,
+            maintenanceId: payload.id
+          });
+
+          // DEBUG: Verify vehicle_id exists in cloud
+          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - vehicle_id in payload: ${entry.vehicleId}`);
+          const maintenanceVehicleExists = existingCloudVehicles?.some(v => v.id === entry.vehicleId);
+          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - vehicle_id exists in cloud: ${maintenanceVehicleExists}`);
+          if (!maintenanceVehicleExists) {
+            console.error(`[Sync][upload] CRITICAL: Maintenance ${entry.id} references non-existent vehicle_id ${entry.vehicleId}`);
+          }
+          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - Full payload:`, JSON.stringify(payload, null, 2));
+
+          
+
+          // CRITICAL FIX: Use upsert with onConflict targeting stable_key to prevent 409 conflicts
+          // This handles both new inserts and updates to existing records by stable_key
+          // Note: onConflict parameter may need adjustment based on actual table constraints
+          const { error, data: maintenanceData } = await supabase.from('maintenance').upsert(payload, {
+            onConflict: 'stable_key,user_id'  // Try composite constraint first
+          });
+
           if (error) {
             maintenanceErrors++;
-            result.details.push(`Maintenance upload failed: ${error.message} (code: ${error.code})`);
+            console.error('[Sync][upload] Maintenance upsert FAILED - FULL ERROR OBJECT:', JSON.stringify(error, null, 2));
+            console.error('[Sync][upload] Maintenance upsert FAILED - structured:', {
+              maintenanceId: entry.id,
+              cloudId: cloudIdToUse,
+              stableKey: entry.stableKey,
+              vehicleId: entry.vehicleId,
+              vehicleExistsInCloud: maintenanceVehicleExists,
+              matchedByStableKey,
+              error: {
+                name: error.name,
+                code: error.code,
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                statusCode: error.statusCode
+              }
+            });
+            result.details.push(`Maintenance upload failed (${entry.id}): ${error.message} (code: ${error.code})`);
           } else {
             result.counts.maintenance++;
+            const action = matchedByStableKey ? 'updated' : 'inserted';
+            console.log(`[Sync][upload] ${action} maintenance ${entry.id} with stable_key ${entry.stableKey} (cloud ID: ${cloudIdToUse})`);
           }
         }
       }
@@ -1600,11 +1925,38 @@ export const cloudSyncService = {
       // Upload maintenance (skip existing)
       for (const entry of remappedMaintenance) {
         if (!existingMaintenanceIds.has(entry.id)) {
+          // CRITICAL FIX: Preserve original maintenance date (same logic as fill-ups)
+          // Priority order: date > timestamp > createdAt
+          let normalizedMaintenanceDate = null;
+          if (entry.date) {
+            normalizedMaintenanceDate = entry.date;
+            console.log(`[Sync][merge] Maintenance ${entry.id}: Using entry.date = ${entry.date}`);
+          } else if (entry.timestamp) {
+            normalizedMaintenanceDate = entry.timestamp.split('T')[0];
+            console.log(`[Sync][merge] Maintenance ${entry.id}: Extracted date from timestamp = ${normalizedMaintenanceDate} (original timestamp: ${entry.timestamp})`);
+          } else if (entry.createdAt) {
+            normalizedMaintenanceDate = entry.createdAt.split('T')[0];
+            console.log(`[Sync][merge] Maintenance ${entry.id}: Extracted date from createdAt = ${normalizedMaintenanceDate} (original createdAt: ${entry.createdAt})`);
+          } else {
+            console.error(`[Sync][merge] Maintenance ${entry.id}: CRITICAL - No date field found (date, timestamp, createdAt all missing). Rejecting record.`);
+            maintenanceErrors++;
+            result.details.push(`Maintenance merge failed (${entry.id}): missing date (date, timestamp, and createdAt all absent)`);
+            continue;
+          }
+
+          // Validate date format
+          if (!normalizedMaintenanceDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedMaintenanceDate)) {
+            console.error(`[Sync][merge] Maintenance ${entry.id}: CRITICAL - Invalid date format: ${normalizedMaintenanceDate}. Rejecting record.`);
+            maintenanceErrors++;
+            result.details.push(`Maintenance merge failed (${entry.id}): invalid date format: ${normalizedMaintenanceDate}`);
+            continue;
+          }
+
           const { error } = await supabase.from('maintenance').upsert({
             id: entry.id,
             user_id: userId,
             vehicle_id: entry.vehicleId,
-            date: entry.date || new Date().toISOString().split('T')[0],
+            date: normalizedMaintenanceDate,
             type: entry.type || null,
             description: entry.description || null,
             cost: entry.cost || null,
@@ -1733,11 +2085,25 @@ export const cloudSyncService = {
       const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
       if (fillups.length > 0) {
         for (const fillup of fillups) {
+          // CRITICAL FIX: Preserve original fill-up date during migration
+          // Priority order: date > timestamp > createdAt
+          let normalizedDate = null;
+          if (fillup.date) {
+            normalizedDate = fillup.date;
+          } else if (fillup.timestamp) {
+            normalizedDate = fillup.timestamp.split('T')[0];
+          } else if (fillup.createdAt) {
+            normalizedDate = fillup.createdAt.split('T')[0];
+          } else {
+            console.error(`[Sync][migrate] Fillup ${fillup.id}: CRITICAL - No date field found. Skipping migration.`);
+            continue;
+          }
+
           await supabase.from('fillups').upsert({
             id: fillup.id || uuidv4(),
             user_id: userId,
             vehicle_id: fillup.vehicleId,
-            date: fillup.date || new Date().toISOString().split('T')[0],
+            date: normalizedDate,
             odometer: fillup.odometer,
             liters: fillup.liters,
             price_per_liter: fillup.pricePerLiter,
@@ -1870,6 +2236,7 @@ export const cloudSyncService = {
         .from('fillups')
         .select('*')
         .eq('user_id', userId)
+        .is('deleted_at', null)
         .order('date', { ascending: true });
       
       if (fillupsError) {
@@ -2074,7 +2441,11 @@ export const cloudSyncService = {
    * Returns sync status for UI to decide if migration modal is needed
    */
   async initialize() {
-    if (initializationInProgress) return initializationPromise;
+    // Single-flight guard: if already initializing, return the same promise
+    if (initializationInProgress) {
+      console.log('[Sync][initialize] Initialization already in progress, returning existing promise');
+      return initializationPromise;
+    }
 
     const currentId = ++latestInitializationId;
     console.log(`[Sync][initialize] Starting sync initialization (ID: ${currentId})`);
@@ -2090,37 +2461,109 @@ export const cloudSyncService = {
 
         if (currentId !== latestInitializationId) return null;
 
+        // Check for pending migration state from previous initialization
+        const migrationDecision = localStorage.getItem(MIGRATION_DECISION_KEY);
+        const migrationFlag = localStorage.getItem(MIGRATION_FLAG_KEY);
+        
+        const clearPendingSyncStatus = () => {
+          pendingSyncStatus = null;
+          localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+        };
+
+        const isRestorablePendingStatus = (status) => {
+          if (!status || typeof status !== 'object') return false;
+
+          const hasLocalData = !!status.hasLocalData;
+          const hasCloudData = !!status.hasCloudData;
+          const hasScenario = typeof status.scenario === 'string' && status.scenario.length > 0;
+
+          return hasLocalData && (hasCloudData || hasScenario);
+        };
+
+        // If there's a pending sync status in memory, only return it if it's still valid
+        if (pendingSyncStatus) {
+          if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(pendingSyncStatus)) {
+            console.log('[Sync][initialize] Returning cached pending sync status');
+            return pendingSyncStatus;
+          }
+
+          console.log('[Sync][initialize] Clearing stale cached pending sync status');
+          clearPendingSyncStatus();
+        }
+
+        // If there's a persisted pending sync status, only restore it if it's still valid
+        const persistedPendingStatus = localStorage.getItem(PENDING_SYNC_STATUS_KEY);
+        if (persistedPendingStatus) {
+          try {
+            const restored = JSON.parse(persistedPendingStatus);
+
+            if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(restored)) {
+              console.log('[Sync][initialize] Restoring persisted pending sync status');
+              pendingSyncStatus = restored;
+              return restored;
+            }
+
+            console.log('[Sync][initialize] Ignoring stale persisted pending sync status');
+            clearPendingSyncStatus();
+          } catch (e) {
+            console.error('[Sync][initialize] Failed to parse persisted pending status:', e);
+            clearPendingSyncStatus();
+          }
+        }
+
         // --- LEGACY BACKFILL RULE ---
         console.log('[Sync][initialize] Running legacy metadata backfill');
         this.backfillMetadata();
 
-        const migrationDecision = localStorage.getItem(MIGRATION_DECISION_KEY);
         const migrationComplete = localStorage.getItem(MIGRATION_FLAG_KEY);
         const countsMatchedNoConflict = localStorage.getItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+        console.log('[Sync][initialize] migrationComplete:', migrationComplete);
+        console.log('[Sync][initialize] countsMatchedNoConflict:', countsMatchedNoConflict);
+        console.log('[Sync][initialize] migrationDecision:', migrationDecision);
 
         if (countsMatchedNoConflict && !migrationDecision) {
+          console.log('[Sync][initialize] countsMatchedNoConflict is true, checking if counts still match');
           const syncStatus = await this.getSyncStatus(userId);
           if (currentId !== latestInitializationId) return null;
 
           const countsMatch = (syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles && 
                          syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups);
           
-          if (countsMatch) {
+          console.log('[Sync][initialize] countsMatch check:', countsMatch, 'localCounts:', syncStatus.localCounts, 'cloudCounts:', syncStatus.cloudCounts);
+          
+          let noActionableDifference = false;
+          if (!countsMatch) {
+            const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
+            noActionableDifference =
+              uploadCheck.success &&
+              (
+                uploadCheck.message === 'Nothing to upload. Cloud is already up to date.' ||
+                uploadCheck.message === 'Nothing to upload. All records are already in sync.'
+              );
+
+            console.log('[Sync][initialize] countsMatchedNoConflict fallback noActionableDifference:', noActionableDifference, 'uploadCheck.message:', uploadCheck.message);
+          }
+
+          if (countsMatch || noActionableDifference) {
+            console.log('[Sync][initialize] Counts still match, skipping modal and setting up sync listener');
             this.setupOnlineSyncListener(userId, { decision: null });
             // Always fire outbox on startup – don't gate on the background lock
             if (this.isOnline()) await this.syncAfterMutation(userId);
             return null;
           } else {
+            console.log('[Sync][initialize] Counts no longer match, removing countsMatchedNoConflict flag');
             localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
             return await this.getSyncStatus(userId);
           }
         }
 
         if (migrationComplete === 'true' && migrationDecision) {
+          console.log('[Sync][initialize] migrationComplete is true with decision:', migrationDecision);
           if (migrationDecision === 'keep-local') {
             console.log('[Sync][initialize] Stored decision is keep-local — cloud writes DISABLED. Remove localStorage key "fueltracker-migration-decision" to re-enable.');
             return null;
           }
+          console.log('[Sync][initialize] Setting up sync listener with decision:', migrationDecision);
           this.setupOnlineSyncListener(userId, { decision: migrationDecision });
           // Always fire outbox on startup – don't gate on the background lock
           if (this.isOnline()) await this.syncAfterMutation(userId);
@@ -2129,6 +2572,19 @@ export const cloudSyncService = {
 
         // Only show modal if user action is genuinely required
         const syncStatus = await this.getSyncStatus(userId);
+        let noActionableDifference = false;
+
+        if (hasLocalData && hasCloudData) {
+          const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
+          noActionableDifference =
+            uploadCheck.success &&
+            (
+              uploadCheck.message === 'Nothing to upload. Cloud is already up to date.' ||
+              uploadCheck.message === 'Nothing to upload. All records are already in sync.'
+            );
+
+          console.log('[Sync][initialize] noActionableDifference:', noActionableDifference, 'uploadCheck.message:', uploadCheck.message);
+        }
         if (currentId !== latestInitializationId) return null;
 
         // Don't show modal if:
@@ -2142,7 +2598,7 @@ export const cloudSyncService = {
                            syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups);
 
         // Fresh start - no data anywhere
-        if (!hasLocalData && !hasCloudData) {
+        if (!hasLocalData && (countsMatch || noActionableDifference)) {
           console.log('[Sync][initialize] Fresh start - no local or cloud data, skipping modal');
           localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
           localStorage.setItem(MIGRATION_DECISION_KEY, 'keep-local');
@@ -2160,7 +2616,8 @@ export const cloudSyncService = {
         }
 
         // First-time user with local data only - can auto-upload without asking
-        if (hasLocalData && !hasCloudData && !hasConflicts) {
+        // Guardrail: Only auto-upload if user hasn't already chosen "keep-local"
+        if (hasLocalData && !hasCloudData && !hasConflicts && migrationDecision !== 'keep-local') {
           console.log('[Sync][initialize] First-time user with local data only - auto-uploading without modal');
           const uploadResult = await this.uploadLocalChanges(userId);
           if (uploadResult.success) {
@@ -2179,6 +2636,38 @@ export const cloudSyncService = {
         // - Cloud data exists but no local data (user must choose download or start fresh)
         if (hasConflicts || (hasLocalData && hasCloudData) || (hasCloudData && !hasLocalData)) {
           console.log('[Sync][initialize] Showing modal - user action required');
+          
+          // AUDIT: Log full syncStatus object before returning
+          console.log('[Sync][initialize] AUDIT - Full syncStatus object:', JSON.stringify(syncStatus, null, 2));
+          console.log('[Sync][initialize] AUDIT - hasLocalData:', hasLocalData);
+          console.log('[Sync][initialize] AUDIT - hasCloudData:', hasCloudData);
+          console.log('[Sync][initialize] AUDIT - localCounts:', syncStatus.localCounts);
+          console.log('[Sync][initialize] AUDIT - cloudCounts:', syncStatus.cloudCounts);
+          console.log('[Sync][initialize] AUDIT - hasConflicts:', hasConflicts);
+          console.log('[Sync][initialize] AUDIT - countsMatch:', countsMatch);
+          console.log('[Sync][initialize] AUDIT - migrationDecision:', migrationDecision);
+          
+          // Derive explicit scenario string
+          let scenario = 'UNKNOWN';
+          if (!hasLocalData && !hasCloudData) {
+            scenario = 'NO_BOTH';
+          } else if (!hasLocalData && hasCloudData) {
+            scenario = 'NO_LOCAL_HAS_CLOUD';
+          } else if (hasLocalData && !hasCloudData) {
+            scenario = 'HAS_LOCAL_NO_CLOUD';
+          } else if (hasLocalData && hasCloudData) {
+            scenario = 'HAS_BOTH';
+          }
+          console.log('[Sync][initialize] AUDIT - Derived scenario:', scenario);
+          
+          // Attach scenario to syncStatus for explicit modal rendering
+          syncStatus.scenario = scenario;
+          
+          // Cache pending sync status for replayability
+          pendingSyncStatus = syncStatus;
+          localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(syncStatus));
+          console.log('[Sync][initialize] Cached pending sync status for replayability');
+          
           return syncStatus;
         }
 
@@ -2225,6 +2714,11 @@ export const cloudSyncService = {
     console.log('[Sync][initialize] Continuing sync after decision:', decision);
     console.log('[Sync][initialize] Decision value:', decision);
     console.log('[Sync][initialize] Action to perform:', decision);
+    
+    // Clear pending migration state after user decision
+    pendingSyncStatus = null;
+    localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+    console.log('[Sync][initialize] Cleared pending migration state after decision');
     
     const result = {
       success: true,
@@ -2423,6 +2917,21 @@ export const cloudSyncService = {
       const payload = this.mapLocalToCloud(record, entityKey);
       payload.user_id = userId;
 
+      if (entityKey === "fillups") {
+        payload.total_cost =
+          payload.total_cost ??
+          (payload.liters != null && payload.price_per_liter != null
+            ? Number(payload.liters) * Number(payload.price_per_liter)
+            : 0);
+
+        console.log("[Sync][outbox] fillup total_cost check", {
+          stable_key: record.stableKey,
+          liters: payload.liters,
+          price_per_liter: payload.price_per_liter,
+          total_cost: payload.total_cost,
+        });
+      }
+
       // 3. Replay-safe idempotency check (Identity + Metadata)
       // Check if cloud already has a newer or identical version
       const { data: existing, error: fetchError } = await supabase
@@ -2569,7 +3078,10 @@ export const cloudSyncService = {
         odometer: record.odometer,
         liters: record.liters,
         price_per_liter: record.pricePerLiter,
-        total_cost: record.totalCost,
+        total_cost: record.totalCost ??
+          ((record.liters != null && record.pricePerLiter != null)
+            ? Number(record.liters) * Number(record.pricePerLiter)
+            : 0),
         station: record.station || null,
         full_tank: record.fullTank !== undefined ? record.fullTank : true,
         notes: record.notes || null,
@@ -3015,41 +3527,6 @@ export const cloudSyncService = {
     }
   },
 
-  /**
-   * Download a single record of any type
-   */
-  downloadSingle(record, type) {
-    switch (type) {
-      case 'vehicle': return this.downloadSingleVehicle(record);
-      case 'fillup': return this.downloadSingleFillup(record);
-      case 'maintenance': return this.downloadSingleMaintenance(record);
-      case 'trip': return this.downloadSingleTripEstimate(record);
-    }
-  },
-
-  /**
-   * Delete a single record from cloud
-   */
-  async deleteFromCloud(record, type, userId) {
-    switch (type) {
-      case 'vehicle': return this.deleteVehicleFromCloud(record, userId);
-      case 'fillup': return this.deleteFillupFromCloud(record, userId);
-      case 'maintenance': return this.deleteMaintenanceFromCloud(record, userId);
-      case 'trip': return this.deleteTripFromCloud(record, userId);
-    }
-  },
-
-  /**
-   * Delete a single record from local
-   */
-  deleteFromLocal(record, type) {
-    switch (type) {
-      case 'vehicle': return this.deleteVehicleFromLocal(record);
-      case 'fillup': return this.deleteFillupFromLocal(record);
-      case 'maintenance': return this.deleteMaintenanceFromLocal(record);
-      case 'trip': return this.deleteTripFromLocal(record);
-    }
-  },
 
   /**
    * Apply diff to local and cloud based on sync action (legacy wrapper)
@@ -3258,19 +3735,26 @@ export const cloudSyncService = {
       throw new Error(`Failed to check existing fillup ${fillup.id}: ${fetchErr.message}`);
     }
 
+    // Compute total_cost if not provided (required field in Supabase)
+    const computedTotalCost =
+      fillup.totalCost ??
+      ((fillup.liters != null && fillup.pricePerLiter != null)
+        ? Number(fillup.liters) * Number(fillup.pricePerLiter)
+        : 0);
+
     const normalized = {
       user_id: userId,
       vehicle_id: fillup.vehicleId,
-      date: fillup.date,
+      date: fillup.date || fillup.timestamp,  // Use date field if available, otherwise use timestamp (actual fill-up date)
       odometer: fillup.odometer,
       liters: fillup.liters,
       price_per_liter: fillup.pricePerLiter,
-      total_cost: fillup.totalCost,
+      total_cost: computedTotalCost,  // Computed if null
       station: fillup.station || null,
       notes: fillup.notes || null,
       full_tank: fillup.fullTank !== undefined ? fillup.fullTank : true,
       stable_key: fillup.stableKey,
-      created_at: fillup.createdAt || now,
+      created_at: fillup.createdAt || now,  // When the record was created in the app
       updated_at: fillup.updatedAt || now,
       deleted_at: fillup.deletedAt || null
     };
@@ -3333,7 +3817,9 @@ export const cloudSyncService = {
         // Try to map local vehicle ID to cloud vehicle UUID
         console.log(`[Sync][uploadSingleMaintenance] vehicleId "${maintenance.vehicleId}" is not a valid UUID, attempting to map`);
         const vehicleIdMap = await this.buildVehicleIdMap(userId);
-        const cloudVehicleId = vehicleIdMap.get(maintenance.vehicleId);
+        const cloudVehicleId = remappedToCloudIdMap.get(maintenance.vehicleId) ||
+          vehicleIdMap.get(maintenance.vehicleId) ||
+          maintenance.vehicleId;
         
         if (!cloudVehicleId) {
           const error = `Cannot map vehicleId "${maintenance.vehicleId}" to a valid cloud vehicle UUID. Vehicle must be synced first.`;
@@ -3350,11 +3836,11 @@ export const cloudSyncService = {
 
     const now = new Date().toISOString();
     
-    // First, check if a row exists with this id and user_id
+    // First, check if a row exists with this stable_key and user_id (use stable_key instead of id for legacy records)
     const { data: existingRow, error: fetchErr } = await supabase
       .from('maintenance')
       .select('id')
-      .eq('id', maintenance.id)
+      .eq('stable_key', maintenance.stableKey)
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -3512,7 +3998,7 @@ export const cloudSyncService = {
     const mapped = {
       id: fillup.id,
       vehicleId: fillup.vehicle_id,
-      date: fillup.date,
+      date: fillup.date,  // The actual fill-up date (when the fueling happened)
       odometer: fillup.odometer,
       liters: fillup.liters,
       pricePerLiter: fillup.price_per_liter,
@@ -3520,7 +4006,8 @@ export const cloudSyncService = {
       station: fillup.station,
       notes: fillup.notes,
       fullTank: fillup.full_tank,
-      timestamp: fillup.created_at,
+      timestamp: fillup.date,  // Use the actual fill-up date as timestamp for display
+      createdAt: fillup.created_at,  // When the record was created in the app/cloud
       updatedAt: fillup.updated_at,
       stableKey: fillup.stable_key,
       deletedAt: fillup.deleted_at
@@ -3565,6 +4052,209 @@ export const cloudSyncService = {
     const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
     const filtered = fillups.filter(f => f.id !== fillup.id);
     localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(filtered));
+  },
+
+  /**
+   * Download a single record of any type
+   */
+  downloadSingle(record, type) {
+    switch (type) {
+      case 'vehicle': return this.downloadSingleVehicle(record);
+      case 'fillup': return this.downloadSingleFillup(record);
+      case 'maintenance': return this.downloadSingleMaintenance(record);
+      case 'trip': return this.downloadSingleTripEstimate(record);
+    }
+  },
+
+  /**
+   * Download a single vehicle record from cloud to local
+   */
+  downloadSingleVehicle(cloudVehicle) {
+    const localKey = 'fueltracker-vehicles-v2';
+    const vehicles = JSON.parse(localStorage.getItem(localKey) || '[]');
+    
+    const mappedVehicle = {
+      id: cloudVehicle.id,
+      name: cloudVehicle.name,
+      make: cloudVehicle.make,
+      model: cloudVehicle.model,
+      year: cloudVehicle.year,
+      fuelType: cloudVehicle.fuel_type,
+      tankCapacity: cloudVehicle.tank_capacity,
+      licensePlate: cloudVehicle.license_plate,
+      stableKey: cloudVehicle.stable_key,
+      tyreSize: null
+    };
+    
+    // Replace or add the vehicle
+    const index = vehicles.findIndex(v => v.id === cloudVehicle.id);
+    if (index >= 0) {
+      vehicles[index] = mappedVehicle;
+    } else {
+      vehicles.push(mappedVehicle);
+    }
+    
+    localStorage.setItem(localKey, JSON.stringify(vehicles));
+  },
+
+  /**
+   * Download a single maintenance record from cloud to local
+   */
+  downloadSingleMaintenance(cloudMaintenance) {
+    const localKey = 'fueltracker-maintenance-entries-v3';
+    const maintenance = JSON.parse(localStorage.getItem(localKey) || '[]');
+    
+    const mappedMaintenance = {
+      id: cloudMaintenance.id,
+      vehicleId: cloudMaintenance.vehicle_id,
+      date: cloudMaintenance.date,
+      type: cloudMaintenance.type,
+      description: cloudMaintenance.description,
+      cost: cloudMaintenance.cost,
+      odometer: cloudMaintenance.odometer,
+      nextDueDate: cloudMaintenance.next_due_date,
+      nextDueOdometer: cloudMaintenance.next_due_odometer,
+      createdAt: cloudMaintenance.created_at,
+      stableKey: cloudMaintenance.stable_key,
+      updatedAt: cloudMaintenance.updated_at,
+      deletedAt: cloudMaintenance.deleted_at
+    };
+    
+    // Replace or add the maintenance record
+    const index = maintenance.findIndex(m => m.id === cloudMaintenance.id);
+    if (index >= 0) {
+      maintenance[index] = mappedMaintenance;
+    } else {
+      maintenance.push(mappedMaintenance);
+    }
+    
+    localStorage.setItem(localKey, JSON.stringify(maintenance));
+  },
+
+  /**
+   * Download a single trip estimate record from cloud to local
+   */
+  downloadSingleTripEstimate(cloudTrip) {
+    const localKey = 'fueltracker-trip-estimates-v2';
+    const trips = JSON.parse(localStorage.getItem(localKey) || '[]');
+    
+    const mappedTrip = {
+      id: cloudTrip.id,
+      vehicleId: cloudTrip.vehicle_id,
+      name: cloudTrip.name,
+      distance: cloudTrip.distance,
+      notes: cloudTrip.notes,
+      createdAt: cloudTrip.created_at,
+      stableKey: cloudTrip.stable_key,
+      updatedAt: cloudTrip.updated_at,
+      deletedAt: cloudTrip.deleted_at
+    };
+    
+    // Replace or add the trip estimate
+    const index = trips.findIndex(t => t.id === cloudTrip.id);
+    if (index >= 0) {
+      trips[index] = mappedTrip;
+    } else {
+      trips.push(mappedTrip);
+    }
+    
+    localStorage.setItem(localKey, JSON.stringify(trips));
+  },
+
+  /**
+   * Delete a single record from cloud
+   */
+  async deleteFromCloud(record, type, userId) {
+    switch (type) {
+      case 'vehicle': return this.deleteVehicleFromCloud(record, userId);
+      case 'fillup': return this.deleteFillupFromCloud(record, userId);
+      case 'maintenance': return this.deleteMaintenanceFromCloud(record, userId);
+      case 'trip': return this.deleteTripFromCloud(record, userId);
+    }
+  },
+
+  /**
+   * Delete a vehicle from cloud (tombstone)
+   */
+  async deleteVehicleFromCloud(vehicle, userId) {
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', vehicle.id)
+      .eq('user_id', userId);
+    
+    if (error) {
+      throw new Error(`Failed to delete vehicle ${vehicle.id} from cloud: ${error.message}`);
+    }
+  },
+
+  /**
+   * Delete a maintenance entry from cloud (tombstone)
+   */
+  async deleteMaintenanceFromCloud(maintenance, userId) {
+    const { error } = await supabase
+      .from('maintenance')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', maintenance.id)
+      .eq('user_id', userId);
+    
+    if (error) {
+      throw new Error(`Failed to delete maintenance ${maintenance.id} from cloud: ${error.message}`);
+    }
+  },
+
+  /**
+   * Delete a trip estimate from cloud (tombstone)
+   */
+  async deleteTripFromCloud(trip, userId) {
+    const { error } = await supabase
+      .from('trip_estimates')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', trip.id)
+      .eq('user_id', userId);
+    
+    if (error) {
+      throw new Error(`Failed to delete trip estimate ${trip.id} from cloud: ${error.message}`);
+    }
+  },
+
+  /**
+   * Delete a single record from local
+   */
+  deleteFromLocal(record, type) {
+    switch (type) {
+      case 'vehicle': return this.deleteVehicleFromLocal(record);
+      case 'fillup': return this.deleteFillupFromLocal(record);
+      case 'maintenance': return this.deleteMaintenanceFromLocal(record);
+      case 'trip': return this.deleteTripFromLocal(record);
+    }
+  },
+
+  /**
+   * Delete a vehicle from local storage
+   */
+  deleteVehicleFromLocal(vehicle) {
+    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
+    const filtered = vehicles.filter(v => v.id !== vehicle.id);
+    localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(filtered));
+  },
+
+  /**
+   * Delete a maintenance entry from local storage
+   */
+  deleteMaintenanceFromLocal(maintenance) {
+    const entries = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    const filtered = entries.filter(m => m.id !== maintenance.id);
+    localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(filtered));
+  },
+
+  /**
+   * Delete a trip estimate from local storage
+   */
+  deleteTripFromLocal(trip) {
+    const trips = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+    const filtered = trips.filter(t => t.id !== trip.id);
+    localStorage.setItem('fueltracker-trip-estimates-v2', JSON.stringify(filtered));
   },
 
   /**

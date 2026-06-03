@@ -85,6 +85,13 @@ export default function Settings() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
 
+  // Manual sync modal state
+  const [manualSyncModalOpen, setManualSyncModalOpen] = useState(false);
+  const [syncSummary, setSyncSummary] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+  const [syncConfirmModal, setSyncConfirmModal] = useState({ isOpen: false, action: null });
+
   const [toastMessage, setToastMessage] = useState('');
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -193,6 +200,93 @@ export default function Settings() {
       });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleOpenManualSync = async () => {
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        showToast('You must be logged in to sync data.');
+        return;
+      }
+
+      const summary = await cloudSyncService.getSyncStatus(userId);
+      setSyncSummary(summary);
+      setManualSyncModalOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch sync summary:', error);
+      showToast('Failed to fetch sync status.');
+    }
+  };
+
+  const handleManualSyncAction = async (action) => {
+    // Show confirmation for destructive actions
+    if (action === 'download') {
+      setSyncConfirmModal({
+        isOpen: true,
+        action: 'download',
+        title: 'Download Cloud Data',
+        message: 'This will replace all local data on this device with your cloud data. Any unsynced local changes will be lost.',
+        confirmText: 'Download'
+      });
+      return;
+    } else if (action === 'merge') {
+      setSyncConfirmModal({
+        isOpen: true,
+        action: 'merge',
+        title: 'Merge Data',
+        message: 'This will merge local and cloud data. Conflicts will be resolved by keeping the most recent version of each record.',
+        confirmText: 'Merge'
+      });
+      return;
+    }
+
+    // Upload is non-destructive, proceed directly
+    performSyncAction(action);
+  };
+
+  const performSyncAction = async (action) => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        setSyncResult({
+          success: false,
+          message: 'You must be logged in to sync data.'
+        });
+        setIsSyncing(false);
+        return;
+      }
+
+      let result;
+      switch (action) {
+        case 'upload':
+          result = await cloudSyncService.uploadLocalDataToCloud(userId);
+          break;
+        case 'download':
+          result = await cloudSyncService.downloadCloudDataToLocal(userId);
+          break;
+        case 'merge':
+          result = await cloudSyncService.mergeLocalDataToCloud(userId);
+          break;
+        default:
+          throw new Error('Unknown sync action');
+      }
+
+      setSyncResult(result);
+      if (result.success) {
+        showToast('Sync completed successfully');
+      }
+    } catch (error) {
+      setSyncResult({
+        success: false,
+        message: 'Sync failed due to an unexpected error.',
+        details: [error.message]
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -504,7 +598,7 @@ export default function Settings() {
                <button onClick={() => setFormatModal({ isOpen: true, type: 'export' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><DownloadSimple weight="duotone" size={18} /> {t('export_data')}</button>
                <button onClick={() => setFormatModal({ isOpen: true, type: 'import' })} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"><UploadSimple weight="duotone" size={18} /> {t('import_data')}</button>
             </div>
-            <button onClick={handleManualUpload} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"><CloudArrowUp weight="duotone" size={18} /> Upload to Cloud</button>
+            <button onClick={handleOpenManualSync} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"><CloudArrowUp weight="duotone" size={18} /> Manual Sync</button>
          </Card>
       </section>
 
@@ -656,7 +750,7 @@ export default function Settings() {
                 )}
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setUploadResult(null)}
               className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
             >
@@ -665,6 +759,153 @@ export default function Settings() {
           </div>
         </Modal>
       )}
+
+      {/* Manual Sync Modal */}
+      <Modal
+        isOpen={manualSyncModalOpen}
+        onClose={() => {
+          setManualSyncModalOpen(false);
+          setSyncResult(null);
+        }}
+        title="Manual Sync"
+        size="sm"
+      >
+        <div className="p-1 space-y-4">
+          {/* Sync Summary */}
+          {syncSummary && !syncResult && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Local Data</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.localCounts?.vehicles || 0} Vehicles</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.localCounts?.fillups || 0} Fill-ups</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.localCounts?.maintenance || 0} Maintenance</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Cloud Data</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.cloudCounts?.vehicles || 0} Vehicles</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.cloudCounts?.fillups || 0} Fill-ups</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      <span className="text-slate-700 dark:text-slate-300">{syncSummary.cloudCounts?.maintenance || 0} Maintenance</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sync Actions */}
+          {!syncResult && !isSyncing && (
+            <div className="space-y-3">
+              <button
+                onClick={() => handleManualSyncAction('upload')}
+                className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+              >
+                <CloudArrowUp weight="duotone" className="w-5 h-5" />
+                Upload local data to cloud
+              </button>
+              <button
+                onClick={() => handleManualSyncAction('download')}
+                className="w-full py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+              >
+                <DownloadSimple weight="duotone" className="w-5 h-5" />
+                Download cloud data to this device
+              </button>
+              <button
+                onClick={() => handleManualSyncAction('merge')}
+                className="w-full py-3.5 bg-purple-500 hover:bg-purple-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+              >
+                <Globe weight="duotone" className="w-5 h-5" />
+                Merge local and cloud data
+              </button>
+              <button
+                onClick={() => setManualSyncModalOpen(false)}
+                className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Sync Loading */}
+          {isSyncing && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              <p className="font-bold text-slate-900 dark:text-white">Syncing...</p>
+            </div>
+          )}
+
+          {/* Sync Result */}
+          {syncResult && (
+            <div className="space-y-4">
+              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${syncResult.success ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20'}`}>
+                {syncResult.success ? (
+                  <Check weight="duotone" className="text-emerald-500 w-6 h-6 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <WarningCircle weight="duotone" className="text-red-500 w-6 h-6 mt-0.5 flex-shrink-0" />
+                )}
+                <div>
+                  <p className={`font-semibold mb-1 ${syncResult.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400'}`}>
+                    {syncResult.message}
+                  </p>
+                  {syncResult.counts && (syncResult.counts.vehicles > 0 || syncResult.counts.fillups > 0 || syncResult.counts.maintenance > 0 || syncResult.counts.tripEstimates > 0) && (
+                    <div className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="space-y-1">
+                        {syncResult.counts.vehicles > 0 && <div>• {syncResult.counts.vehicles} vehicle{syncResult.counts.vehicles !== 1 ? 's' : ''}</div>}
+                        {syncResult.counts.fillups > 0 && <div>• {syncResult.counts.fillups} fill-up{syncResult.counts.fillups !== 1 ? 's' : ''}</div>}
+                        {syncResult.counts.maintenance > 0 && <div>• {syncResult.counts.maintenance} maintenance record{syncResult.counts.maintenance !== 1 ? 's' : ''}</div>}
+                        {syncResult.counts.tripEstimates > 0 && <div>• {syncResult.counts.tripEstimates} trip estimate{syncResult.counts.tripEstimates !== 1 ? 's' : ''}</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setManualSyncModalOpen(false);
+                  setSyncResult(null);
+                }}
+                className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Sync Confirmation Modal */}
+      <ConfirmModal
+        isOpen={syncConfirmModal.isOpen}
+        onClose={() => setSyncConfirmModal({ isOpen: false, action: null })}
+        onConfirm={() => {
+          setSyncConfirmModal({ isOpen: false, action: null });
+          performSyncAction(syncConfirmModal.action);
+        }}
+        title={syncConfirmModal.title}
+        message={syncConfirmModal.message}
+        confirmText={syncConfirmModal.confirmText}
+        variant="danger"
+      />
 
       {/* Global Setting Toast */}
       <AnimatePresence>

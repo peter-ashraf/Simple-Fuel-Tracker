@@ -132,7 +132,8 @@ export default function FillUpForm() {
     newDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
     
     addFillUp({
-      timestamp: newDate.toISOString(),
+      date: date,  // The actual fill-up date (YYYY-MM-DD format)
+      timestamp: newDate.toISOString(),  // Full timestamp with time
       fuelType: selectedFuelType,
       liters: Number(liters) || 0,
       odometer: newOdometer,

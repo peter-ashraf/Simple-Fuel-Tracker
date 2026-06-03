@@ -30,7 +30,15 @@ export default function DataMigrationModal({
   disableClose,
   userId,
 }) {
-  const { hasLocalData, hasCloudData, localCounts, cloudCounts } = syncStatus;
+  const { hasLocalData, hasCloudData, localCounts, cloudCounts, scenario } = syncStatus;
+
+  // AUDIT: Log full syncStatus object received by modal
+  console.log('[Sync][modal] AUDIT - Full syncStatus object received:', JSON.stringify(syncStatus, null, 2));
+  console.log('[Sync][modal] AUDIT - hasLocalData:', hasLocalData);
+  console.log('[Sync][modal] AUDIT - hasCloudData:', hasCloudData);
+  console.log('[Sync][modal] AUDIT - localCounts:', localCounts);
+  console.log('[Sync][modal] AUDIT - cloudCounts:', cloudCounts);
+  console.log('[Sync][modal] AUDIT - scenario:', scenario);
 
   // Detect imported data scenario: local exists, cloud empty
   const isImportedData = hasLocalData && !hasCloudData;
@@ -412,6 +420,59 @@ export default function DataMigrationModal({
                   </div>
                 )}
 
+                {/* Scenario: Cloud data exists, local is empty */}
+                {hasCloudData && !hasLocalData && (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
+                      <CloudArrowDown
+                        weight="duotone"
+                        className="text-blue-500 w-6 h-6 mt-0.5 flex-shrink-0"
+                      />
+                      <div>
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-400 mb-1">
+                          Cloud Data Found
+                        </h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          We found data in your cloud account, but this device has no local data yet.
+                          Would you like to download your cloud data to this device or start fresh?
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                        Cloud Data
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                            {cloudCounts.vehicles} Vehicles
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                            {cloudCounts.fillups} Fill-ups
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                            {cloudCounts.maintenance} Maintenance
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                            {cloudCounts.tripEstimates} Trips
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Scenario: Both local and cloud have data */}
                 {hasCloudData && hasLocalData && (
                   <div className="space-y-4">
@@ -647,6 +708,25 @@ export default function DataMigrationModal({
                 </div>
               )}
 
+              {/* Fallback: If cloud data exists but wasn't detected, show download option */}
+              {hasCloudData && !hasLocalData && (
+                <div className="space-y-3">
+                  <button
+                    onClick={handleDownload}
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                  >
+                    <CloudArrowDown weight="duotone" className="w-5 h-5" />
+                    Download Cloud Data
+                  </button>
+                  <button
+                    onClick={handleKeepLocal}
+                    className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
+                  >
+                    Start Fresh (No Sync)
+                  </button>
+                </div>
+              )}
+
               {/* Scenario: Both local and cloud have data */}
               {hasCloudData && hasLocalData && (
                 <div className="space-y-3">
@@ -679,6 +759,53 @@ export default function DataMigrationModal({
                   </p>
                 </div>
               )}
+
+              {/* Fallback UI for unknown/invalid states */}
+              {(!hasLocalData && !hasCloudData) || scenario === 'UNKNOWN' ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/20">
+                    <Warning
+                      weight="duotone"
+                      className="text-amber-500 w-6 h-6 mt-0.5 flex-shrink-0"
+                    />
+                    <div>
+                      <h3 className="font-semibold text-amber-900 dark:text-amber-400 mb-1">
+                        Sync State Unknown
+                      </h3>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        We couldn't determine your sync state. Please retry the sync check.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={onRetry}
+                      className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                    >
+                      <Spinner weight="duotone" className="w-5 h-5" />
+                      Retry sync check
+                    </button>
+                    
+                    {hasCloudData && cloudCounts && (cloudCounts.vehicles > 0 || cloudCounts.fillups > 0) && (
+                      <button
+                        onClick={handleDownload}
+                        className="w-full py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                      >
+                        <CloudArrowDown weight="duotone" className="w-5 h-5" />
+                        Download cloud data
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={onCancel}
+                      className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
+                    >
+                      Close / cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </motion.div>
