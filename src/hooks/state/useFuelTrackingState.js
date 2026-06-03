@@ -51,7 +51,7 @@ export function useFuelTrackingState(selectedVehicleId) {
     // Trigger background sync
     const userId = await cloudSyncService.getUserId();
     if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      cloudSyncService.syncAfterMutation(userId).catch(err => {});
     }
   };
 
@@ -66,7 +66,7 @@ export function useFuelTrackingState(selectedVehicleId) {
     // Trigger background sync
     const userId = await cloudSyncService.getUserId();
     if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      cloudSyncService.syncAfterMutation(userId).catch(err => {});
     }
   };
 
@@ -82,7 +82,7 @@ export function useFuelTrackingState(selectedVehicleId) {
     // Trigger background sync
     const userId = await cloudSyncService.getUserId();
     if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      cloudSyncService.syncAfterMutation(userId).catch(err => {});
     }
   };
 
@@ -97,7 +97,7 @@ export function useFuelTrackingState(selectedVehicleId) {
     // Trigger background sync
     const userId = await cloudSyncService.getUserId();
     if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      cloudSyncService.syncAfterMutation(userId).catch(err => {});
     }
   };
 

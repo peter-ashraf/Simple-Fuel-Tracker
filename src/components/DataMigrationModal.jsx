@@ -30,15 +30,8 @@ export default function DataMigrationModal({
   disableClose,
   userId,
 }) {
-  const { hasLocalData, hasCloudData, localCounts, cloudCounts, scenario } = syncStatus;
-
-  // AUDIT: Log full syncStatus object received by modal
-  console.log('[Sync][modal] AUDIT - Full syncStatus object received:', JSON.stringify(syncStatus, null, 2));
-  console.log('[Sync][modal] AUDIT - hasLocalData:', hasLocalData);
-  console.log('[Sync][modal] AUDIT - hasCloudData:', hasCloudData);
-  console.log('[Sync][modal] AUDIT - localCounts:', localCounts);
-  console.log('[Sync][modal] AUDIT - cloudCounts:', cloudCounts);
-  console.log('[Sync][modal] AUDIT - scenario:', scenario);
+  const { hasLocalData, hasCloudData, localCounts, cloudCounts, scenario } =
+    syncStatus;
 
   // Detect imported data scenario: local exists, cloud empty
   const isImportedData = hasLocalData && !hasCloudData;
@@ -68,55 +61,37 @@ export default function DataMigrationModal({
     };
   }, [loading]);
 
-  console.log(
-    "[Sync][modal] Modal rendered with isImportedData:",
-    isImportedData,
-    "isNonDismissible:",
-    isNonDismissible,
-  );
-
   const handleUpload = async () => {
-    console.log('[Sync][modal] Button clicked: Upload Local Data to Cloud');
-    console.log('[Sync][modal] Decision value: upload');
     const decisionResult = await onDecision("upload");
 
     // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
-      console.log('[Sync][modal] Upload requires conflict resolution');
       setConflictData(decisionResult);
       setShowConflictReview(true);
     }
   };
 
   const handleDownload = async () => {
-    console.log('[Sync][modal] Button clicked: Download Cloud Data');
-    console.log('[Sync][modal] Decision value: download');
     const decisionResult = await onDecision("download");
 
     // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
-      console.log('[Sync][modal] Download requires conflict resolution');
       setConflictData(decisionResult);
       setShowConflictReview(true);
     }
   };
 
   const handleMerge = async () => {
-    console.log('[Sync][modal] Button clicked: Sync both sides');
-    console.log('[Sync][modal] Decision value: merge');
     const decisionResult = await onDecision("merge");
 
     // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
-      console.log('[Sync][modal] Merge requires conflict resolution');
       setConflictData(decisionResult);
       setShowConflictReview(true);
     }
   };
 
   const handleKeepLocal = async () => {
-    console.log('[Sync][modal] Button clicked: Keep Local Only / Start Fresh');
-    console.log('[Sync][modal] Decision value: keep-local');
     onDecision("keep-local");
   };
 
@@ -303,15 +278,25 @@ export default function DataMigrationModal({
                                 <div>
                                   • {result.counts.maintenance} maintenance
                                   record
-                                  {result.counts.maintenance !== 1 ? "s" : ""}{" "}
+                                  {result.counts.maintenance !== 1
+                                    ? "s"
+                                    : ""}{" "}
                                   uploaded
                                 </div>
                               )}
                               {result.counts.tripEstimates > 0 && (
                                 <div>
                                   • {result.counts.tripEstimates} trip estimate
-                                  {result.counts.tripEstimates !== 1 ? "s" : ""}{" "}
+                                  {result.counts.tripEstimates !== 1
+                                    ? "s"
+                                    : ""}{" "}
                                   uploaded
+                                </div>
+                              )}
+                              {result.counts.vehicles > 1 && (
+                                <div className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                                  💡 Please select a vehicle to display your
+                                  data.
                                 </div>
                               )}
                             </div>
@@ -433,8 +418,9 @@ export default function DataMigrationModal({
                           Cloud Data Found
                         </h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300">
-                          We found data in your cloud account, but this device has no local data yet.
-                          Would you like to download your cloud data to this device or start fresh?
+                          We found data in your cloud account, but this device
+                          has no local data yet. Would you like to download your
+                          cloud data to this device or start fresh?
                         </p>
                       </div>
                     </div>
@@ -487,7 +473,13 @@ export default function DataMigrationModal({
                             Conflicts Detected
                           </h3>
                           <p className="text-sm text-amber-700 dark:text-amber-300">
-                            We found {syncStatus.detailedDiff.conflicts.length} conflicting record{syncStatus.detailedDiff.conflicts.length !== 1 ? "s" : ""} that need your attention. Please review and resolve them.
+                            We found {syncStatus.detailedDiff.conflicts.length}{" "}
+                            conflicting record
+                            {syncStatus.detailedDiff.conflicts.length !== 1
+                              ? "s"
+                              : ""}{" "}
+                            that need your attention. Please review and resolve
+                            them.
                           </p>
                         </div>
                       </div>
@@ -502,7 +494,8 @@ export default function DataMigrationModal({
                             Data Difference
                           </h3>
                           <p className="text-sm text-blue-700 dark:text-blue-300">
-                            Your local and cloud data have differences. Choose how you want to sync them.
+                            Your local and cloud data have differences. Choose
+                            how you want to sync them.
                           </p>
                         </div>
                       </div>
@@ -761,7 +754,7 @@ export default function DataMigrationModal({
               )}
 
               {/* Fallback UI for unknown/invalid states */}
-              {(!hasLocalData && !hasCloudData) || scenario === 'UNKNOWN' ? (
+              {(!hasLocalData && !hasCloudData) || scenario === "UNKNOWN" ? (
                 <div className="space-y-4">
                   <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/20">
                     <Warning
@@ -773,7 +766,8 @@ export default function DataMigrationModal({
                         Sync State Unknown
                       </h3>
                       <p className="text-sm text-amber-700 dark:text-amber-300">
-                        We couldn't determine your sync state. Please retry the sync check.
+                        We couldn't determine your sync state. Please retry the
+                        sync check.
                       </p>
                     </div>
                   </div>
@@ -786,17 +780,22 @@ export default function DataMigrationModal({
                       <Spinner weight="duotone" className="w-5 h-5" />
                       Retry sync check
                     </button>
-                    
-                    {hasCloudData && cloudCounts && (cloudCounts.vehicles > 0 || cloudCounts.fillups > 0) && (
-                      <button
-                        onClick={handleDownload}
-                        className="w-full py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
-                      >
-                        <CloudArrowDown weight="duotone" className="w-5 h-5" />
-                        Download cloud data
-                      </button>
-                    )}
-                    
+
+                    {hasCloudData &&
+                      cloudCounts &&
+                      (cloudCounts.vehicles > 0 || cloudCounts.fillups > 0) && (
+                        <button
+                          onClick={handleDownload}
+                          className="w-full py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
+                        >
+                          <CloudArrowDown
+                            weight="duotone"
+                            className="w-5 h-5"
+                          />
+                          Download cloud data
+                        </button>
+                      )}
+
                     <button
                       onClick={onCancel}
                       className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"

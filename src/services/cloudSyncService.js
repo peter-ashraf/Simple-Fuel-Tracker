@@ -59,17 +59,13 @@ function isValidUuid(value) {
  * @returns {Promise<Object>} Test result with full error details
  */
 async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
-  console.log('[DEBUG][fillup] ========== SINGLE FILL-UP DEBUG TEST ==========');
-  console.log('[DEBUG][fillup] Raw local record:', JSON.stringify(fillup, null, 2));
   
   const { normalized, skipped, reason } = normalizeFillupForCloud(fillup, vehicleIdMap);
   
   if (skipped) {
-    console.log('[DEBUG][fillup] Fillup was skipped during normalization:', reason);
     return { success: false, skipped: true, reason };
   }
   
-  console.log('[DEBUG][fillup] Normalized payload:', JSON.stringify(normalized, null, 2));
   
   const payload = {
     ...normalized,
@@ -77,26 +73,13 @@ async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
     user_id: userId
   };
   
-  console.log('[DEBUG][fillup] Final payload with user_id:', JSON.stringify(payload, null, 2));
   
   const { error, data } = await supabase.from('fillups').upsert(payload);
   
   if (error) {
-    console.log('[DEBUG][fillup] UPSERT FAILED');
-    console.log('[DEBUG][fillup] Full error object:', JSON.stringify(error, null, 2));
-    console.log('[DEBUG][fillup] Error structure:', {
-      name: error.name,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      statusCode: error.statusCode
-    });
     return { success: false, error, payload };
   }
   
-  console.log('[DEBUG][fillup] UPSERT SUCCESS');
-  console.log('[DEBUG][fillup] Returned data:', data);
   return { success: true, data, payload };
 }
 
@@ -107,8 +90,6 @@ async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
  * @returns {Promise<Object>} Test result with full error details
  */
 async function debugSingleMaintenanceUpload(userId, maintenance) {
-  console.log('[DEBUG][maintenance] ========== SINGLE MAINTENANCE DEBUG TEST ==========');
-  console.log('[DEBUG][maintenance] Raw local record:', JSON.stringify(maintenance, null, 2));
   
   // Apply same date normalization as main upload
   let normalizedDate = null;
@@ -119,7 +100,6 @@ async function debugSingleMaintenanceUpload(userId, maintenance) {
   } else if (maintenance.createdAt) {
     normalizedDate = maintenance.createdAt.split('T')[0];
   } else {
-    console.log('[DEBUG][maintenance] No date field found, skipping');
     return { success: false, skipped: true, reason: 'missing date' };
   }
   
@@ -143,33 +123,14 @@ async function debugSingleMaintenanceUpload(userId, maintenance) {
     created_at: maintenance.createdAt || new Date().toISOString()
   };
   
-  console.log('[DEBUG][maintenance] Normalized payload:', JSON.stringify(payload, null, 2));
-  console.log('[Sync][maintenance] vehicle mapping check', {
-    originalVehicleId: maintenance.vehicleId,
-    mappedVehicleId: payload.vehicle_id,
-    maintenanceId: payload.id
-  });
-  
   const { error, data } = await supabase.from('maintenance').upsert(payload, {
     onConflict: 'stable_key,user_id'
   });
   
   if (error) {
-    console.log('[DEBUG][maintenance] UPSERT FAILED');
-    console.log('[DEBUG][maintenance] Full error object:', JSON.stringify(error, null, 2));
-    console.log('[DEBUG][maintenance] Error structure:', {
-      name: error.name,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      statusCode: error.statusCode
-    });
     return { success: false, error, payload };
   }
   
-  console.log('[DEBUG][maintenance] UPSERT SUCCESS');
-  console.log('[DEBUG][maintenance] Returned data:', data);
   return { success: true, data, payload };
 }
 
@@ -196,22 +157,16 @@ function generateStableKey(vehicle) {
  * @returns {Array} Vehicles with backfilled stable keys
  */
 function backfillStableKeys(vehicles) {
-  console.log('[Sync][vehicle] Backfilling stable keys for legacy vehicles');
-  
   const updatedVehicles = vehicles.map(vehicle => {
     if (vehicle.stableKey && isValidUuid(vehicle.stableKey)) {
-      console.log(`[Sync][vehicle] Vehicle ${vehicle.id} already has stable key: ${vehicle.stableKey}`);
       return vehicle;
     }
     
     const stableKey = generateStableKey(vehicle);
-    console.log(`[Sync][vehicle] Backfilled stable key for vehicle ${vehicle.id}: ${stableKey}`);
     return { ...vehicle, stableKey };
   });
   
-  // Persist updated vehicles with stable keys to localStorage immediately
   localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(updatedVehicles));
-  console.log(`[Sync][vehicle] Persisted ${updatedVehicles.length} vehicles with stable keys to localStorage`);
   
   return updatedVehicles;
 }
@@ -222,22 +177,16 @@ function backfillStableKeys(vehicles) {
  * @returns {Array} Fillups with stable keys
  */
 function backfillStableKeysForFillups(fillups) {
-  console.log('[Sync][fillup] Backfilling stable keys for legacy fillups');
-  
   const updatedFillups = fillups.map(fillup => {
     if (fillup.stableKey && isValidUuid(fillup.stableKey)) {
-      console.log(`[Sync][fillup] Fillup ${fillup.id} already has stable key: ${fillup.stableKey}`);
       return fillup;
     }
     
     const stableKey = generateStableKey(fillup);
-    console.log(`[Sync][fillup] Backfilled stable key for fillup ${fillup.id}: ${stableKey}`);
     return { ...fillup, stableKey };
   });
   
-  // Persist updated fillups with stable keys to localStorage immediately
   localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(updatedFillups));
-  console.log(`[Sync][fillup] Persisted ${updatedFillups.length} fillups with stable keys to localStorage`);
   
   return updatedFillups;
 }
@@ -248,22 +197,16 @@ function backfillStableKeysForFillups(fillups) {
  * @returns {Array} Maintenance with stable keys
  */
 function backfillStableKeysForMaintenance(maintenance) {
-  console.log('[Sync][maintenance] Backfilling stable keys for legacy maintenance');
-  
   const updatedMaintenance = maintenance.map(entry => {
     if (entry.stableKey && isValidUuid(entry.stableKey)) {
-      console.log(`[Sync][maintenance] Maintenance ${entry.id} already has stable key: ${entry.stableKey}`);
       return entry;
     }
     
     const stableKey = generateStableKey(entry);
-    console.log(`[Sync][maintenance] Backfilled stable key for maintenance ${entry.id}: ${stableKey}`);
     return { ...entry, stableKey };
   });
   
-  // Persist updated maintenance with stable keys to localStorage immediately
   localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(updatedMaintenance));
-  console.log(`[Sync][maintenance] Persisted ${updatedMaintenance.length} maintenance with stable keys to localStorage`);
   
   return updatedMaintenance;
 }
@@ -379,13 +322,10 @@ function matchVehicles(localVehicles, cloudVehicles) {
     const stableKey = normalizedLocal.stableKey;
     const fingerprint = generateVehicleFingerprint(normalizedLocal);
     
-    console.log(`[Sync][vehicle] Matching local vehicle ${localVehicle.id}: stableKey=${stableKey}, fingerprint=${fingerprint}`);
-    
     // First try stable key match
     if (stableKey && cloudByStableKey.has(stableKey)) {
       const cloudVehicle = cloudByStableKey.get(stableKey);
       matches.set(localVehicle.id, cloudVehicle.id);
-      console.log(`[Sync][vehicle] Matched local vehicle ${localVehicle.id} to cloud vehicle ${cloudVehicle.id} by stable key`);
       
       // Remove from unmatched cloud
       const idx = unmatchedCloud.findIndex(v => v.id === cloudVehicle.id);
@@ -397,7 +337,6 @@ function matchVehicles(localVehicles, cloudVehicles) {
     if (cloudByFingerprint.has(fingerprint)) {
       const cloudVehicle = cloudByFingerprint.get(fingerprint);
       matches.set(localVehicle.id, cloudVehicle.id);
-      console.log(`[Sync][vehicle] Matched local vehicle ${localVehicle.id} to cloud vehicle ${cloudVehicle.id} by fallback fingerprint`);
       
       // Remove from unmatched cloud
       const idx = unmatchedCloud.findIndex(v => v.id === cloudVehicle.id);
@@ -406,7 +345,6 @@ function matchVehicles(localVehicles, cloudVehicles) {
     }
     
     // No match found
-    console.log(`[Sync][vehicle] No match found for local vehicle ${localVehicle.id}`);
     unmatchedLocal.push(localVehicle);
   });
   
@@ -426,8 +364,6 @@ async function syncTombstonesToCloud(userId, localRecords, tableName) {
     return { synced: 0, errors: 0 };
   }
   
-  console.log(`[Sync][delete] Syncing ${deletedRecords.length} tombstones to ${tableName}`);
-  
   let synced = 0;
   let errors = 0;
   
@@ -438,13 +374,11 @@ async function syncTombstonesToCloud(userId, localRecords, tableName) {
     
     if (error) {
       errors++;
-      console.error(`[Sync][delete] Failed to sync tombstone for ${record.id}: ${error.message}`);
     } else {
       synced++;
     }
   }
   
-  console.log(`[Sync][delete] Tombstone sync complete: ${synced} synced, ${errors} errors`);
   return { synced, errors };
 }
 
@@ -581,9 +515,7 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
       // Round to 2 decimal places for currency
       totalCost = Math.round(totalCost * 100) / 100;
       computedTotal = true;
-      console.log(`[Sync][fillup] Computed totalCost from liters * pricePerLiter: ${totalCost}`);
     } else {
-      console.log(`[Sync][fillup] Skipping fillup ${id} due to unable to compute totalCost`);
       return { normalized: null, skipped: true, reason: 'unable to compute totalCost' };
     }
   } else {
@@ -602,18 +534,7 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
   if (fillup.date) {
     // Use explicit date field if present
     normalizedDate = fillup.date;
-    console.log(`[Sync][fillup] Fillup ${id}: Using fillup.date = ${fillup.date}`);
-  } else if (fillup.timestamp) {
-    // Extract date from timestamp for legacy records
-    normalizedDate = fillup.timestamp.split('T')[0];
-    console.log(`[Sync][fillup] Fillup ${id}: Extracted date from timestamp = ${normalizedDate} (original timestamp: ${fillup.timestamp})`);
-  } else if (fillup.createdAt) {
-    // Extract date from createdAt as fallback
-    normalizedDate = fillup.createdAt.split('T')[0];
-    console.log(`[Sync][fillup] Fillup ${id}: Extracted date from createdAt = ${normalizedDate} (original createdAt: ${fillup.createdAt})`);
   } else {
-    // CRITICAL: Reject record with no date information
-    console.error(`[Sync][fillup] Fillup ${id}: CRITICAL - No date field found (date, timestamp, createdAt all missing). Rejecting record to prevent data corruption.`);
     return { normalized: null, skipped: true, reason: 'missing date (date, timestamp, and createdAt all absent)' };
   }
 
@@ -639,7 +560,6 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
     created_at: fillup.createdAt || new Date().toISOString()
   };
 
-  console.log(`[Sync][fillup] Final payload for fillup ${id}: vehicleId=${newVehicleId}, date=${normalizedDate} (source: ${fillup.date ? 'date' : fillup.timestamp ? 'timestamp' : 'createdAt'}), totalCost=${totalCost}${computedTotal ? ' (computed)' : ''}`);
 
   return { normalized, skipped: false, reason: null, computedTotal };
 }
@@ -829,10 +749,10 @@ export const cloudSyncService = {
    * Check if local data exists
    */
   hasLocalData() {
-    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
-    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
-    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
-    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
+    const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]').filter(v => !v.deleted_at);
+    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]').filter(f => !f.deleted_at);
+    const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]').filter(m => !m.deleted_at);
+    const tripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]').filter(t => !t.deleted_at);
     
     return {
       hasData: vehicles.length > 0 || fillups.length > 0 || maintenance.length > 0 || tripEstimates.length > 0,
@@ -886,7 +806,6 @@ export const cloudSyncService = {
       const maintenance = maintenanceResult.data || [];
       const tripEstimates = tripEstimatesResult.data || [];
 
-      console.log('[Sync][getCloudDataSummary] Cloud counts - vehicles:', vehicles.length, 'fillups:', fillups.length, 'maintenance:', maintenance.length, 'trips:', tripEstimates.length);
 
       return {
         hasCloudData: vehicles.length > 0 || fillups.length > 0 || maintenance.length > 0 || tripEstimates.length > 0,
@@ -898,7 +817,6 @@ export const cloudSyncService = {
         }
       };
     } catch (error) {
-      console.error('[Sync][getCloudDataSummary] Error fetching cloud data summary:', error);
       return {
         hasCloudData: false,
         cloudCounts: {
@@ -934,7 +852,6 @@ export const cloudSyncService = {
    */
   async uploadLocalDataToCloud(userId, options = {}) {
     const { silent = false } = options;
-    console.log(`[Sync][upload] Starting ${silent ? 'silent' : 'manual'} upload to cloud`);
     const result = {
       success: false,
       action: 'upload',
@@ -983,32 +900,15 @@ export const cloudSyncService = {
       const { data: existingMaintenance, error: cloudMaintenanceError } = await supabase.from('maintenance').select('*').eq('user_id', userId);
       const { data: existingTripEstimates, error: cloudTripsError } = await supabase.from('trip_estimates').select('*').eq('user_id', userId).is('deleted_at', null);
       
-      if (cloudVehiclesError) result.details.push(`Cloud vehicles fetch failed: ${cloudVehiclesError.message}`);
-      if (cloudFillupsError) result.details.push(`Cloud fillups fetch failed: ${cloudFillupsError.message}`);
-      if (cloudMaintenanceError) result.details.push(`Cloud maintenance fetch failed: ${cloudMaintenanceError.message}`);
-      if (cloudTripsError) result.details.push(`Cloud trips fetch failed: ${cloudTripsError.message}`);
 
       result.details.push(`Cloud records found: ${existingCloudVehicles?.length || 0} vehicles, ${existingFillups?.length || 0} fillups, ${existingMaintenance?.length || 0} maintenance, ${existingTripEstimates?.length || 0} trips`);
 
-      // Log exact vehicle shapes for debugging
-      console.log('[Sync][upload] Local vehicle shapes:');
-      vehiclesWithStableKeys.forEach(v => {
-        console.log(`[Sync][vehicle] Local vehicle candidate: id=${v.id}, stableKey=${v.stableKey}, name=${v.name}, stable_key=${v.stable_key}, tankCapacity=${v.tankCapacity}, tank_capacity=${v.tank_capacity}`);
-      });
-      console.log('[Sync][upload] Cloud vehicle shapes:');
-      existingCloudVehicles?.forEach(v => {
-        console.log(`[Sync][vehicle] Cloud vehicle candidate: id=${v.id}, stableKey=${v.stableKey}, stable_key=${v.stable_key}, name=${v.name}, tankCapacity=${v.tankCapacity}, tank_capacity=${v.tank_capacity}`);
-      });
 
       // Match local vehicles to cloud vehicles BEFORE remapping (using original IDs)
       const { matches, unmatchedLocal, unmatchedCloud } = matchVehicles(vehiclesWithStableKeys, existingCloudVehicles || []);
       
-      console.log(`[Sync][upload] Vehicle matching: ${matches.size} matched, ${unmatchedLocal.length} unmatched local, ${unmatchedCloud.length} unmatched cloud`);
 
-      // Fail-safe guard: if matching collapsed unexpectedly, use fingerprint fallback
       if (matches.size === 0 && vehiclesWithStableKeys.length > 0 && existingCloudVehicles?.length > 0) {
-        console.log('[Sync][upload] WARNING: Stable-key matching returned zero matches with existing cloud data');
-        console.log('[Sync][upload] Falling back to fingerprint matching for safety');
         
         // Try fingerprint matching as fallback with normalization
         for (const localVehicle of vehiclesWithStableKeys) {
@@ -1019,22 +919,15 @@ export const cloudSyncService = {
             const normalizedCloud = normalizeVehicleForMatch(cloudVehicle, 'cloud');
             const cloudFingerprint = generateVehicleFingerprint(normalizedCloud);
             
-            console.log(`[Sync][upload] Fallback comparison: local fingerprint=${localFingerprint}, cloud fingerprint=${cloudFingerprint}`);
-            
             if (localFingerprint === cloudFingerprint) {
-              console.log(`[Sync][upload] Fallback matched local vehicle ${localVehicle.id} to cloud vehicle ${cloudVehicle.id} by fingerprint`);
               matches.set(localVehicle.id, cloudVehicle.id);
               break;
             }
           }
         }
         
-        console.log(`[Sync][upload] Fallback matching result: ${matches.size} matched by fingerprint`);
         
-        // If still zero matches after fallback, abort to prevent duplicates
         if (matches.size === 0) {
-          console.log('[Sync][upload] ERROR: Both stable-key and fingerprint matching returned zero matches');
-          console.log('[Sync][upload] Aborting upload to prevent duplicate data creation');
           result.success = false;
           result.message = 'Upload aborted: Vehicle matching failed. This may indicate data corruption or schema mismatch.';
           result.details.push('Matching failed: No vehicles could be matched between local and cloud data.');
@@ -1079,15 +972,12 @@ export const cloudSyncService = {
       const changeDetection = detectChanges(localDataSummary, cloudDataSummary);
       
       if (!changeDetection.hasChanges) {
-        console.log('[Sync][upload] No changes detected');
-        console.log('[Sync][upload] Nothing to upload');
         result.success = true;
         result.message = 'Nothing to upload. Cloud is already up to date.';
         result.details.push('No new or changed records detected');
         return result;
       }
       
-      console.log(`[Sync][upload] Changes detected: ${changeDetection.changeType} (${changeDetection.newVehicles} new vehicles, ${changeDetection.newFillups} new fillups, ${changeDetection.updatedVehicles} updated vehicles, ${changeDetection.deletedVehicles} deleted vehicles)`);
 
       // Sync tombstones to cloud before uploading new/updated records
       const vehicleTombstoneSync = await syncTombstonesToCloud(userId, vehiclesWithStableKeys, 'vehicles');
@@ -1116,21 +1006,12 @@ export const cloudSyncService = {
         vehicleIdMap.set(remappedLocalId, cloudId);
       });
       
-      // DEBUG: Log vehicle ID mapping for verification
-      console.log('[Sync][upload] DEBUG: Vehicle ID mapping:');
-      console.log('[Sync][upload] DEBUG: remappedToCloudIdMap size:', remappedToCloudIdMap.size);
-      console.log('[Sync][upload] DEBUG: vehicleIdMap size:', vehicleIdMap.size);
-      remappedToCloudIdMap.forEach((cloudId, remappedLocalId) => {
-        console.log(`[Sync][upload] DEBUG:   ${remappedLocalId} -> ${cloudId}`);
-      });
 
       // Upload vehicles with deduplication
       for (const remappedVehicle of remappedVehicles) {
         const matchedCloudId = remappedToCloudIdMap.get(remappedVehicle.id);
         
         if (matchedCloudId) {
-          // Vehicle already exists in cloud - check if update is needed
-          console.log(`[Sync][upload] Checking vehicle ${remappedVehicle.id} -> cloud ${matchedCloudId} for changes`);
           
           // Fetch current cloud vehicle to compare fields
           const { data: cloudVehicle, error: fetchError } = await supabase
@@ -1154,16 +1035,17 @@ export const cloudSyncService = {
             (remappedVehicle.fuelType || null) !== cloudVehicle.fuel_type ||
             (remappedVehicle.tankCapacity || null) !== cloudVehicle.tank_capacity ||
             (remappedVehicle.licensePlate || null) !== cloudVehicle.license_plate ||
+            (remappedVehicle.tyreSize?.width || null) !== cloudVehicle.tyre_width ||
+            (remappedVehicle.tyreSize?.aspectRatio || null) !== cloudVehicle.tyre_ratio ||
+            (remappedVehicle.tyreSize?.rimSize || null) !== cloudVehicle.tyre_rim ||
             remappedVehicle.stableKey !== cloudVehicle.stable_key;
           
           if (!hasChanges) {
-            console.log(`[Sync][upload] Skipping unchanged vehicle ${remappedVehicle.id}`);
             vehicleSkipped++;
             continue;
           }
           
           // Update vehicle with changes
-          console.log(`[Sync][upload] Updating existing vehicle ${remappedVehicle.id} -> cloud ${matchedCloudId}`);
           const { error } = await supabase.from('vehicles').update({
             name: remappedVehicle.name,
             make: remappedVehicle.make || null,
@@ -1172,6 +1054,9 @@ export const cloudSyncService = {
             fuel_type: remappedVehicle.fuelType || null,
             tank_capacity: remappedVehicle.tankCapacity || null,
             license_plate: remappedVehicle.licensePlate || null,
+            tyre_width: remappedVehicle.tyreSize?.width || null,
+            tyre_ratio: remappedVehicle.tyreSize?.aspectRatio || null,
+            tyre_rim: remappedVehicle.tyreSize?.rimSize || null,
             stable_key: remappedVehicle.stableKey
           }).eq('id', matchedCloudId);
           
@@ -1184,7 +1069,6 @@ export const cloudSyncService = {
           }
         } else {
           // New vehicle - insert it
-          console.log(`[Sync][upload] Inserting new vehicle ${remappedVehicle.id}`);
           const { error } = await supabase.from('vehicles').insert({
             id: remappedVehicle.id,
             user_id: userId,
@@ -1195,6 +1079,9 @@ export const cloudSyncService = {
             fuel_type: remappedVehicle.fuelType || null,
             tank_capacity: remappedVehicle.tankCapacity || null,
             license_plate: remappedVehicle.licensePlate || null,
+            tyre_width: remappedVehicle.tyreSize?.width || null,
+            tyre_ratio: remappedVehicle.tyreSize?.aspectRatio || null,
+            tyre_rim: remappedVehicle.tyreSize?.rimSize || null,
             stable_key: remappedVehicle.stableKey,
             created_at: new Date().toISOString()
           });
@@ -1202,7 +1089,6 @@ export const cloudSyncService = {
           if (error) {
             vehicleErrors++;
             result.details.push(`Vehicle insert failed (${remappedVehicle.id}): ${error.message} (code: ${error.code})`);
-            console.log(`[Sync][upload] ERROR: Vehicle insert failed for ${remappedVehicle.id}, aborting upload to prevent foreign key errors`);
             result.success = false;
             result.message = 'Upload aborted: Vehicle insert failed. This may indicate a schema mismatch.';
             result.details.push('Upload was aborted to prevent cascading foreign key errors.');
@@ -1211,19 +1097,8 @@ export const cloudSyncService = {
             vehicleInserts++;
             result.counts.vehicles++;
             
-            // CRITICAL FIX: Update vehicleIdMap for newly inserted vehicles
-            // This ensures fill-ups can reference the correct cloud vehicle ID
             vehicleIdMap.set(remappedVehicle.id, remappedVehicle.id);
-            console.log(`[Sync][upload] Updated vehicleIdMap for new vehicle: ${remappedVehicle.id} -> ${remappedVehicle.id}`);
             
-            // Verify the inserted row from Supabase
-            const { data: insertedRow, error: verifyError } = await supabase
-              .from('vehicles')
-              .select('id, user_id, name, make, model, year, fuel_type, tank_capacity, license_plate, stable_key, created_at, deleted_at')
-              .eq('id', remappedVehicle.id)
-              .single();
-            
-            console.log('[Sync][vehicle] Verified inserted cloud vehicle:', insertedRow, verifyError);
           }
         }
       }
@@ -1239,10 +1114,7 @@ export const cloudSyncService = {
         });
         
         for (const fillup of remappedFillups) {
-          // First try to match by stable_key
           if (fillup.stableKey && existingFillupStableKeys.has(fillup.stableKey)) {
-            const existingFillup = existingFillupStableKeys.get(fillup.stableKey);
-            console.log(`[Sync][upload] Skipping existing fillup ${fillup.id} (by stable_key ${fillup.stableKey}, matches cloud ${existingFillup.id})`);
             fillupSkipped++;
             fillupSkippedByStableKey++;
             continue;
@@ -1250,16 +1122,13 @@ export const cloudSyncService = {
           
           // Skip if fillup already exists in cloud (by ID)
           if (existingFillupIds.has(fillup.id)) {
-            console.log(`[Sync][upload] Skipping existing fillup ${fillup.id} (by ID)`);
             fillupSkipped++;
             fillupSkippedById++;
             continue;
           }
           
           // Fallback duplicate detection for historical bad data
-          const { isDuplicate, existingId } = detectDuplicateFillupByFields(fillup, existingFillups || []);
           if (isDuplicate) {
-            console.log(`[Sync][upload] Skipping duplicate fillup ${fillup.id} (fallback detection, matches existing ${existingId})`);
             fillupSkipped++;
             fillupSkippedByFallback++;
             continue;
@@ -1277,15 +1146,6 @@ export const cloudSyncService = {
             fillupComputedTotal++;
           }
           
-          // DEBUG: Log full payload and verify vehicle_id exists in cloud
-          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - vehicle_id in payload: ${normalized.vehicle_id}`);
-          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - Checking if vehicle_id exists in cloud vehicles...`);
-          const vehicleExists = existingCloudVehicles?.some(v => v.id === normalized.vehicle_id);
-          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - vehicle_id exists in cloud: ${vehicleExists}`);
-          if (!vehicleExists) {
-            console.error(`[Sync][upload] CRITICAL: Fillup ${fillup.id} references non-existent vehicle_id ${normalized.vehicle_id}`);
-          }
-          console.log(`[Sync][upload] DEBUG: Fillup ${fillup.id} - Full payload:`, JSON.stringify(normalized, null, 2));
 
           const { error, data: fillupData } = await supabase.from('fillups').upsert({
             ...normalized,
@@ -1294,26 +1154,9 @@ export const cloudSyncService = {
           });
           if (error) {
             fillupErrors++;
-            console.error('[Sync][upload] Fillup upsert FAILED - FULL ERROR OBJECT:', JSON.stringify(error, null, 2));
-            console.error('[Sync][upload] Fillup upsert FAILED - structured:', {
-              fillupId: fillup.id,
-              stableKey: fillup.stableKey,
-              payload: normalized,
-              vehicleId: normalized.vehicle_id,
-              vehicleExistsInCloud: vehicleExists,
-              error: {
-                name: error.name,
-                code: error.code,
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                statusCode: error.statusCode
-              }
-            });
             result.details.push(`Fillup upload failed (${fillup.id}): ${error.message} (code: ${error.code})`);
           } else {
             result.counts.fillups++;
-            console.log(`[Sync][upload] Uploaded fillup ${fillup.id} with stable_key ${fillup.stableKey}, vehicle_id ${normalized.vehicle_id}`);
           }
         }
         
@@ -1341,9 +1184,7 @@ export const cloudSyncService = {
             const existingMaintenance = existingMaintenanceStableKeys.get(entry.stableKey);
             cloudIdToUse = existingMaintenance.id;
             matchedByStableKey = true;
-            console.log(`[Sync][upload] Maintenance ${entry.id}: Matched by stable_key ${entry.stableKey} to cloud ${cloudIdToUse}`);
           } else if (existingMaintenanceIds.has(entry.id)) {
-            console.log(`[Sync][upload] Maintenance ${entry.id}: Already exists in cloud by ID`);
             continue;
           }
 
@@ -1352,15 +1193,7 @@ export const cloudSyncService = {
           let normalizedMaintenanceDate = null;
           if (entry.date) {
             normalizedMaintenanceDate = entry.date;
-            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Using entry.date = ${entry.date}`);
-          } else if (entry.timestamp) {
-            normalizedMaintenanceDate = entry.timestamp.split('T')[0];
-            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Extracted date from timestamp = ${normalizedMaintenanceDate} (original timestamp: ${entry.timestamp})`);
-          } else if (entry.createdAt) {
-            normalizedMaintenanceDate = entry.createdAt.split('T')[0];
-            console.log(`[Sync][maintenance] Maintenance ${entry.id}: Extracted date from createdAt = ${normalizedMaintenanceDate} (original createdAt: ${entry.createdAt})`);
           } else {
-            console.error(`[Sync][maintenance] Maintenance ${entry.id}: CRITICAL - No date field found (date, timestamp, createdAt all missing). Rejecting record.`);
             maintenanceErrors++;
             result.details.push(`Maintenance upload failed (${entry.id}): missing date (date, timestamp, and createdAt all absent)`);
             continue;
@@ -1394,28 +1227,6 @@ export const cloudSyncService = {
             created_at: entry.createdAt || new Date().toISOString()
           };
           
-          console.log(`[Sync][maintenance] Maintenance ${entry.id} upload payload:`, {
-            id: cloudIdToUse,
-            stableKey: entry.stableKey,
-            date: normalizedMaintenanceDate,
-            vehicleId: entry.vehicleId,
-            matchedByStableKey
-          });
-
-          console.log('[Sync][maintenance] vehicle mapping check', {
-            originalVehicleId: entry.vehicleId,
-            mappedVehicleId: payload.vehicle_id,
-            maintenanceId: payload.id
-          });
-
-          // DEBUG: Verify vehicle_id exists in cloud
-          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - vehicle_id in payload: ${entry.vehicleId}`);
-          const maintenanceVehicleExists = existingCloudVehicles?.some(v => v.id === entry.vehicleId);
-          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - vehicle_id exists in cloud: ${maintenanceVehicleExists}`);
-          if (!maintenanceVehicleExists) {
-            console.error(`[Sync][upload] CRITICAL: Maintenance ${entry.id} references non-existent vehicle_id ${entry.vehicleId}`);
-          }
-          console.log(`[Sync][upload] DEBUG: Maintenance ${entry.id} - Full payload:`, JSON.stringify(payload, null, 2));
 
           
 
@@ -1428,28 +1239,9 @@ export const cloudSyncService = {
 
           if (error) {
             maintenanceErrors++;
-            console.error('[Sync][upload] Maintenance upsert FAILED - FULL ERROR OBJECT:', JSON.stringify(error, null, 2));
-            console.error('[Sync][upload] Maintenance upsert FAILED - structured:', {
-              maintenanceId: entry.id,
-              cloudId: cloudIdToUse,
-              stableKey: entry.stableKey,
-              vehicleId: entry.vehicleId,
-              vehicleExistsInCloud: maintenanceVehicleExists,
-              matchedByStableKey,
-              error: {
-                name: error.name,
-                code: error.code,
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                statusCode: error.statusCode
-              }
-            });
             result.details.push(`Maintenance upload failed (${entry.id}): ${error.message} (code: ${error.code})`);
           } else {
             result.counts.maintenance++;
-            const action = matchedByStableKey ? 'updated' : 'inserted';
-            console.log(`[Sync][upload] ${action} maintenance ${entry.id} with stable_key ${entry.stableKey} (cloud ID: ${cloudIdToUse})`);
           }
         }
       }
@@ -1459,9 +1251,7 @@ export const cloudSyncService = {
         const existingTripIds = new Set(existingTripEstimates?.map(t => t.id) || []);
         
         for (const estimate of remappedTripEstimates) {
-          // Skip if trip estimate already exists in cloud
           if (existingTripIds.has(estimate.id)) {
-            console.log(`[Sync][upload] Skipping existing trip estimate ${estimate.id}`);
             continue;
           }
           
@@ -1493,26 +1283,6 @@ export const cloudSyncService = {
       const { data: cloudMaintenanceAfter, error: maintenanceAfterError } = await supabase.from('maintenance').select('id').eq('user_id', userId).is('deleted_at', null);
       const { data: cloudTripsAfter, error: tripsAfterError } = await supabase.from('trip_estimates').select('id').eq('user_id', userId).is('deleted_at', null);
 
-      // Upload summary logging
-      console.log(`[Sync][upload] Upload summary:`);
-      console.log(`  - Cloud counts BEFORE: ${existingCloudVehicles?.length || 0} vehicles, ${existingFillups?.length || 0} fillups, ${existingMaintenance?.length || 0} maintenance, ${existingTripEstimates?.length || 0} trips`);
-      console.log(`  - Local counts BEFORE: ${vehicles.length} vehicles, ${fillups.length} fillups, ${maintenance.length} maintenance, ${tripEstimates.length} trips`);
-      console.log(`  - Matched vehicles: ${matches.size}`);
-      console.log(`  - New vehicles: ${vehicleInserts}`);
-      console.log(`  - Updated vehicles: ${vehicleUpdates}`);
-      console.log(`  - Skipped vehicles (unchanged): ${vehicleSkipped}`);
-      console.log(`  - New fillups: ${result.counts.fillups}`);
-      console.log(`  - Skipped fillups by stable_key: ${fillupSkippedByStableKey || 0}`);
-      console.log(`  - Skipped fillups by ID: ${fillupSkippedById || 0}`);
-      console.log(`  - Skipped fillups by fallback: ${fillupSkippedByFallback || 0}`);
-      console.log(`  - Total skipped fillups: ${fillupSkipped}`);
-      console.log(`  - New maintenance: ${result.counts.maintenance}`);
-      console.log(`  - New trip estimates: ${result.counts.tripEstimates}`);
-      console.log(`  - Total skipped records: ${totalSkipped}`);
-      console.log(`  - Errors: ${totalErrors}`);
-      console.log(`  - Total records uploaded: ${totalRecords}`);
-      console.log(`  - Cloud counts AFTER: ${cloudVehiclesAfter?.length || 0} vehicles, ${cloudFillupsAfter?.length || 0} fillups, ${cloudMaintenanceAfter?.length || 0} maintenance, ${cloudTripsAfter?.length || 0} trips`);
-      console.log(`  - Cloud count changes: +${(cloudVehiclesAfter?.length || 0) - (existingCloudVehicles?.length || 0)} vehicles, +${(cloudFillupsAfter?.length || 0) - (existingFillups?.length || 0)} fillups, +${(cloudMaintenanceAfter?.length || 0) - (existingMaintenance?.length || 0)} maintenance, +${(cloudTripsAfter?.length || 0) - (existingTripEstimates?.length || 0)} trips`);
 
       if (totalErrors === 0 && totalRecords > 0) {
         result.success = true;
@@ -1530,7 +1300,6 @@ export const cloudSyncService = {
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
         // Set cloud synced flag to indicate local data is now in cloud
         localStorage.setItem(CLOUD_SYNCED_FLAG_KEY, new Date().toISOString());
-        console.log('[Sync][upload] Upload successful, migration flags set');
       } else if (totalRecords > 0) {
         result.success = false;
         result.totalUploaded = totalRecords;
@@ -1543,7 +1312,7 @@ export const cloudSyncService = {
         if (fillupSkipped > 0) {
           result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
         }
-        console.log('[Sync][upload] Upload partially succeeded with errors');
+        result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
       } else if (totalSkipped > 0) {
         // No new records, only skipped existing records
         // But only treat as no-op if there were NO errors
@@ -1555,7 +1324,7 @@ export const cloudSyncService = {
           if (fillupSkipped > 0) {
             result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
           }
-          console.log('[Sync][upload] No changes detected, nothing to upload');
+          result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
         } else {
           // There were errors even though no records were uploaded
           result.success = false;
@@ -1566,7 +1335,7 @@ export const cloudSyncService = {
           if (fillupSkipped > 0) {
             result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
           }
-          console.log('[Sync][upload] Upload failed with errors, no records uploaded');
+          result.details.push(`Fillup deduplication: ${fillupSkippedByStableKey} skipped by stable_key, ${fillupSkippedById} skipped by ID, ${fillupSkippedByFallback} skipped by fallback detection`);
         }
       } else {
         result.success = false;
@@ -1577,7 +1346,7 @@ export const cloudSyncService = {
         if (fillupSkipped > 0) {
           result.details.push(`Fillup normalization: ${fillupSkipped} fillups skipped due to missing required fields`);
         }
-        console.log('[Sync][upload] Upload failed - no records saved');
+        result.details.push(`Skipped ${totalSkipped} existing records`);
       }
 
       return result;
@@ -1585,7 +1354,6 @@ export const cloudSyncService = {
       result.success = false;
       result.message = 'Upload failed due to an unexpected error.';
       result.details.push(`Exception: ${error.message}`);
-      console.error('[Sync][upload] Upload exception:', error);
       return result;
     }
   },
@@ -1594,7 +1362,6 @@ export const cloudSyncService = {
    * Download cloud data to local (overwrites local)
    */
   async downloadCloudDataToLocal(userId) {
-    console.log('[Sync][download] Starting download from cloud');
     const result = {
       success: false,
       action: 'download',
@@ -1638,7 +1405,11 @@ export const cloudSyncService = {
           tankCapacity: v.tank_capacity,
           licensePlate: v.license_plate,
           stableKey: v.stable_key,
-          tyreSize: null
+          tyreSize: {
+            width: v.tyre_width || null,
+            aspectRatio: v.tyre_ratio || null,
+            rimSize: v.tyre_rim || null
+          }
         }));
         localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(mappedVehicles));
         result.counts.vehicles = mappedVehicles.length;
@@ -1874,6 +1645,9 @@ export const cloudSyncService = {
             fuel_type: localVehicle.fuelType || null,
             tank_capacity: localVehicle.tankCapacity || null,
             license_plate: localVehicle.licensePlate || null,
+            tyre_width: localVehicle.tyreSize?.width || null,
+            tyre_ratio: localVehicle.tyreSize?.aspectRatio || null,
+            tyre_rim: localVehicle.tyreSize?.rimSize || null,
             stable_key: localVehicle.stableKey,
             created_at: new Date().toISOString()
           });
@@ -2076,6 +1850,9 @@ export const cloudSyncService = {
             fuel_type: vehicle.fuelType || null,
             tank_capacity: vehicle.tankCapacity || null,
             license_plate: vehicle.licensePlate || null,
+            tyre_width: vehicle.tyreSize?.width || null,
+            tyre_ratio: vehicle.tyreSize?.aspectRatio || null,
+            tyre_rim: vehicle.tyreSize?.rimSize || null,
             created_at: new Date().toISOString()
           });
         }
@@ -2226,7 +2003,11 @@ export const cloudSyncService = {
           fuelType: v.fuel_type,
           tankCapacity: v.tank_capacity,
           licensePlate: v.license_plate,
-          tyreSize: null
+          tyreSize: {
+            width: v.tyre_width || null,
+            aspectRatio: v.tyre_ratio || null,
+            rimSize: v.tyre_rim || null
+          }
         }));
         localStorage.setItem('fueltracker-vehicles-v2', JSON.stringify(mappedVehicles));
       }
@@ -2573,6 +2354,8 @@ export const cloudSyncService = {
         // Only show modal if user action is genuinely required
         const syncStatus = await this.getSyncStatus(userId);
         let noActionableDifference = false;
+        const hasLocalData = syncStatus.hasLocalData;
+        const hasCloudData = syncStatus.hasCloudData;
 
         if (hasLocalData && hasCloudData) {
           const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
@@ -2583,7 +2366,6 @@ export const cloudSyncService = {
               uploadCheck.message === 'Nothing to upload. All records are already in sync.'
             );
 
-          console.log('[Sync][initialize] noActionableDifference:', noActionableDifference, 'uploadCheck.message:', uploadCheck.message);
         }
         if (currentId !== latestInitializationId) return null;
 
@@ -2591,8 +2373,6 @@ export const cloudSyncService = {
         // - No local data and no cloud data (fresh start)
         // - No conflicts and counts match (already in sync)
         // - No conflicts and only local-only data (first-time user with local data, can auto-upload)
-        const hasLocalData = syncStatus.hasLocalData;
-        const hasCloudData = syncStatus.hasCloudData;
         const hasConflicts = syncStatus.detailedDiff?.conflicts?.length > 0;
         const countsMatch = (syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles && 
                            syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups);
@@ -2635,17 +2415,6 @@ export const cloudSyncService = {
         // - Both local and cloud data exist with differences
         // - Cloud data exists but no local data (user must choose download or start fresh)
         if (hasConflicts || (hasLocalData && hasCloudData) || (hasCloudData && !hasLocalData)) {
-          console.log('[Sync][initialize] Showing modal - user action required');
-          
-          // AUDIT: Log full syncStatus object before returning
-          console.log('[Sync][initialize] AUDIT - Full syncStatus object:', JSON.stringify(syncStatus, null, 2));
-          console.log('[Sync][initialize] AUDIT - hasLocalData:', hasLocalData);
-          console.log('[Sync][initialize] AUDIT - hasCloudData:', hasCloudData);
-          console.log('[Sync][initialize] AUDIT - localCounts:', syncStatus.localCounts);
-          console.log('[Sync][initialize] AUDIT - cloudCounts:', syncStatus.cloudCounts);
-          console.log('[Sync][initialize] AUDIT - hasConflicts:', hasConflicts);
-          console.log('[Sync][initialize] AUDIT - countsMatch:', countsMatch);
-          console.log('[Sync][initialize] AUDIT - migrationDecision:', migrationDecision);
           
           // Derive explicit scenario string
           let scenario = 'UNKNOWN';
@@ -2658,7 +2427,6 @@ export const cloudSyncService = {
           } else if (hasLocalData && hasCloudData) {
             scenario = 'HAS_BOTH';
           }
-          console.log('[Sync][initialize] AUDIT - Derived scenario:', scenario);
           
           // Attach scenario to syncStatus for explicit modal rendering
           syncStatus.scenario = scenario;
@@ -2666,7 +2434,6 @@ export const cloudSyncService = {
           // Cache pending sync status for replayability
           pendingSyncStatus = syncStatus;
           localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(syncStatus));
-          console.log('[Sync][initialize] Cached pending sync status for replayability');
           
           return syncStatus;
         }
@@ -3140,6 +2907,13 @@ export const cloudSyncService = {
   },
 
   computeDiff(localRecords, cloudRecords, type) {
+    const { normalized: normalizedLocal } = this.normalizeLegacyRecords(localRecords || []);
+    const { normalized: normalizedCloud } = this.normalizeLegacyRecords(cloudRecords || []);
+    
+    // Only compare records that aren't deleted
+    const activeLocal = normalizedLocal.filter(r => !r.deletedAt && r.lastAction !== 'DELETE' && !r.deleted_at);
+    const activeCloud = normalizedCloud.filter(r => !r.deleted_at);
+
     const diff = {
       localOnly: [],
       cloudOnly: [],
@@ -3152,13 +2926,12 @@ export const cloudSyncService = {
     const localMap = new Map();
     const cloudMap = new Map();
 
-    localRecords.forEach(r => {
-      // Use stableKey as primary identity, fallback to UUID-like id
+    activeLocal.forEach(r => {
       const key = r.stableKey || r.id;
       localMap.set(key, r);
     });
 
-    cloudRecords.forEach(r => {
+    activeCloud.forEach(r => {
       const key = r.stable_key || r.id;
       cloudMap.set(key, r);
     });
@@ -3815,7 +3588,7 @@ export const cloudSyncService = {
     if (maintenance.vehicleId) {
       if (maintenance.vehicleId === 'default' || maintenance.vehicleId === '' || !this.isValidUuid(maintenance.vehicleId)) {
         // Try to map local vehicle ID to cloud vehicle UUID
-        console.log(`[Sync][uploadSingleMaintenance] vehicleId "${maintenance.vehicleId}" is not a valid UUID, attempting to map`);
+        
         const vehicleIdMap = await this.buildVehicleIdMap(userId);
         const cloudVehicleId = remappedToCloudIdMap.get(maintenance.vehicleId) ||
           vehicleIdMap.get(maintenance.vehicleId) ||
@@ -3823,16 +3596,14 @@ export const cloudSyncService = {
         
         if (!cloudVehicleId) {
           const error = `Cannot map vehicleId "${maintenance.vehicleId}" to a valid cloud vehicle UUID. Vehicle must be synced first.`;
-          console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
+          
           throw new Error(error);
         }
         
         maintenance.vehicleId = cloudVehicleId;
-        console.log(`[Sync][uploadSingleMaintenance] Mapped vehicleId to cloud UUID: ${cloudVehicleId}`);
+        
       }
     }
-
-    console.log(`[Sync][uploadSingleMaintenance] Starting upload for id: ${maintenance.id}, userId: ${userId}`);
 
     const now = new Date().toISOString();
     
@@ -3864,11 +3635,11 @@ export const cloudSyncService = {
       deleted_at: maintenance.deletedAt || null
     };
 
-    console.log(`[Sync][uploadSingleMaintenance] Payload keys:`, Object.keys(normalized));
+    
 
     if (existingRow) {
       // Row exists - UPDATE by id (the primary key)
-      console.log(`[Sync][uploadSingleMaintenance] Existing row found with id: ${existingRow.id}, updating by id`);
+      
       const { error: updateErr } = await supabase
         .from('maintenance')
         .update(normalized)
@@ -3878,16 +3649,16 @@ export const cloudSyncService = {
         console.error(`[Sync][uploadSingleMaintenance] UPDATE failed for ${maintenance.id} (code: ${updateErr.code}):`, updateErr.message);
         throw new Error(`Failed to update maintenance ${maintenance.id}: ${updateErr.message}`);
       }
-      console.log(`[Sync][uploadSingleMaintenance] UPDATE succeeded for ${maintenance.id}`);
+      
     } else {
       // Row doesn't exist - INSERT without id (let database generate it)
-      console.log(`[Sync][uploadSingleMaintenance] No existing row for ${maintenance.id}, inserting`);
+      
       const { error: insertErr } = await supabase.from('maintenance').insert(normalized);
       if (insertErr) {
         console.error(`[Sync][uploadSingleMaintenance] INSERT failed for ${maintenance.id} (code: ${insertErr.code}):`, insertErr.message);
         throw new Error(`Failed to insert maintenance ${maintenance.id}: ${insertErr.message}`);
       }
-      console.log(`[Sync][uploadSingleMaintenance] INSERT succeeded for ${maintenance.id}`);
+      
     }
   },
 
@@ -3919,7 +3690,7 @@ export const cloudSyncService = {
     if (trip.vehicleId) {
       if (trip.vehicleId === 'default' || trip.vehicleId === '' || !this.isValidUuid(trip.vehicleId)) {
         // Try to map local vehicle ID to cloud vehicle UUID
-        console.log(`[Sync][uploadSingleTripEstimate] vehicleId "${trip.vehicleId}" is not a valid UUID, attempting to map`);
+        
         const vehicleIdMap = await this.buildVehicleIdMap(userId);
         const cloudVehicleId = vehicleIdMap.get(trip.vehicleId);
         
@@ -3930,11 +3701,9 @@ export const cloudSyncService = {
         }
         
         trip.vehicleId = cloudVehicleId;
-        console.log(`[Sync][uploadSingleTripEstimate] Mapped vehicleId to cloud UUID: ${cloudVehicleId}`);
+        
       }
     }
-
-    console.log(`[Sync][uploadSingleTripEstimate] Starting upload for id: ${trip.id}, userId: ${userId}`);
 
     const now = new Date().toISOString();
     
@@ -3962,11 +3731,8 @@ export const cloudSyncService = {
       deleted_at: trip.deletedAt || null
     };
 
-    console.log(`[Sync][uploadSingleTripEstimate] Payload keys:`, Object.keys(normalized));
-
     if (existingRow) {
       // Row exists - UPDATE by id (the primary key)
-      console.log(`[Sync][uploadSingleTripEstimate] Existing row found with id: ${existingRow.id}, updating by id`);
       const { error: updateErr } = await supabase
         .from('trip_estimates')
         .update(normalized)
@@ -3976,16 +3742,13 @@ export const cloudSyncService = {
         console.error(`[Sync][uploadSingleTripEstimate] UPDATE failed for ${trip.id} (code: ${updateErr.code}):`, updateErr.message);
         throw new Error(`Failed to update trip estimate ${trip.id}: ${updateErr.message}`);
       }
-      console.log(`[Sync][uploadSingleTripEstimate] UPDATE succeeded for ${trip.id}`);
     } else {
       // Row doesn't exist - INSERT without id (let database generate it)
-      console.log(`[Sync][uploadSingleTripEstimate] No existing row for ${trip.id}, inserting`);
       const { error: insertErr } = await supabase.from('trip_estimates').insert(normalized);
       if (insertErr) {
         console.error(`[Sync][uploadSingleTripEstimate] INSERT failed for ${trip.id} (code: ${insertErr.code}):`, insertErr.message);
         throw new Error(`Failed to insert trip estimate ${trip.id}: ${insertErr.message}`);
       }
-      console.log(`[Sync][uploadSingleTripEstimate] INSERT succeeded for ${trip.id}`);
     }
   },
 
@@ -4263,7 +4026,6 @@ export const cloudSyncService = {
    * @returns {Promise<Object>} Sync result
    */
   async syncBothSides(userId) {
-    console.log('[Sync][syncBothSides] Starting bidirectional sync');
     const result = {
       success: false,
       action: 'sync-both',
@@ -4278,7 +4040,6 @@ export const cloudSyncService = {
 
       // Check for conflicts first
       if (detailedDiff.conflicts.length > 0) {
-        console.log('[Sync][syncBothSides] Conflicts detected, returning for user resolution');
         result.needsResolution = true;
         result.conflicts = detailedDiff.conflicts;
         result.nonConflicts = detailedDiff.nonConflicts;
@@ -4312,7 +4073,6 @@ export const cloudSyncService = {
         ? `Sync complete: ${result.summary.uploaded} uploaded, ${result.summary.downloaded} downloaded.`
         : 'Sync completed with errors';
     } catch (error) {
-      console.error('[Sync][syncBothSides] Sync failed:', error);
       result.success = false;
       result.message = 'Sync failed';
       result.details.push(error.message);
@@ -4326,7 +4086,6 @@ export const cloudSyncService = {
    * Enforces dependency ordering: vehicles -> fillups -> maintenance -> trips
    */
   async uploadLocalChanges(userId) {
-    console.log('[Sync][uploadLocalChanges] Starting local-first upload with dependency ordering');
     const result = {
       success: false,
       action: 'upload-local',
@@ -4347,10 +4106,8 @@ export const cloudSyncService = {
         { key: 'tripEstimates', type: 'trip', dependsOn: ['vehicles'] }
       ];
 
-      console.log('[Sync][uploadLocalChanges] Processing entities in dependency order');
       
       for (const ent of entities) {
-        console.log(`[Sync][uploadLocalChanges] Processing ${ent.key} (depends on: ${ent.dependsOn.join(', ') || 'none'})`);
         const diff = detailedDiff.entities[ent.key];
         const applyResult = await this.applyDiff(diff, 'upload-local', ent.type, userId);
         
@@ -4360,7 +4117,6 @@ export const cloudSyncService = {
         result.counts[ent.key] = applyResult.uploaded;
         result.details.push(...applyResult.errors);
         
-        console.log(`[Sync][uploadLocalChanges] Completed ${ent.key}: ${applyResult.uploaded} uploaded, ${applyResult.errors.length} errors`);
       }
 
       result.success = result.details.length === 0;
@@ -4381,7 +4137,6 @@ export const cloudSyncService = {
    * Replace local data with cloud data - cloud-first pull
    */
   async replaceLocalWithCloud(userId) {
-    console.log('[Sync][replaceLocalWithCloud] Starting cloud-first replacement');
     const result = {
       success: false,
       action: 'replace-local',
@@ -4479,7 +4234,6 @@ export const cloudSyncService = {
       detectedAt: new Date().toISOString()
     });
     localStorage.setItem('fueltracker-unresolved-conflicts', JSON.stringify(unresolved));
-    console.log('[Sync][resolveConflict] Stored unresolved conflict:', conflict.id);
   },
 
   /**
@@ -4501,7 +4255,6 @@ export const cloudSyncService = {
    * @returns {Promise<Object>} Result summary
    */
   async applyResolutions(resolutions, conflicts, nonConflicts, userId) {
-    console.log(`[Sync][applyResolutions] Starting with userId: ${userId}`);
     
     // Validate userId before proceeding
     if (!userId) {
@@ -4578,7 +4331,6 @@ export const cloudSyncService = {
    * Resolve a single conflict for any entity
    */
   async resolveSingleConflict(conflict, resolution, userId) {
-    console.log(`[Sync][resolveSingleConflict] Resolving conflict with resolution: ${resolution}, userId: ${userId}`);
     
     // Validate userId before proceeding
     if (!userId) {
@@ -4637,7 +4389,7 @@ export const cloudSyncService = {
       return;
     }
 
-    console.log('[Sync][background] Processing queued sync');
+    
     localStorage.removeItem(BACKGROUND_SYNC_LOCK_KEY);
     await this.syncAfterMutation(userId);
   }

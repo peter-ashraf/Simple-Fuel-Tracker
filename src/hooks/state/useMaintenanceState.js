@@ -253,7 +253,7 @@ export function useMaintenanceState(selectedVehicleId) {
   );
 
   const activeVehicleMaintenanceEntries = useMemo(() => 
-    maintenanceEntries.filter(e => e.vehicleId === selectedVehicleId)
+    maintenanceEntries.filter(e => e.vehicleId === selectedVehicleId && !e.deletedAt)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
     [maintenanceEntries, selectedVehicleId]
   );

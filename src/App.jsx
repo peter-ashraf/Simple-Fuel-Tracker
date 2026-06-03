@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Routes, Route, NavLink, useLocation } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  NavLink,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import {
   House,
   ListBullets,
@@ -21,11 +27,6 @@ import { useTranslation } from "react-i18next";
 import { authService } from "./services/authService";
 import { cloudSyncService } from "./services/cloudSyncService";
 import { supabase } from "./lib/supabaseClient";
-
-// Check if supabase client is properly initialized
-if (!supabase) {
-  console.error("Supabase client not initialized");
-}
 
 // Pages
 import Dashboard from "./components/Dashboard";
@@ -213,6 +214,7 @@ function Header() {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -246,8 +248,11 @@ export default function App() {
         const status = await cloudSyncService.initialize();
 
         if (status) {
-          const migrationComplete = localStorage.getItem('fueltracker-migration-complete') === 'true';
-          const migrationDecision = localStorage.getItem('fueltracker-migration-decision');
+          const migrationComplete =
+            localStorage.getItem("fueltracker-migration-complete") === "true";
+          const migrationDecision = localStorage.getItem(
+            "fueltracker-migration-decision",
+          );
 
           const countsMatch =
             status.localCounts?.vehicles === status.cloudCounts?.vehicles &&
@@ -275,16 +280,15 @@ export default function App() {
     };
 
     const checkSession = async () => {
-      console.log("[App][startup] Starting session check");
       const currentSession = await authService.getSession();
       setSession(currentSession);
-      
+
       // Fetch userId when session is available
       if (currentSession) {
         const fetchedUserId = await cloudSyncService.getUserId();
         setUserId(fetchedUserId);
       }
-      
+
       await runSync(currentSession);
       setLoading(false);
       startupInitDone = true;
@@ -304,18 +308,15 @@ export default function App() {
           // Only run if startup is already complete; otherwise checkSession
           // handles it. This guards against near-simultaneous events.
           if (!startupInitDone) {
-            console.log(
-              "[App][sync] SIGNED_IN received before startup done, skipping duplicate init",
-            );
             return;
           }
-          console.log("[App][sync] Explicit sign-in detected, initializing");
-          
+
           // Fetch userId on sign-in
           const fetchedUserId = await cloudSyncService.getUserId();
           setUserId(fetchedUserId);
-          
+
           await runSync(currentSession);
+          navigate("/");
         }
 
         if (event === "SIGNED_OUT") {
@@ -359,7 +360,6 @@ export default function App() {
 
       setMigrationResult(result);
     } catch (error) {
-      console.error("[App][migration] Decision failed:", error);
       setMigrationResult({
         success: false,
         message: "Migration failed: " + error.message,
@@ -386,7 +386,6 @@ export default function App() {
   };
 
   const handleMigrationCancel = () => {
-    console.log("[App] Migration cancelled");
     setShowMigrationModal(false);
     setSyncStatus(null);
   };

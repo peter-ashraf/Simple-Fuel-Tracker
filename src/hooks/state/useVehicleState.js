@@ -31,7 +31,7 @@ export function useVehicleState() {
     // Trigger silent background sync after mutation
     const userId = await cloudSyncService.getUserId();
     if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+      cloudSyncService.syncAfterMutation(userId).catch(err => {});
     }
   };
 
@@ -48,7 +48,6 @@ export function useVehicleState() {
         setSelectedVehicleId(remaining.id);
       }
     }
-    console.log(`[Sync][delete] Marked local vehicle ${id} deleted`);
     return true;
   };
 
@@ -59,23 +58,19 @@ export function useVehicleState() {
     
     // Mark all fillups for this vehicle as deleted
     const updatedFillups = fillups.map(f => f.vehicleId === id ? { ...f, deletedAt } : f);
-    localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(updatedFillups));
-    
     // Mark vehicle as deleted
     const result = internalDeleteVehicle(id);
     if (result) {
-      console.log(`[Sync][delete] Cascaded tombstone to fillups for vehicle ${id}`);
-      // Trigger silent background sync after mutation
       const userId = await cloudSyncService.getUserId();
       if (userId) {
-        cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
+        cloudSyncService.syncAfterMutation(userId).catch(err => {});
       }
     }
     return result;
   };
 
   return {
-    vehicles,
+    vehicles: vehicles.filter(v => !v.deletedAt),
     setVehicles,
     selectedVehicleId,
     setSelectedVehicleId,

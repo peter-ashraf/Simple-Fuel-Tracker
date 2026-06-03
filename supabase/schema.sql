@@ -12,6 +12,9 @@ CREATE TABLE vehicles (
   fuel_type TEXT,
   tank_capacity NUMERIC,
   license_plate TEXT,
+  tyre_width INTEGER,
+  tyre_ratio INTEGER,
+  tyre_rim INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
