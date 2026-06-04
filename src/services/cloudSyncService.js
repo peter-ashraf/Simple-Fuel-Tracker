@@ -2278,142 +2278,104 @@ export const cloudSyncService = {
    * Returns sync status for UI to decide if migration modal is needed
    */
   async initialize() {
-    // Single-flight guard: if already initializing, return the same promise
-    if (initializationInProgress) {
-      console.log('[Sync][initialize] Initialization already in progress, returning existing promise');
-      return initializationPromise;
-    }
+  if (initializationInProgress) {
+    console.log('[Sync][initialize] Initialization already in progress, returning existing promise');
+    return initializationPromise;
+  }
 
-    const currentId = ++latestInitializationId;
-    console.log(`[Sync][initialize] Starting sync initialization (ID: ${currentId})`);
-    
-    initializationInProgress = true;
-    initializationPromise = (async () => {
-      try {
-        const userId = await this.getUserId();
-        if (!userId) {
-          console.log('[Sync][initialize] No user ID found, returning null');
-          return null;
+  const currentId = ++latestInitializationId;
+  console.log(`[Sync][initialize] Starting sync initialization (ID: ${currentId})`);
+
+  initializationInProgress = true;
+  initializationPromise = (async () => {
+    try {
+      const userId = await this.getUserId();
+      if (!userId) {
+        console.log('[Sync][initialize] No user ID found, returning null');
+        return null;
+      }
+
+      if (currentId !== latestInitializationId) return null;
+
+      const migrationDecision = localStorage.getItem(MIGRATION_DECISION_KEY);
+      const migrationFlag = localStorage.getItem(MIGRATION_FLAG_KEY);
+
+      const clearPendingSyncStatus = () => {
+        pendingSyncStatus = null;
+        localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+      };
+
+      const isRestorablePendingStatus = (status) => {
+        if (!status || typeof status !== 'object') return false;
+
+        const hasLocalData = !!status.hasLocalData;
+        const hasCloudData = !!status.hasCloudData;
+        const hasScenario = typeof status.scenario === 'string' && status.scenario.length > 0;
+
+        return hasLocalData && (hasCloudData || hasScenario);
+      };
+
+      if (pendingSyncStatus) {
+        if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(pendingSyncStatus)) {
+          console.log('[Sync][initialize] Returning cached pending sync status');
+          return pendingSyncStatus;
         }
 
-        if (currentId !== latestInitializationId) return null;
+        console.log('[Sync][initialize] Clearing stale cached pending sync status');
+        clearPendingSyncStatus();
+      }
 
-        // Check for pending migration state from previous initialization
-        const migrationDecision = localStorage.getItem(MIGRATION_DECISION_KEY);
-        const migrationFlag = localStorage.getItem(MIGRATION_FLAG_KEY);
-        
-        const clearPendingSyncStatus = () => {
-          pendingSyncStatus = null;
-          localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
-        };
+      const persistedPendingStatus = localStorage.getItem(PENDING_SYNC_STATUS_KEY);
+      if (persistedPendingStatus) {
+        try {
+          const restored = JSON.parse(persistedPendingStatus);
 
-        const isRestorablePendingStatus = (status) => {
-          if (!status || typeof status !== 'object') return false;
-
-          const hasLocalData = !!status.hasLocalData;
-          const hasCloudData = !!status.hasCloudData;
-          const hasScenario = typeof status.scenario === 'string' && status.scenario.length > 0;
-
-          return hasLocalData && (hasCloudData || hasScenario);
-        };
-
-        // If there's a pending sync status in memory, only return it if it's still valid
-        if (pendingSyncStatus) {
-          if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(pendingSyncStatus)) {
-            console.log('[Sync][initialize] Returning cached pending sync status');
-            return pendingSyncStatus;
+          if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(restored)) {
+            console.log('[Sync][initialize] Restoring persisted pending sync status');
+            pendingSyncStatus = restored;
+            return restored;
           }
 
-          console.log('[Sync][initialize] Clearing stale cached pending sync status');
+          console.log('[Sync][initialize] Ignoring stale persisted pending sync status');
+          clearPendingSyncStatus();
+        } catch (e) {
+          console.error('[Sync][initialize] Failed to parse persisted pending status:', e);
           clearPendingSyncStatus();
         }
+      }
 
-        // If there's a persisted pending sync status, only restore it if it's still valid
-        const persistedPendingStatus = localStorage.getItem(PENDING_SYNC_STATUS_KEY);
-        if (persistedPendingStatus) {
-          try {
-            const restored = JSON.parse(persistedPendingStatus);
+      console.log('[Sync][initialize] Running legacy metadata backfill');
+      this.backfillMetadata();
 
-            if (!migrationFlag && migrationDecision === null && isRestorablePendingStatus(restored)) {
-              console.log('[Sync][initialize] Restoring persisted pending sync status');
-              pendingSyncStatus = restored;
-              return restored;
-            }
+      const migrationComplete = localStorage.getItem(MIGRATION_FLAG_KEY);
+      const countsMatchedNoConflict = localStorage.getItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+      console.log('[Sync][initialize] migrationComplete:', migrationComplete);
+      console.log('[Sync][initialize] countsMatchedNoConflict:', countsMatchedNoConflict);
+      console.log('[Sync][initialize] migrationDecision:', migrationDecision);
 
-            console.log('[Sync][initialize] Ignoring stale persisted pending sync status');
-            clearPendingSyncStatus();
-          } catch (e) {
-            console.error('[Sync][initialize] Failed to parse persisted pending status:', e);
-            clearPendingSyncStatus();
-          }
-        }
-
-        // --- LEGACY BACKFILL RULE ---
-        console.log('[Sync][initialize] Running legacy metadata backfill');
-        this.backfillMetadata();
-
-        const migrationComplete = localStorage.getItem(MIGRATION_FLAG_KEY);
-        const countsMatchedNoConflict = localStorage.getItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
-        console.log('[Sync][initialize] migrationComplete:', migrationComplete);
-        console.log('[Sync][initialize] countsMatchedNoConflict:', countsMatchedNoConflict);
-        console.log('[Sync][initialize] migrationDecision:', migrationDecision);
-
-        if (countsMatchedNoConflict && !migrationDecision) {
-          console.log('[Sync][initialize] countsMatchedNoConflict is true, checking if counts still match');
-          const syncStatus = await this.getSyncStatus(userId);
-          if (currentId !== latestInitializationId) return null;
-
-          const countsMatch = (syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles && 
-                         syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups);
-          
-          console.log('[Sync][initialize] countsMatch check:', countsMatch, 'localCounts:', syncStatus.localCounts, 'cloudCounts:', syncStatus.cloudCounts);
-          
-          let noActionableDifference = false;
-          if (!countsMatch) {
-            const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
-            noActionableDifference =
-              uploadCheck.success &&
-              (
-                uploadCheck.message === 'Nothing to upload. Cloud is already up to date.' ||
-                uploadCheck.message === 'Nothing to upload. All records are already in sync.'
-              );
-
-            console.log('[Sync][initialize] countsMatchedNoConflict fallback noActionableDifference:', noActionableDifference, 'uploadCheck.message:', uploadCheck.message);
-          }
-
-          if (countsMatch || noActionableDifference) {
-            console.log('[Sync][initialize] Counts still match, skipping modal and setting up sync listener');
-            this.setupOnlineSyncListener(userId, { decision: null });
-            // Always fire outbox on startup – don't gate on the background lock
-            if (this.isOnline()) await this.syncAfterMutation(userId);
-            return null;
-          } else {
-            console.log('[Sync][initialize] Counts no longer match, removing countsMatchedNoConflict flag');
-            localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
-            return await this.getSyncStatus(userId);
-          }
-        }
-
-        if (migrationComplete === 'true' && migrationDecision) {
-          console.log('[Sync][initialize] migrationComplete is true with decision:', migrationDecision);
-          if (migrationDecision === 'keep-local') {
-            console.log('[Sync][initialize] Stored decision is keep-local — cloud writes DISABLED. Remove localStorage key "fueltracker-migration-decision" to re-enable.');
-            return null;
-          }
-          console.log('[Sync][initialize] Setting up sync listener with decision:', migrationDecision);
-          this.setupOnlineSyncListener(userId, { decision: migrationDecision });
-          // Always fire outbox on startup – don't gate on the background lock
-          if (this.isOnline()) await this.syncAfterMutation(userId);
-          return null;
-        }
-
-        // Only show modal if user action is genuinely required
+      if (countsMatchedNoConflict && !migrationDecision) {
+        console.log('[Sync][initialize] countsMatchedNoConflict is true, checking if counts still match');
         const syncStatus = await this.getSyncStatus(userId);
-        let noActionableDifference = false;
-        const hasLocalData = syncStatus.hasLocalData;
-        const hasCloudData = syncStatus.hasCloudData;
+        if (currentId !== latestInitializationId) return null;
 
-        if (hasLocalData && hasCloudData) {
+        const countsMatch = (
+          syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles &&
+          syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups &&
+          syncStatus.localCounts?.maintenance === syncStatus.cloudCounts?.maintenance &&
+          syncStatus.localCounts?.trips === syncStatus.cloudCounts?.trips
+        );
+
+        console.log(
+          '[Sync][initialize] countsMatch check:',
+          countsMatch,
+          'localCounts:',
+          syncStatus.localCounts,
+          'cloudCounts:',
+          syncStatus.cloudCounts
+        );
+
+        let noActionableDifference = false;
+        if (!countsMatch) {
           const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
           noActionableDifference =
             uploadCheck.success &&
@@ -2422,93 +2384,134 @@ export const cloudSyncService = {
               uploadCheck.message === 'Nothing to upload. All records are already in sync.'
             );
 
-        }
-        if (currentId !== latestInitializationId) return null;
-
-        // Don't show modal if:
-        // - No local data and no cloud data (fresh start)
-        // - No conflicts and counts match (already in sync)
-        // - No conflicts and only local-only data (first-time user with local data, can auto-upload)
-        const hasConflicts = syncStatus.detailedDiff?.conflicts?.length > 0;
-        const countsMatch = (syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles && 
-                           syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups);
-
-        // Fresh start - no data anywhere
-        if (!hasLocalData && (countsMatch || noActionableDifference)) {
-          console.log('[Sync][initialize] Fresh start - no local or cloud data, skipping modal');
-          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-          localStorage.setItem(MIGRATION_DECISION_KEY, 'keep-local');
-          return null;
+          console.log(
+            '[Sync][initialize] countsMatchedNoConflict fallback noActionableDifference:',
+            noActionableDifference,
+            'uploadCheck.message:',
+            uploadCheck.message
+          );
         }
 
-        // Already in sync - no conflicts, counts match
-        if (!hasConflicts && countsMatch) {
-          console.log('[Sync][initialize] Already in sync - no conflicts, counts match, skipping modal');
-          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-          localStorage.setItem(MIGRATION_DECISION_KEY, 'merge');
-          this.setupOnlineSyncListener(userId, { decision: 'merge' });
+        if (countsMatch || noActionableDifference) {
+          console.log('[Sync][initialize] Counts still match, skipping modal and setting up sync listener');
+          this.setupOnlineSyncListener(userId, { decision: null });
           if (this.isOnline()) await this.syncAfterMutation(userId);
           return null;
+        } else {
+          console.log('[Sync][initialize] Counts no longer match, removing countsMatchedNoConflict flag');
+          localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+          return await this.getSyncStatus(userId);
+        }
+      }
+
+      if (migrationComplete === 'true' && migrationDecision) {
+        console.log('[Sync][initialize] migrationComplete is true with decision:', migrationDecision);
+
+        if (migrationDecision === 'keep-local') {
+          console.log('[Sync][initialize] Stored decision is keep-local — cloud writes DISABLED. Remove localStorage key "fueltracker-migration-decision" to re-enable.');
+          return null;
         }
 
-        // First-time user with local data only - can auto-upload without asking
-        // Guardrail: Only auto-upload if user hasn't already chosen "keep-local"
-        if (hasLocalData && !hasCloudData && !hasConflicts && migrationDecision !== 'keep-local') {
-          console.log('[Sync][initialize] First-time user with local data only - auto-uploading without modal');
-          const uploadResult = await this.uploadLocalChanges(userId);
-          if (uploadResult.success) {
-            localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-            localStorage.setItem(MIGRATION_DECISION_KEY, 'upload');
-            this.setupOnlineSyncListener(userId, { decision: 'upload' });
-            return null;
-          }
-          // If upload fails, show modal for manual intervention
-          console.log('[Sync][initialize] Auto-upload failed, showing modal for manual intervention');
+        if (migrationDecision === 'download') {
+          console.log('[Sync][initialize] Stored decision is download — skipping startup auto-upload');
+          this.setupOnlineSyncListener(userId, { decision: 'download' });
+          return null;
         }
 
-        // Show modal only if:
-        // - Has conflicts (user must resolve)
-        // - Both local and cloud data exist with differences
-        // - Cloud data exists but no local data (user must choose download or start fresh)
-        if (hasConflicts || (hasLocalData && hasCloudData) || (hasCloudData && !hasLocalData)) {
-          
-          // Derive explicit scenario string
-          let scenario = 'UNKNOWN';
-          if (!hasLocalData && !hasCloudData) {
-            scenario = 'NO_BOTH';
-          } else if (!hasLocalData && hasCloudData) {
-            scenario = 'NO_LOCAL_HAS_CLOUD';
-          } else if (hasLocalData && !hasCloudData) {
-            scenario = 'HAS_LOCAL_NO_CLOUD';
-          } else if (hasLocalData && hasCloudData) {
-            scenario = 'HAS_BOTH';
-          }
-          
-          // Attach scenario to syncStatus for explicit modal rendering
-          syncStatus.scenario = scenario;
-          
-          // Cache pending sync status for replayability
-          pendingSyncStatus = syncStatus;
-          localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(syncStatus));
-          
-          return syncStatus;
-        }
+        console.log('[Sync][initialize] Setting up sync listener with decision:', migrationDecision);
+        this.setupOnlineSyncListener(userId, { decision: migrationDecision });
+        if (this.isOnline()) await this.syncAfterMutation(userId);
+        return null;
+      }
 
-        console.log('[Sync][initialize] No user action required, skipping modal');
+      const syncStatus = await this.getSyncStatus(userId);
+      let noActionableDifference = false;
+      const hasLocalData = syncStatus.hasLocalData;
+      const hasCloudData = syncStatus.hasCloudData;
+
+      if (hasLocalData && hasCloudData) {
+        const uploadCheck = await this.uploadLocalDataToCloud(userId, { silent: true });
+        noActionableDifference =
+          uploadCheck.success &&
+          (
+            uploadCheck.message === 'Nothing to upload. Cloud is already up to date.' ||
+            uploadCheck.message === 'Nothing to upload. All records are already in sync.'
+          );
+      }
+
+      if (currentId !== latestInitializationId) return null;
+
+      const hasConflicts = syncStatus.detailedDiff?.conflicts?.length > 0;
+      const countsMatch = (
+        syncStatus.localCounts?.vehicles === syncStatus.cloudCounts?.vehicles &&
+        syncStatus.localCounts?.fillups === syncStatus.cloudCounts?.fillups &&
+        syncStatus.localCounts?.maintenance === syncStatus.cloudCounts?.maintenance &&
+        syncStatus.localCounts?.trips === syncStatus.cloudCounts?.trips
+      );
+
+      if (!hasLocalData && !hasCloudData) {
+        console.log('[Sync][initialize] Fresh start - no local or cloud data, skipping modal');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
         localStorage.setItem(MIGRATION_DECISION_KEY, 'keep-local');
         return null;
-      } catch (error) {
-        console.error('[Sync][initialize] Initialization failed:', error);
-        return null;
-      } finally {
-        initializationInProgress = false;
-        setTimeout(() => { if (!initializationInProgress) initializationPromise = null; }, 1000);
       }
-    })();
 
-    return initializationPromise;
-  },
+      if (!hasConflicts && countsMatch) {
+        console.log('[Sync][initialize] Already in sync - no conflicts, counts match, skipping modal');
+        localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+        localStorage.setItem(MIGRATION_DECISION_KEY, 'merge');
+        this.setupOnlineSyncListener(userId, { decision: 'merge' });
+        if (this.isOnline()) await this.syncAfterMutation(userId);
+        return null;
+      }
+
+      if (hasLocalData && !hasCloudData && !hasConflicts && migrationDecision !== 'keep-local' && migrationDecision !== 'download') {
+        console.log('[Sync][initialize] First-time user with local data only - auto-uploading without modal');
+        const uploadResult = await this.uploadLocalChanges(userId);
+        if (uploadResult.success) {
+          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+          localStorage.setItem(MIGRATION_DECISION_KEY, 'upload');
+          this.setupOnlineSyncListener(userId, { decision: 'upload' });
+          return null;
+        }
+        console.log('[Sync][initialize] Auto-upload failed, showing modal for manual intervention');
+      }
+
+      if (hasConflicts || (hasLocalData && hasCloudData) || (hasCloudData && !hasLocalData)) {
+        let scenario = 'UNKNOWN';
+        if (!hasLocalData && !hasCloudData) {
+          scenario = 'NO_BOTH';
+        } else if (!hasLocalData && hasCloudData) {
+          scenario = 'NO_LOCAL_HAS_CLOUD';
+        } else if (hasLocalData && !hasCloudData) {
+          scenario = 'HAS_LOCAL_NO_CLOUD';
+        } else if (hasLocalData && hasCloudData) {
+          scenario = 'HAS_BOTH';
+        }
+
+        syncStatus.scenario = scenario;
+        pendingSyncStatus = syncStatus;
+        localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(syncStatus));
+        return syncStatus;
+      }
+
+      console.log('[Sync][initialize] No user action required, skipping modal');
+      localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+      localStorage.setItem(MIGRATION_DECISION_KEY, 'keep-local');
+      return null;
+    } catch (error) {
+      console.error('[Sync][initialize] Initialization failed:', error);
+      return null;
+    } finally {
+      initializationInProgress = false;
+      setTimeout(() => {
+        if (!initializationInProgress) initializationPromise = null;
+      }, 1000);
+    }
+  })();
+
+  return initializationPromise;
+},
 
   /**
    * Backfill missing metadata (stableKey, updatedAt) for all local records
@@ -2534,129 +2537,161 @@ export const cloudSyncService = {
    * Continue sync after migration decision
    */
   async continueSyncAfterDecision(userId, decision) {
-    console.log('[Sync][initialize] Continuing sync after decision:', decision);
-    console.log('[Sync][initialize] Decision value:', decision);
-    console.log('[Sync][initialize] Action to perform:', decision);
-    
-    // Clear pending migration state after user decision
-    pendingSyncStatus = null;
-    localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
-    console.log('[Sync][initialize] Cleared pending migration state after decision');
-    
-    const result = {
-      success: true,
-      action: decision,
-      message: '',
-      details: []
-    };
+  console.log('[Sync][initialize] Continuing sync after decision:', decision);
+  console.log('[Sync][initialize] Decision value:', decision);
+  console.log('[Sync][initialize] Action to perform:', decision);
 
-    try {
-      // Setup online listener that respects this decision
-      this.setupOnlineSyncListener(userId, { decision });
+  pendingSyncStatus = null;
+  localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+  console.log('[Sync][initialize] Cleared pending migration state after decision');
 
-      switch (decision) {
-        case 'upload':
-          console.log('[Sync][initialize] Action: Upload local data to cloud');
-          console.log('[Sync][initialize] Using new uploadLocalChanges logic');
-          const uploadResult = await this.uploadLocalChanges(userId);
-          result.success = uploadResult.success;
-          result.message = uploadResult.message;
-          result.details = uploadResult.details;
-          result.summary = uploadResult.summary;
-          result.counts = uploadResult.counts;
-          result.totalUploaded = uploadResult.totalUploaded;
-          console.log('[Sync][initialize] Upload action completed. Success:', result.success, 'Message:', result.message);
-          break;
+  const result = {
+    success: true,
+    action: decision,
+    message: '',
+    details: []
+  };
 
-        case 'download':
-          console.log('[Sync][initialize] Action: Download cloud data to local');
-          console.log('[Sync][initialize] Using new replaceLocalWithCloud logic');
-          const downloadResult = await this.replaceLocalWithCloud(userId);
-          result.success = downloadResult.success;
-          result.message = downloadResult.message;
-          result.details = downloadResult.details;
-          result.summary = downloadResult.summary;
-          result.counts = downloadResult.counts;
-          console.log('[Sync][initialize] Download action completed. Success:', result.success, 'Message:', result.message);
-          break;
+  try {
+    switch (decision) {
+      case 'upload': {
+        console.log('[Sync][initialize] Action: Upload local data to cloud');
+        console.log('[Sync][initialize] Using new uploadLocalChanges logic');
 
-        case 'merge':
-          console.log('[Sync][initialize] Action: Sync both sides (merge)');
-          console.log('[Sync][initialize] Checking for conflicts in merge decision');
-          
-          // Fetch cloud data
-          const { data: cloudFillups } = await supabase
-            .from('fillups')
-            .select('*')
-            .eq('user_id', userId)
-            .is('deleted_at', null);
+        const uploadResult = await this.uploadLocalChanges(userId);
+        result.success = !!uploadResult?.success;
+        result.message = uploadResult?.message || '';
+        result.details = uploadResult?.details || [];
+        result.summary = uploadResult?.summary;
+        result.counts = uploadResult?.counts;
+        result.totalUploaded = uploadResult?.totalUploaded;
 
-          // Get local data
-          const localFillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+        if (result.success) {
+          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+          localStorage.setItem(MIGRATION_DECISION_KEY, 'upload');
+          localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+          pendingSyncStatus = null;
+          localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+          this.setupOnlineSyncListener(userId, { decision: 'upload' });
+        }
 
-          // Compute diff
-          const diff = this.computeFillupDiff(localFillups, cloudFillups || []);
-
-          console.log('[Sync][initialize] Diff computed:', {
-            localOnly: diff.localOnly.length,
-            cloudOnly: diff.cloudOnly.length,
-            bothChanged: diff.bothChanged.length,
-            localDeleted: diff.localDeleted.length,
-            cloudDeleted: diff.cloudDeleted.length
-          });
-
-          // If there are conflicts, return them for UI to handle
-          if (diff.bothChanged.length > 0) {
-            console.log('[Sync][initialize] Conflicts detected, returning for user resolution');
-            result.needsResolution = true;
-            result.conflicts = diff.bothChanged;
-            result.nonConflicts = {
-              localOnly: diff.localOnly,
-              cloudOnly: diff.cloudOnly,
-              localDeleted: diff.localDeleted,
-              cloudDeleted: diff.cloudDeleted
-            };
-            result.message = `${diff.bothChanged.length} conflict${diff.bothChanged.length !== 1 ? 's' : ''} need resolution`;
-            return result;
-          }
-
-          // No conflicts, proceed with automatic sync
-          console.log('[Sync][initialize] No conflicts, proceeding with automatic sync');
-          const mergeResult = await this.syncBothSides(userId);
-          result.success = mergeResult.success;
-          result.message = mergeResult.message;
-          result.details = mergeResult.details;
-          result.summary = mergeResult.summary;
-          result.counts = mergeResult.counts;
-          console.log('[Sync][initialize] Merge action completed. Success:', result.success, 'Message:', result.message);
-          break;
-
-        case 'keep-local':
-          console.log('[Sync][initialize] Action: Keep local only (no sync)');
-          // CRITICAL: Do NOT call syncFromCloud - preserve local data as-is
-          // Do NOT overwrite localStorage from cloud
-          // Skip queue processing to be safe
-          console.log('[Sync][initialize] Keeping local only, no sync');
-          result.message = 'Local data preserved. Cloud sync disabled.';
-          console.log('[Sync][initialize] Keep-local action completed. Success:', result.success, 'Message:', result.message);
-          break;
-
-        default:
-          console.log('[Sync][initialize] Unknown decision:', decision);
-          result.success = false;
-          result.message = 'Unknown migration decision.';
-          break;
+        console.log('[Sync][initialize] Upload action completed. Success:', result.success, 'Message:', result.message);
+        break;
       }
-    } catch (error) {
-      console.error('[Sync][initialize] Continue sync after decision exception:', error);
-      result.success = false;
-      result.message = 'Sync continuation failed.';
-      result.details.push(`Exception: ${error.message}`);
-    }
 
-    console.log('[Sync][initialize] Result modal to show - Title:', result.action, 'Message:', result.message);
-    return result;
-  },
+      case 'download': {
+        console.log('[Sync][initialize] Action: Download cloud data to local');
+        console.log('[Sync][initialize] Using new replaceLocalWithCloud logic');
+
+        const downloadResult = await this.replaceLocalWithCloud(userId);
+        result.success = !!downloadResult?.success;
+        result.message = downloadResult?.message || '';
+        result.details = downloadResult?.details || [];
+        result.summary = downloadResult?.summary;
+        result.counts = downloadResult?.counts;
+
+        if (result.success) {
+          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+          localStorage.setItem(MIGRATION_DECISION_KEY, 'download');
+          localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+          pendingSyncStatus = null;
+          localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+          this.setupOnlineSyncListener(userId, { decision: 'download' });
+        }
+
+        console.log('[Sync][initialize] Download action completed. Success:', result.success, 'Message:', result.message);
+        break;
+      }
+
+      case 'merge': {
+        console.log('[Sync][initialize] Action: Sync both sides (merge)');
+        console.log('[Sync][initialize] Checking for conflicts in merge decision');
+
+        const { data: cloudFillups } = await supabase
+          .from('fillups')
+          .select('*')
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+
+        const localFillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+        const diff = this.computeFillupDiff(localFillups, cloudFillups || []);
+
+        console.log('[Sync][initialize] Diff computed:', {
+          localOnly: diff.localOnly.length,
+          cloudOnly: diff.cloudOnly.length,
+          bothChanged: diff.bothChanged.length,
+          localDeleted: diff.localDeleted.length,
+          cloudDeleted: diff.cloudDeleted.length
+        });
+
+        if (diff.bothChanged.length > 0) {
+          console.log('[Sync][initialize] Conflicts detected, returning for user resolution');
+          result.needsResolution = true;
+          result.conflicts = diff.bothChanged;
+          result.nonConflicts = {
+            localOnly: diff.localOnly,
+            cloudOnly: diff.cloudOnly,
+            localDeleted: diff.localDeleted,
+            cloudDeleted: diff.cloudDeleted
+          };
+          result.message = `${diff.bothChanged.length} conflict${diff.bothChanged.length !== 1 ? 's' : ''} need resolution`;
+          return result;
+        }
+
+        console.log('[Sync][initialize] No conflicts, proceeding with automatic sync');
+        const mergeResult = await this.syncBothSides(userId);
+        result.success = !!mergeResult?.success;
+        result.message = mergeResult?.message || '';
+        result.details = mergeResult?.details || [];
+        result.summary = mergeResult?.summary;
+        result.counts = mergeResult?.counts;
+
+        if (result.success) {
+          localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+          localStorage.setItem(MIGRATION_DECISION_KEY, 'merge');
+          localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+          pendingSyncStatus = null;
+          localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+          this.setupOnlineSyncListener(userId, { decision: 'merge' });
+        }
+
+        console.log('[Sync][initialize] Merge action completed. Success:', result.success, 'Message:', result.message);
+        break;
+      }
+
+      case 'keep-local': {
+        console.log('[Sync][initialize] Action: Keep local only (no sync)');
+        console.log('[Sync][initialize] Keeping local only, no sync');
+
+        localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+        localStorage.setItem(MIGRATION_DECISION_KEY, 'keep-local');
+        localStorage.removeItem(COUNTS_MATCHED_NO_CONFLICT_KEY);
+        pendingSyncStatus = null;
+        localStorage.removeItem(PENDING_SYNC_STATUS_KEY);
+
+        result.success = true;
+        result.message = 'Local data preserved. Cloud sync disabled.';
+        console.log('[Sync][initialize] Keep-local action completed. Success:', result.success, 'Message:', result.message);
+        break;
+      }
+
+      default: {
+        console.log('[Sync][initialize] Unknown decision:', decision);
+        result.success = false;
+        result.message = 'Unknown migration decision.';
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('[Sync][initialize] Continue sync after decision exception:', error);
+    result.success = false;
+    result.message = error?.message || 'Sync continuation failed.';
+    result.details.push(`Exception: ${error.message}`);
+  }
+
+  console.log('[Sync][initialize] Result modal to show - Title:', result.action, 'Message:', result.message);
+  return result;
+},
 
   /**
    * Silent background sync for routine mutations
@@ -3253,74 +3288,100 @@ export const cloudSyncService = {
    * @returns {Promise<Object>} Result summary
    */
   async applyDiff(diff, action, type, userId) {
-    const result = {
-      uploaded: 0,
-      downloaded: 0,
-      deletedFromCloud: 0,
-      deletedFromLocal: 0,
-      conflictsResolved: 0,
-      errors: []
-    };
+  const result = {
+    uploaded: 0,
+    downloaded: 0,
+    deletedFromCloud: 0,
+    deletedFromLocal: 0,
+    conflictsResolved: 0,
+    errors: []
+  };
 
-    try {
-      switch (action) {
-        case 'sync-both':
-          result.uploaded += diff.localOnly.length;
-          result.downloaded += diff.cloudOnly.length;
-          result.deletedFromCloud += diff.localDeleted.length;
-          result.deletedFromLocal += diff.cloudDeleted.length;
-          
-          for (const record of diff.localOnly) await this.uploadSingle(record, type, userId);
-          for (const record of diff.cloudOnly) this.downloadSingle(record, type);
-          for (const record of diff.localDeleted) {
-            if (isValidUuid(record.stableKey || record.id)) await this.deleteFromCloud(record, type, userId);
-          }
-          for (const record of diff.cloudDeleted) this.deleteFromLocal(record, type);
-          
-          for (const conflict of diff.bothChanged) {
-            if (conflict.winner === 'local') {
-              await this.uploadSingle(conflict.local, type, userId);
-            } else {
-              this.downloadSingle(conflict.cloud, type);
-            }
-            result.conflictsResolved++;
-          }
-          break;
+  try {
+    switch (action) {
+      case 'sync-both':
+        result.uploaded += diff.localOnly.length;
+        result.downloaded += diff.cloudOnly.length;
+        result.deletedFromCloud += diff.localDeleted.length;
+        result.deletedFromLocal += diff.cloudDeleted.length;
 
-        case 'upload-local':
-          result.uploaded += diff.localOnly.length + diff.bothChanged.length;
-          result.deletedFromCloud += diff.localDeleted.length;
-          
-          for (const record of diff.localOnly) await this.uploadSingle(record, type, userId);
-          for (const record of diff.localDeleted) {
-            if (isValidUuid(record.stableKey || record.id)) await this.deleteFromCloud(record, type, userId);
+        for (const record of diff.localOnly) {
+          await this.uploadSingle(record, type, userId);
+        }
+
+        for (const record of diff.cloudOnly) {
+          await this.downloadSingle(record, type);
+        }
+
+        for (const record of diff.localDeleted) {
+          if (isValidUuid(record.stableKey || record.id)) {
+            await this.deleteFromCloud(record, type, userId);
           }
-          for (const conflict of diff.bothChanged) {
+        }
+
+        for (const record of diff.cloudDeleted) {
+          await this.deleteFromLocal(record, type);
+        }
+
+        for (const conflict of diff.bothChanged) {
+          if (conflict.winner === 'local') {
             await this.uploadSingle(conflict.local, type, userId);
-            result.conflictsResolved++;
+          } else {
+            await this.downloadSingle(conflict.cloud, type);
           }
-          break;
+          result.conflictsResolved++;
+        }
+        break;
 
-        case 'replace-local':
-          result.downloaded += diff.cloudOnly.length + diff.bothChanged.length;
-          result.deletedFromLocal += diff.cloudDeleted.length + diff.localOnly.length;
-          
-          for (const record of diff.cloudOnly) this.downloadSingle(record, type);
-          for (const record of diff.localOnly) this.deleteFromLocal(record, type);
-          for (const record of diff.cloudDeleted) this.deleteFromLocal(record, type);
-          for (const conflict of diff.bothChanged) {
-            this.downloadSingle(conflict.cloud, type);
-            result.conflictsResolved++;
+      case 'upload-local':
+        result.uploaded += diff.localOnly.length + diff.bothChanged.length;
+        result.deletedFromCloud += diff.localDeleted.length;
+
+        for (const record of diff.localOnly) {
+          await this.uploadSingle(record, type, userId);
+        }
+
+        for (const record of diff.localDeleted) {
+          if (isValidUuid(record.stableKey || record.id)) {
+            await this.deleteFromCloud(record, type, userId);
           }
-          break;
-      }
-    } catch (error) {
-      console.error(`[Sync][applyDiff] Error applying diff for ${type}:`, error);
-      result.errors.push(error.message);
+        }
+
+        for (const conflict of diff.bothChanged) {
+          await this.uploadSingle(conflict.local, type, userId);
+          result.conflictsResolved++;
+        }
+        break;
+
+      case 'replace-local':
+        result.downloaded += diff.cloudOnly.length + diff.bothChanged.length;
+        result.deletedFromLocal += diff.cloudDeleted.length + diff.localOnly.length;
+
+        for (const record of diff.cloudOnly) {
+          await this.downloadSingle(record, type);
+        }
+
+        for (const record of diff.localOnly) {
+          await this.deleteFromLocal(record, type);
+        }
+
+        for (const record of diff.cloudDeleted) {
+          await this.deleteFromLocal(record, type);
+        }
+
+        for (const conflict of diff.bothChanged) {
+          await this.downloadSingle(conflict.cloud, type);
+          result.conflictsResolved++;
+        }
+        break;
     }
+  } catch (error) {
+    console.error(`[Sync][applyDiff] Error applying diff for ${type}:`, error);
+    result.errors.push(error.message);
+  }
 
-    return result;
-  },
+  return result;
+},
 
   /**
    * Upload a single record of any type
@@ -3632,127 +3693,154 @@ export const cloudSyncService = {
    * @returns {Promise<void>}
    */
   async uploadSingleMaintenance(maintenance, userId) {
-  // 1. Initial Validation Inputs
+  console.log('[Sync][uploadSingleMaintenance] raw maintenance', maintenance);
+
   if (!userId) {
     const error = 'userId is required but was undefined';
     console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
     throw new Error(error);
   }
+
   if (!this.isValidUuid(userId)) {
     const error = `userId is not a valid UUID: ${userId}`;
     console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
     throw new Error(error);
   }
 
-  const recordId = maintenance.id || maintenance.idx || 'unknown';
-  if (!maintenance.id && !maintenance.idx && maintenance.id !== 0) {
+  const recordId = maintenance?.id ?? maintenance?.idx ?? 'unknown';
+
+  if (!maintenance || (!maintenance.id && !maintenance.idx && maintenance.id !== 0)) {
     const error = 'id or idx is required but was undefined';
-    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`);
+    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`, maintenance);
     throw new Error(error);
   }
 
-  // Extract keys defensively supporting both camelCase and snake_case variants
-  let vehicleId = maintenance.vehicleId || maintenance.vehicle_id;
-  const stableKey = maintenance.stableKey || maintenance.stable_key;
-  const maintenanceDate = maintenance.date;
-  const maintenanceType = maintenance.type || null;
-  const createdAt = maintenance.createdAt || maintenance.created_at;
-  const updatedAt = maintenance.updatedAt || maintenance.updated_at;
-  const deletedAt = maintenance.deletedAt || maintenance.deleted_at || null;
+  let vehicleId = maintenance.vehicleId ?? maintenance.vehicle_id ?? null;
+  const stableKey = maintenance.stableKey ?? maintenance.stable_key ?? null;
+  const maintenanceDate =
+    maintenance.date ??
+    maintenance.maintenanceDate ??
+    maintenance.maintenance_date ??
+    null;
+  const maintenanceType = maintenance.type ?? null;
+  const createdAt = maintenance.createdAt ?? maintenance.created_at ?? null;
+  const updatedAt = maintenance.updatedAt ?? maintenance.updated_at ?? null;
+  const deletedAt = maintenance.deletedAt ?? maintenance.deleted_at ?? null;
 
-  // 2. Preflight validation: vehicle_id must be a valid UUID or mapped
+  if (!stableKey) {
+    console.warn(
+      `[Sync][uploadSingleMaintenance] Skipping maintenance ${recordId}: missing stableKey/stable_key`,
+      maintenance
+    );
+    return { skipped: true, reason: 'missing_stable_key', recordId };
+  }
+
+  if (!maintenanceDate || String(maintenanceDate).trim() === '') {
+    console.warn(
+      `[Sync][uploadSingleMaintenance] Skipping maintenance ${recordId}: missing date`,
+      maintenance
+    );
+    return { skipped: true, reason: 'missing_date', recordId, stableKey };
+  }
+
   if (vehicleId) {
     if (vehicleId === 'default' || vehicleId === '' || !this.isValidUuid(vehicleId)) {
       const vehicleIdMap = await this.buildVehicleIdMap(userId);
-      const cloudVehicleId = vehicleIdMap.get(vehicleId) || vehicleId;
-      
-      if (!cloudVehicleId || cloudVehicleId === 'default' || !this.isValidUuid(cloudVehicleId)) {
-        const error = `Cannot map vehicleId "${vehicleId}" to a valid cloud vehicle UUID. Vehicle must be synced first.`;
-        throw new Error(error);
+      const cloudVehicleId = vehicleIdMap.get(vehicleId) ?? null;
+
+      if (!cloudVehicleId || !this.isValidUuid(cloudVehicleId)) {
+        console.warn(
+          `[Sync][uploadSingleMaintenance] Skipping maintenance ${recordId}: cannot map vehicleId "${vehicleId}"`,
+          maintenance
+        );
+        return { skipped: true, reason: 'unmapped_vehicle', recordId, stableKey };
       }
-      
+
       vehicleId = cloudVehicleId;
     }
   }
 
-  // 3. Structural Validation Checks
-  if (!maintenanceDate || String(maintenanceDate).trim() === '') {
-    const error = `maintenance.date is required but missing for record ${recordId}`;
-    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`, maintenance);
-    throw new Error(error);
-  }
-
-  if (!stableKey) {
-    const error = `maintenance.stableKey/stable_key is required but missing for record ${recordId}`;
-    console.error(`[Sync][uploadSingleMaintenance] Validation failed: ${error}`, maintenance);
-    throw new Error(error);
-  }
-
-  // --- 🛠️ DETAILED FIELD EXTRACTION FALLBACK ENGINE ---
-  // If the values are stringified or hidden inside a nested metadata tree, let's extract them
   let nestedMeta = {};
   if (typeof maintenance.metadata === 'string') {
-    try { nestedMeta = JSON.parse(maintenance.metadata); } catch(e) {}
+    try {
+      nestedMeta = JSON.parse(maintenance.metadata);
+    } catch (e) {}
   } else if (typeof maintenance.metadata === 'object' && maintenance.metadata !== null) {
     nestedMeta = maintenance.metadata;
   }
 
-  // Capture Odometer from any variant name used by the form view
-  const odometerVal = maintenance.odometer !== undefined && maintenance.odometer !== null ? Number(maintenance.odometer) :
-                      nestedMeta.odometer !== undefined && nestedMeta.odometer !== null ? Number(nestedMeta.odometer) :
-                      maintenance.current_odometer !== undefined && maintenance.current_odometer !== null ? Number(maintenance.current_odometer) : null;
+  const odometerVal =
+    maintenance.odometer !== undefined && maintenance.odometer !== null
+      ? Number(maintenance.odometer)
+      : nestedMeta.odometer !== undefined && nestedMeta.odometer !== null
+        ? Number(nestedMeta.odometer)
+        : maintenance.current_odometer !== undefined && maintenance.current_odometer !== null
+          ? Number(maintenance.current_odometer)
+          : null;
 
-  // Capture Distance/Interval
-  const distanceVal = maintenance.distance !== undefined && maintenance.distance !== null ? Number(maintenance.distance) :
-                      nestedMeta.distance !== undefined && nestedMeta.distance !== null ? Number(nestedMeta.distance) :
-                      maintenance.interval !== undefined && maintenance.interval !== null ? Number(maintenance.interval) : null;
+  const distanceVal =
+    maintenance.distance !== undefined && maintenance.distance !== null
+      ? Number(maintenance.distance)
+      : nestedMeta.distance !== undefined && nestedMeta.distance !== null
+        ? Number(nestedMeta.distance)
+        : maintenance.interval !== undefined && maintenance.interval !== null
+          ? Number(maintenance.interval)
+          : null;
 
-  // Capture Safety Margin
-  const safetyVal = maintenance.safety !== undefined && maintenance.safety !== null ? Number(maintenance.safety) :
-                    nestedMeta.safety !== undefined && nestedMeta.safety !== null ? Number(nestedMeta.safety) : null;
+  const safetyVal =
+    maintenance.safety !== undefined && maintenance.safety !== null
+      ? Number(maintenance.safety)
+      : nestedMeta.safety !== undefined && nestedMeta.safety !== null
+        ? Number(nestedMeta.safety)
+        : null;
 
-  // 4. Force calculate the absolute next due value for the database schema
-  let calculatedNextDueOdometer = maintenance.nextDueOdometer || maintenance.next_due_odometer || nestedMeta.next_due_odometer || null;
-  
-  if (odometerVal !== null && distanceVal !== null && !calculatedNextDueOdometer) {
-    calculatedNextDueOdometer = odometerVal + distanceVal;
+  const safeOdometerVal = Number.isNaN(odometerVal) ? null : odometerVal;
+  const safeDistanceVal = Number.isNaN(distanceVal) ? null : distanceVal;
+  const safeSafetyVal = Number.isNaN(safetyVal) ? null : safetyVal;
+
+  let calculatedNextDueOdometer =
+    maintenance.nextDueOdometer ??
+    maintenance.next_due_odometer ??
+    nestedMeta.next_due_odometer ??
+    null;
+
+  if (
+    safeOdometerVal !== null &&
+    safeDistanceVal !== null &&
+    calculatedNextDueOdometer == null
+  ) {
+    calculatedNextDueOdometer = safeOdometerVal + safeDistanceVal;
   }
 
-  // Package layout fields together inside description metadata payload string safely
   const trackingMetadata = {
-    distance: distanceVal,
-    safety: safetyVal,
-    notes: maintenance.description || maintenance.notes || ''
+    distance: safeDistanceVal,
+    safety: safeSafetyVal,
+    notes: maintenance.description ?? maintenance.notes ?? ''
   };
 
   const now = new Date().toISOString();
 
-  // 5. Assemble perfectly normalized database representation schema
   const normalized = {
     user_id: userId,
     vehicle_id: vehicleId,
     stable_key: stableKey,
     date: maintenanceDate,
     type: maintenanceType,
-    
-    // Store custom frontend layout config fields safely inside description
     description: JSON.stringify(trackingMetadata),
-    
     cost: maintenance.cost !== undefined && maintenance.cost !== null ? Number(maintenance.cost) : null,
-    odometer: odometerVal,
-    next_due_date: maintenance.nextDueDate || maintenance.next_due_date || null,
+    odometer: safeOdometerVal,
+    next_due_date: maintenance.nextDueDate ?? maintenance.next_due_date ?? null,
     next_due_odometer: calculatedNextDueOdometer,
-    created_at: createdAt || now,
-    updated_at: updatedAt || now,
+    created_at: createdAt ?? now,
+    updated_at: updatedAt ?? now,
     deleted_at: deletedAt
   };
 
   console.log(
     '[Sync][maintenance] Uploading with structured metadata',
     JSON.stringify(normalized, null, 2)
-  );  
+  );
 
-  // 6. Fetch checking for matching row via stable_key matching engine
   const { data: existingRow, error: fetchErr } = await supabase
     .from('maintenance')
     .select('id')
@@ -3761,11 +3849,13 @@ export const cloudSyncService = {
     .maybeSingle();
 
   if (fetchErr) {
-    console.error(`[Sync][uploadSingleMaintenance] Fetch existing row failed for ${recordId} (code: ${fetchErr.code}):`, fetchErr.message);
+    console.error(
+      `[Sync][uploadSingleMaintenance] Fetch existing row failed for ${recordId} (code: ${fetchErr.code}):`,
+      fetchErr.message
+    );
     throw new Error(`Failed to check existing maintenance ${recordId}: ${fetchErr.message}`);
   }
 
-  // 7. Write to Supabase using exact Primary Key assignments if matched
   if (existingRow) {
     const { error: updateErr } = await supabase
       .from('maintenance')
@@ -3781,7 +3871,8 @@ export const cloudSyncService = {
       });
       throw new Error(`Failed to update maintenance ${recordId}: ${updateErr.message}`);
     }
-    
+
+    return { success: true, action: 'updated', recordId, stableKey };
   } else {
     const { error: insertErr } = await supabase
       .from('maintenance')
@@ -3796,6 +3887,8 @@ export const cloudSyncService = {
       });
       throw new Error(`Failed to insert maintenance ${recordId}: ${insertErr.message}`);
     }
+
+    return { success: true, action: 'inserted', recordId, stableKey };
   }
 },
 
@@ -4005,68 +4098,100 @@ export const cloudSyncService = {
    * Download a single maintenance record from cloud to local
    */
   downloadSingleMaintenance(cloudMaintenance) {
-    const localKey = 'fueltracker-maintenance-entries-v3';
-    const maintenance = JSON.parse(localStorage.getItem(localKey) || '[]');
-    
-    // Fallback variables matching your field UI state
-    let extractedDistance = null;
-    let extractedSafety = null;
-    let extractedNotes = cloudMaintenance.description || '';
+  console.log('[Sync][downloadSingleMaintenance] raw maintenance', cloudMaintenance);
 
-    // --- STRATEGIC FIX: Deconstruct text metadata string back into frontend layout object ---
-    if (cloudMaintenance.description) {
-      try {
-        const trimmedDesc = String(cloudMaintenance.description).trim();
-        // Check if description is our JSON string container
-        if (trimmedDesc.startsWith('{') && trimmedDesc.endsWith('}')) {
-          const parsedConfig = JSON.parse(trimmedDesc);
-          extractedDistance = parsedConfig.distance !== undefined ? parsedConfig.distance : null;
-          extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
-          extractedNotes = parsedConfig.notes || '';
-        }
-      } catch (e) {
-        // Fallback if the record was written manually in DB or legacy plain text format
-        console.log('[Sync] Parsing description as normal text notes string.');
+  if (!cloudMaintenance?.date) {
+    console.error('[Sync][downloadSingleMaintenance] missing date', cloudMaintenance);
+  }
+
+  const localKey = 'fueltracker-maintenance-entries-v3';
+  const maintenance = JSON.parse(localStorage.getItem(localKey) || '[]');
+
+  let extractedDistance = null;
+  let extractedSafety = null;
+  let extractedNotes = cloudMaintenance.description || '';
+
+  if (cloudMaintenance.description) {
+    try {
+      const trimmedDesc = String(cloudMaintenance.description).trim();
+      if (trimmedDesc.startsWith('{') && trimmedDesc.endsWith('}')) {
+        const parsedConfig = JSON.parse(trimmedDesc);
+        extractedDistance = parsedConfig.distance !== undefined ? parsedConfig.distance : null;
+        extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
+        extractedNotes = parsedConfig.notes || '';
       }
+    } catch (e) {
+      console.log('[Sync] Description is regular text string.');
     }
+  }
 
-    // Direct fallback calculation if distance metadata wasn't populated
-    if (extractedDistance === null && cloudMaintenance.next_due_odometer && cloudMaintenance.odometer) {
-      extractedDistance = Number(cloudMaintenance.next_due_odometer) - Number(cloudMaintenance.odometer);
-    }
+  if (
+    extractedDistance === null &&
+    cloudMaintenance.next_due_odometer &&
+    cloudMaintenance.odometer
+  ) {
+    extractedDistance =
+      Number(cloudMaintenance.next_due_odometer) - Number(cloudMaintenance.odometer);
+  }
 
-    const mappedMaintenance = {
-      id: cloudMaintenance.id,
-      vehicleId: cloudMaintenance.vehicle_id,
-      date: cloudMaintenance.date,
-      type: cloudMaintenance.type,
-      
-      // Map properties matching your state initialization structure
-      description: extractedNotes,
-      notes: extractedNotes,
-      distance: extractedDistance,
-      safety: extractedSafety,
-      
-      cost: cloudMaintenance.cost,
-      odometer: cloudMaintenance.odometer,
-      nextDueDate: cloudMaintenance.next_due_date,
-      nextDueOdometer: cloudMaintenance.next_due_odometer,
-      createdAt: cloudMaintenance.created_at,
-      stableKey: cloudMaintenance.stable_key,
-      updatedAt: cloudMaintenance.updated_at,
-      deletedAt: cloudMaintenance.deleted_at
-    };
-    
-    // Replace or add the maintenance record safely
-    const index = maintenance.findIndex(m => m.id === cloudMaintenance.id);
-    if (index >= 0) {
-      maintenance[index] = mappedMaintenance;
-    } else {
-      maintenance.push(mappedMaintenance);
-    }
-    
-    localStorage.setItem(localKey, JSON.stringify(maintenance));
-  },
+  const parsedOdometer =
+    cloudMaintenance.odometer !== null && cloudMaintenance.odometer !== undefined
+      ? Number(cloudMaintenance.odometer)
+      : 0;
+
+  const parsedNextDueOdometer =
+    cloudMaintenance.next_due_odometer !== null && cloudMaintenance.next_due_odometer !== undefined
+      ? Number(cloudMaintenance.next_due_odometer)
+      : 0;
+
+  const stableKey = cloudMaintenance.stable_key || cloudMaintenance.stableKey;
+
+  const index = maintenance.findIndex(m =>
+    (stableKey && (m.stableKey === stableKey || m.stable_key === stableKey)) ||
+    (m.id && m.id === cloudMaintenance.id)
+  );
+
+  const existing = index >= 0 ? maintenance[index] : null;
+
+  const mappedMaintenance = {
+    id: existing?.id || cloudMaintenance.id,
+    user_id: cloudMaintenance.user_id,
+    vehicle_id: cloudMaintenance.vehicle_id,
+    vehicleId: cloudMaintenance.vehicle_id,
+    date: cloudMaintenance.date,
+    type: cloudMaintenance.type,
+    cost: cloudMaintenance.cost,
+    odometer: parsedOdometer,
+    next_due_date: cloudMaintenance.next_due_date,
+    next_due_odometer: parsedNextDueOdometer,
+    stable_key: stableKey,
+    stableKey: stableKey,
+    version: cloudMaintenance.version,
+    created_at: cloudMaintenance.created_at,
+    updated_at: cloudMaintenance.updated_at,
+    deleted_at: cloudMaintenance.deleted_at,
+    description: cloudMaintenance.description,
+    notes: extractedNotes,
+    distance: extractedDistance,
+    intervalKm: extractedDistance,
+    safety: extractedSafety,
+    safetyMarginKm: extractedSafety,
+    performedAtODO: parsedOdometer,
+    nextDueOdometer: parsedNextDueOdometer,
+    nextDueODO: parsedNextDueOdometer,
+    createdAt: cloudMaintenance.created_at,
+    updatedAt: cloudMaintenance.updated_at,
+    timestamp: cloudMaintenance.created_at || cloudMaintenance.date || new Date().toISOString()
+  };
+
+  if (index >= 0) {
+    maintenance[index] = mappedMaintenance;
+  } else {
+    maintenance.push(mappedMaintenance);
+  }
+
+  localStorage.setItem(localKey, JSON.stringify(maintenance));
+},
 
   /**
    * Download a single trip estimate record from cloud to local
@@ -4179,11 +4304,26 @@ export const cloudSyncService = {
   /**
    * Delete a maintenance entry from local storage
    */
-  deleteMaintenanceFromLocal(maintenance) {
-    const entries = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
-    const filtered = entries.filter(m => m.id !== maintenance.id);
-    localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(filtered));
-  },
+  deleteMaintenanceFromLocal(maintenanceRecord) {
+  const localKey = 'fueltracker-maintenance-entries-v3';
+  const entries = JSON.parse(localStorage.getItem(localKey) || '[]');
+
+  const targetStableKey =
+    maintenanceRecord?.stableKey || maintenanceRecord?.stable_key || null;
+  const targetId = maintenanceRecord?.id || null;
+
+  const filtered = entries.filter(m => {
+    const sameStableKey =
+      targetStableKey &&
+      (m.stableKey === targetStableKey || m.stable_key === targetStableKey);
+
+    const sameId = targetId && m.id === targetId;
+
+    return !(sameStableKey || sameId);
+  });
+
+  localStorage.setItem(localKey, JSON.stringify(filtered));
+},
 
   /**
    * Delete a trip estimate from local storage
@@ -4259,53 +4399,64 @@ export const cloudSyncService = {
    * Upload local changes - local-first push to cloud
    * Enforces dependency ordering: vehicles -> fillups -> maintenance -> trips
    */
-  async uploadLocalChanges(userId) {
-    const result = {
-      success: false,
-      action: 'upload-local',
-      message: '',
-      details: [],
-      counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
-      summary: { uploaded: 0, downloaded: 0, deletedFromCloud: 0, deletedFromLocal: 0, conflictsResolved: 0 }
-    };
+  async syncBothSides(userId, resolutionStrategy = null) {
+  const result = {
+    success: false,
+    action: 'sync-both',
+    message: '',
+    details: [],
+    counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
+    summary: { uploaded: 0, downloaded: 0, deletedFromCloud: 0, deletedFromLocal: 0, conflictsResolved: 0 }
+  };
 
-    try {
-      const detailedDiff = await this.getDetailedSyncDiff(userId);
-      
-      // Enforce dependency ordering: vehicles must be uploaded before fillups
-      const entities = [
-        { key: 'vehicles', type: 'vehicle', dependsOn: [] },
-        { key: 'fillups', type: 'fillup', dependsOn: ['vehicles'] },
-        { key: 'maintenance', type: 'maintenance', dependsOn: ['vehicles'] },
-        { key: 'tripEstimates', type: 'trip', dependsOn: ['vehicles'] }
-      ];
+  try {
+    const detailedDiff = await this.getDetailedSyncDiff(userId);
 
-      
-      for (const ent of entities) {
-        const diff = detailedDiff.entities[ent.key];
-        const applyResult = await this.applyDiff(diff, 'upload-local', ent.type, userId);
-        
-        result.summary.uploaded += applyResult.uploaded;
-        result.summary.deletedFromCloud += applyResult.deletedFromCloud;
-        result.summary.conflictsResolved += applyResult.conflictsResolved;
-        result.counts[ent.key] = applyResult.uploaded;
-        result.details.push(...applyResult.errors);
-        
-      }
-
-      result.success = result.details.length === 0;
-      result.message = result.success 
-        ? `Upload complete: ${result.summary.uploaded} records uploaded.`
-        : 'Upload completed with errors';
-    } catch (error) {
-      console.error('[Sync][uploadLocalChanges] Upload failed:', error);
-      result.success = false;
-      result.message = 'Upload failed';
-      result.details.push(error.message);
+    // 🟢 ONLY TRIGGER EARLY RETURN IF NOT RESOLVING CONFLICTS
+    if (detailedDiff.conflicts.length > 0 && !resolutionStrategy) {
+      result.needsResolution = true;
+      result.conflicts = detailedDiff.conflicts;
+      result.nonConflicts = detailedDiff.nonConflicts;
+      result.summary.unchanged = detailedDiff.summary.identical;
+      result.message = `${detailedDiff.conflicts.length} conflict${detailedDiff.conflicts.length !== 1 ? 's' : ''} detected that require review.`;
+      return result;
     }
 
-    return result;
-  },
+    const entities = [
+      { key: 'vehicles', type: 'vehicle' },
+      { key: 'fillups', type: 'fillup' },
+      { key: 'maintenance', type: 'maintenance' },
+      { key: 'tripEstimates', type: 'trip' }
+    ];
+
+    for (const ent of entities) {
+      const diff = detailedDiff.entities[ent.key];
+      
+      // 🟢 PASS THE USER'S CHOICE INTO THE INTERNALS OF APPLYDIFF
+      const strategyToApply = resolutionStrategy || 'sync-both';
+      const applyResult = await this.applyDiff(diff, strategyToApply, ent.type, userId);
+      
+      result.summary.uploaded += applyResult.uploaded;
+      result.summary.downloaded += applyResult.downloaded;
+      result.summary.deletedFromCloud += applyResult.deletedFromCloud;
+      result.summary.deletedFromLocal += applyResult.deletedFromLocal;
+      result.summary.conflictsResolved += applyResult.conflictsResolved;
+      result.counts[ent.key] = applyResult.uploaded + applyResult.downloaded;
+      result.details.push(...applyResult.errors);
+    }
+
+    result.success = result.details.length === 0;
+    result.message = result.success 
+      ? `Sync complete: ${result.summary.uploaded} uploaded, ${result.summary.downloaded} downloaded.`
+      : 'Sync completed with errors';
+  } catch (error) {
+    result.success = false;
+    result.message = 'Sync failed';
+    result.details.push(error.message);
+  }
+
+  return result;
+},
 
   /**
    * Replace local data with cloud data - cloud-first pull

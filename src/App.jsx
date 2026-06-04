@@ -231,7 +231,14 @@ export default function App() {
   const [migrationResult, setMigrationResult] = useState(null);
 
   // Check for due maintenance reminders on app open
-  const { maintenanceReminders, activeVehicleFillUps } = useFuel();
+  const {
+    maintenanceReminders,
+    activeVehicleFillUps,
+    vehicles,
+    selectedVehicleId,
+    setSelectedVehicleId,
+    refreshLocalAppState,
+  } = useFuel();
   const { checkMaintenanceReminders } = useNotifications();
 
   useEffect(() => {
@@ -329,11 +336,56 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const refreshAppFromLocalStorage = () => {
-    window.location.reload();
+  const refreshAppFromLocalStorage = async () => {
+    const refreshedVehicles = JSON.parse(
+      localStorage.getItem("vehicles") || "[]",
+    );
+
+    if (!refreshedVehicles.length) {
+      setSelectedVehicleId(null);
+      window.dispatchEvent(new Event("storage"));
+      return;
+    }
+
+    const matchedVehicle = refreshedVehicles.find(
+      (v) => v.id === selectedVehicleId,
+    );
+
+    setSelectedVehicleId(
+      matchedVehicle ? matchedVehicle.id : refreshedVehicles[0].id,
+    );
+
+    window.dispatchEvent(new Event("storage"));
+  };
+
+  const refreshSyncStatus = async () => {
+    const status = await cloudSyncService.initialize();
+    setSyncStatus(status);
+
+    const migrationComplete =
+      localStorage.getItem("fueltracker-migration-complete") === "true";
+    const migrationDecision = localStorage.getItem(
+      "fueltracker-migration-decision",
+    );
+
+    const countsMatch =
+      status?.localCounts?.vehicles === status?.cloudCounts?.vehicles &&
+      status?.localCounts?.fillups === status?.cloudCounts?.fillups &&
+      status?.localCounts?.maintenance === status?.cloudCounts?.maintenance;
+
+    const hasConflicts = status?.detailedDiff?.conflicts?.length > 0;
+
+    const shouldShowModal =
+      !migrationComplete &&
+      !migrationDecision &&
+      (!countsMatch || hasConflicts);
+
+    setShowMigrationModal(shouldShowModal);
   };
 
   const handleMigrationDecision = async (decision) => {
+    if (migrationLoading) return null;
+
     setMigrationLoading(true);
     setMigrationLoadingAction(decision);
     setMigrationResult(null);
@@ -345,25 +397,38 @@ export default function App() {
         decision,
       );
 
-      if (result.needsResolution) {
-        // Handle conflict resolution flow if needed
+      if (result?.needsResolution) {
         setSyncStatus(result);
-        setMigrationLoading(false);
-        return;
+        return result;
       }
 
-      if (result.success && (decision === "download" || decision === "merge")) {
-        setTimeout(() => {
-          refreshAppFromLocalStorage();
-        }, 300);
+      if (
+        result?.success &&
+        (decision === "download" || decision === "merge")
+      ) {
+        try {
+          await refreshAppFromLocalStorage();
+        } catch (refreshError) {
+          console.error(
+            "[Sync][handleMigrationDecision] refreshAppFromLocalStorage failed after successful sync:",
+            refreshError,
+          );
+        }
       }
 
       setMigrationResult(result);
+      return result;
     } catch (error) {
-      setMigrationResult({
+      console.error("[Sync][handleMigrationDecision] decision failed:", error);
+
+      const failureResult = {
         success: false,
+        action: decision,
         message: "Migration failed: " + error.message,
-      });
+      };
+
+      setMigrationResult(failureResult);
+      return failureResult;
     } finally {
       setMigrationLoading(false);
     }
@@ -371,12 +436,22 @@ export default function App() {
 
   const handleMigrationResultClose = () => {
     if (migrationResult?.success) {
-      setShowMigrationModal(false);
-      setSyncStatus(null);
-      setMigrationResult(null);
-    } else {
-      setMigrationResult(null);
+      const vehicles = JSON.parse(localStorage.getItem("vehicles") || "[]");
+      const currentSelectedVehicleId =
+        localStorage.getItem("selectedVehicleId");
+
+      if (
+        vehicles.length > 0 &&
+        !vehicles.some((v) => v.id === currentSelectedVehicleId)
+      ) {
+        localStorage.setItem("selectedVehicleId", vehicles[0].id);
+      }
+
+      window.location.assign("/");
+      return;
     }
+
+    setMigrationResult(null);
   };
 
   const handleMigrationRetry = () => {
@@ -642,7 +717,7 @@ export default function App() {
 
       {/* Data Migration Modal */}
       <AnimatePresence>
-        {showMigrationModal && syncStatus && (
+        {(showMigrationModal || migrationResult) && (
           <DataMigrationModal
             syncStatus={syncStatus}
             onDecision={handleMigrationDecision}

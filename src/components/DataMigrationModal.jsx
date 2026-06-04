@@ -29,9 +29,20 @@ export default function DataMigrationModal({
   onRetry,
   disableClose,
   userId,
+  setSyncStatus,
+  refreshLocalAppState,
+  fetchSummary,
 }) {
-  const { hasLocalData, hasCloudData, localCounts, cloudCounts, scenario } =
-    syncStatus;
+  const safeSyncStatus = syncStatus ?? {};
+
+  const {
+    hasLocalData = false,
+    hasCloudData = false,
+    localCounts = { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
+    cloudCounts = { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
+    scenario = null,
+    detailedDiff = null,
+  } = safeSyncStatus;
 
   // Detect imported data scenario: local exists, cloud empty
   const isImportedData = hasLocalData && !hasCloudData;
@@ -62,9 +73,8 @@ export default function DataMigrationModal({
   }, [loading]);
 
   const handleUpload = async () => {
+    if (loading) return;
     const decisionResult = await onDecision("upload");
-
-    // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
       setConflictData(decisionResult);
       setShowConflictReview(true);
@@ -72,9 +82,8 @@ export default function DataMigrationModal({
   };
 
   const handleDownload = async () => {
+    if (loading) return;
     const decisionResult = await onDecision("download");
-
-    // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
       setConflictData(decisionResult);
       setShowConflictReview(true);
@@ -82,9 +91,8 @@ export default function DataMigrationModal({
   };
 
   const handleMerge = async () => {
+    if (loading) return;
     const decisionResult = await onDecision("merge");
-
-    // Check if conflicts need resolution
     if (decisionResult?.needsResolution) {
       setConflictData(decisionResult);
       setShowConflictReview(true);
@@ -92,13 +100,43 @@ export default function DataMigrationModal({
   };
 
   const handleKeepLocal = async () => {
-    onDecision("keep-local");
+    if (loading) return;
+    await onDecision("keep-local");
   };
 
-  const handleConflictResolve = (resolutionResult) => {
+  const handleConflictResolve = async (resolutionResult) => {
+    // 1. Close your specialized inner review interfaces
     setShowConflictReview(false);
     setConflictData(null);
-    // Show resolution result
+
+    // 2. 🟢 CLEAR THE CONFLICT COUNTERS FROM UI STATE
+    // This prevents the parent layout conditional from matching true on evaluation loops
+    if (typeof setSyncStatus === "function") {
+      setSyncStatus((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          detailedDiff: {
+            ...prev.detailedDiff,
+            conflicts: [], // Empty the conflict loop check array
+            summary: {
+              ...prev.detailedDiff?.summary,
+              bothChanged: 0, // Reset the numeric summary flag
+            },
+          },
+        };
+      });
+    }
+
+    // 3. 🟢 RUN AN INTERNAL IN-MEMORY STATE REFRESH IF AVAILABLE
+    // Instead of window.location.reload(), just call your app-level reload data hook
+    // if (typeof refreshLocalAppState === "function") {
+    //   await refreshLocalAppState();
+    // } else if (typeof fetchSummary === "function") {
+    //   await fetchSummary(); // Or your equivalent state aggregator hook
+    // }
+
+    // 4. Send metrics out to your success step screen layout safely
     onCloseResult({
       success: resolutionResult.errors.length === 0,
       message:
@@ -151,7 +189,7 @@ export default function DataMigrationModal({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[min(85vh,720px)] sm:max-h-[min(85vh,720px)]"
+          className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[min(85vh,720px)]"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
@@ -378,25 +416,25 @@ export default function DataMigrationModal({
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                             <span className="text-sm text-slate-600 dark:text-slate-400">
-                              {localCounts.vehicles} Vehicles
+                              {localCounts?.vehicles || 0} Vehicles
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                             <span className="text-sm text-slate-600 dark:text-slate-400">
-                              {localCounts.fillups} Fill-ups
+                              {localCounts?.fillups || 0} Fill-ups
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                             <span className="text-sm text-slate-600 dark:text-slate-400">
-                              {localCounts.maintenance} Maintenance
+                              {localCounts?.maintenance || 0} Maintenance
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                             <span className="text-sm text-slate-600 dark:text-slate-400">
-                              {localCounts.tripEstimates} Trips
+                              {localCounts?.tripEstimates || 0} Trips
                             </span>
                           </div>
                         </div>
@@ -433,25 +471,25 @@ export default function DataMigrationModal({
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {cloudCounts.vehicles} Vehicles
+                            {cloudCounts?.vehicles || 0} Vehicles
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {cloudCounts.fillups} Fill-ups
+                            {cloudCounts?.fillups || 0} Fill-ups
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {cloudCounts.maintenance} Maintenance
+                            {cloudCounts?.maintenance || 0} Maintenance
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {cloudCounts.tripEstimates} Trips
+                            {cloudCounts?.tripEstimates || 0} Trips
                           </span>
                         </div>
                       </div>
@@ -462,7 +500,7 @@ export default function DataMigrationModal({
                 {/* Scenario: Both local and cloud have data */}
                 {hasCloudData && hasLocalData && (
                   <div className="space-y-4">
-                    {syncStatus.detailedDiff?.conflicts?.length > 0 ? (
+                    {detailedDiff?.conflicts?.length > 0 ? (
                       <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/20">
                         <Warning
                           weight="duotone"
@@ -473,9 +511,9 @@ export default function DataMigrationModal({
                             Conflicts Detected
                           </h3>
                           <p className="text-sm text-amber-700 dark:text-amber-300">
-                            We found {syncStatus.detailedDiff.conflicts.length}{" "}
-                            conflicting record
-                            {syncStatus.detailedDiff.conflicts.length !== 1
+                            We found {detailedDiff.conflicts.length} conflicting
+                            record
+                            {detailedDiff.conflicts.length !== 1
                               ? "s"
                               : ""}{" "}
                             that need your attention. Please review and resolve
@@ -502,90 +540,84 @@ export default function DataMigrationModal({
                     )}
 
                     {/* Detailed Diff List */}
-                    {syncStatus.detailedDiff && (
+                    {detailedDiff && (
                       <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl space-y-3">
                         <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           Pending Changes
                         </h4>
                         <div className="space-y-2">
-                          {syncStatus.detailedDiff.summary.localOnly > 0 && (
+                          {detailedDiff.summary?.localOnly > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-slate-600 dark:text-slate-400">
                                 Local-only (to upload)
                               </span>
                               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                {syncStatus.detailedDiff.summary.localOnly}
+                                {detailedDiff.summary.localOnly}
                               </span>
                             </div>
                           )}
-                          {syncStatus.detailedDiff.summary.cloudOnly > 0 && (
+                          {detailedDiff.summary?.cloudOnly > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-slate-600 dark:text-slate-400">
                                 Cloud-only (to download)
                               </span>
                               <span className="font-semibold text-blue-600 dark:text-blue-400">
-                                {syncStatus.detailedDiff.summary.cloudOnly}
+                                {detailedDiff.summary.cloudOnly}
                               </span>
                             </div>
                           )}
-                          {syncStatus.detailedDiff.summary.bothChanged > 0 && (
+                          {detailedDiff.summary?.bothChanged > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-slate-600 dark:text-slate-400">
                                 Conflicts (changed on both)
                               </span>
                               <span className="font-semibold text-amber-600 dark:text-amber-400">
-                                {syncStatus.detailedDiff.summary.bothChanged}
+                                {detailedDiff.summary.bothChanged}
                               </span>
                             </div>
                           )}
-                          {syncStatus.detailedDiff.summary.localDeleted > 0 && (
+                          {detailedDiff.summary?.localDeleted > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-slate-600 dark:text-slate-400">
                                 Deletions to cloud
                               </span>
                               <span className="font-semibold text-red-600 dark:text-red-400">
-                                {syncStatus.detailedDiff.summary.localDeleted}
+                                {detailedDiff.summary.localDeleted}
                               </span>
                             </div>
                           )}
-                          {syncStatus.detailedDiff.summary.cloudDeleted > 0 && (
+                          {detailedDiff.summary?.cloudDeleted > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-slate-600 dark:text-slate-400">
                                 Deletions from cloud
                               </span>
                               <span className="font-semibold text-red-600 dark:text-red-400">
-                                {syncStatus.detailedDiff.summary.cloudDeleted}
+                                {detailedDiff.summary.cloudDeleted}
                               </span>
                             </div>
                           )}
                         </div>
 
-                        {syncStatus.detailedDiff.conflicts?.length > 0 && (
+                        {detailedDiff.conflicts?.length > 0 && (
                           <button
                             onClick={() => {
                               setConflictData({
-                                conflicts: syncStatus.detailedDiff.conflicts,
-                                nonConflicts:
-                                  syncStatus.detailedDiff.nonConflicts,
+                                conflicts: detailedDiff.conflicts,
+                                nonConflicts: detailedDiff.nonConflicts,
                               });
                               setShowConflictReview(true);
                             }}
                             className="w-full mt-2 py-2 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-semibold rounded-xl border border-amber-200/50 dark:border-amber-500/20 transition flex items-center justify-center gap-2"
                           >
                             <ArrowsMerge weight="bold" className="w-4 h-4" />
-                            Review {
-                              syncStatus.detailedDiff.conflicts.length
-                            }{" "}
-                            conflict
-                            {syncStatus.detailedDiff.conflicts.length !== 1
-                              ? "s"
-                              : ""}
+                            Review {detailedDiff.conflicts.length} conflict
+                            {detailedDiff.conflicts.length !== 1 ? "s" : ""}
                           </button>
                         )}
                       </div>
                     )}
 
-                    {!syncStatus.detailedDiff && (
+                    {!detailedDiff && (
                       <div className="grid grid-cols-2 gap-4">
                         {/* Local Data */}
                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
@@ -596,13 +628,13 @@ export default function DataMigrationModal({
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                               <span className="text-sm text-slate-600 dark:text-slate-400">
-                                {localCounts.vehicles} Vehicles
+                                {localCounts?.vehicles || 0} Vehicles
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-emerald-500 rounded-full" />
                               <span className="text-sm text-slate-600 dark:text-slate-400">
-                                {localCounts.fillups} Fill-ups
+                                {localCounts?.fillups || 0} Fill-ups
                               </span>
                             </div>
                           </div>
@@ -617,13 +649,13 @@ export default function DataMigrationModal({
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-blue-500 rounded-full" />
                               <span className="text-sm text-slate-600 dark:text-slate-400">
-                                {cloudCounts.vehicles} Vehicles
+                                {cloudCounts?.vehicles || 0} Vehicles
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-blue-500 rounded-full" />
                               <span className="text-sm text-slate-600 dark:text-slate-400">
-                                {cloudCounts.fillups} Fill-ups
+                                {cloudCounts?.fillups || 0} Fill-ups
                               </span>
                             </div>
                           </div>
@@ -676,6 +708,7 @@ export default function DataMigrationModal({
                   {!hasLocalData && hasCloudData && (
                     <button
                       onClick={handleDownload}
+                      disabled={loading}
                       className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                     >
                       <CloudArrowDown weight="duotone" className="w-5 h-5" />
@@ -684,6 +717,7 @@ export default function DataMigrationModal({
                   )}
                   <button
                     onClick={handleKeepLocal}
+                    disabled={loading}
                     className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
                   >
                     {hasLocalData
@@ -706,6 +740,7 @@ export default function DataMigrationModal({
                 <div className="space-y-3">
                   <button
                     onClick={handleDownload}
+                    disabled={loading}
                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <CloudArrowDown weight="duotone" className="w-5 h-5" />
@@ -713,6 +748,7 @@ export default function DataMigrationModal({
                   </button>
                   <button
                     onClick={handleKeepLocal}
+                    disabled={loading}
                     className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
                   >
                     Start Fresh (No Sync)
@@ -725,6 +761,7 @@ export default function DataMigrationModal({
                 <div className="space-y-3">
                   <button
                     onClick={handleMerge}
+                    disabled={loading}
                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <ArrowsMerge weight="duotone" className="w-5 h-5" />
@@ -732,6 +769,7 @@ export default function DataMigrationModal({
                   </button>
                   <button
                     onClick={handleUpload}
+                    disabled={loading}
                     className="w-full py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <CloudArrowUp weight="duotone" className="w-5 h-5" />
@@ -739,6 +777,7 @@ export default function DataMigrationModal({
                   </button>
                   <button
                     onClick={handleDownload}
+                    disabled={loading}
                     className="w-full py-3.5 bg-white dark:bg-slate-900 border-2 border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <CloudArrowDown weight="duotone" className="w-5 h-5" />
@@ -777,7 +816,11 @@ export default function DataMigrationModal({
                       onClick={onRetry}
                       className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                     >
-                      <Spinner weight="duotone" className="w-5 h-5" />
+                      {/* 🟢 FIXED: Added missing animate-spin class to the icon */}
+                      <Spinner
+                        weight="duotone"
+                        className="w-5 h-5 animate-spin"
+                      />
                       Retry sync check
                     </button>
 
