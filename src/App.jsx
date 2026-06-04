@@ -402,19 +402,19 @@ export default function App() {
         return result;
       }
 
-      if (
-        result?.success &&
-        (decision === "download" || decision === "merge")
-      ) {
-        try {
-          await refreshAppFromLocalStorage();
-        } catch (refreshError) {
-          console.error(
-            "[Sync][handleMigrationDecision] refreshAppFromLocalStorage failed after successful sync:",
-            refreshError,
-          );
-        }
-      }
+      //if (
+      //  result?.success &&
+      //  (decision === "download" || decision === "merge")
+      //) {
+      //  try {
+      // await refreshAppFromLocalStorage();
+      //  } catch (refreshError) {
+      //    console.error(
+      //      "[Sync][handleMigrationDecision] refreshAppFromLocalStorage failed after successful sync:",
+      //      refreshError,
+      //    );
+      //  }
+      //}
 
       setMigrationResult(result);
       return result;
@@ -447,7 +447,7 @@ export default function App() {
         localStorage.setItem("selectedVehicleId", vehicles[0].id);
       }
 
-      window.location.assign("/");
+      window.location.assign("/Simple-Fuel-Tracker/#/");
       return;
     }
 
