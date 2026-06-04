@@ -435,24 +435,27 @@ export default function App() {
   };
 
   const handleMigrationResultClose = () => {
-    if (migrationResult?.success) {
-      const vehicles = JSON.parse(localStorage.getItem("vehicles") || "[]");
-      const currentSelectedVehicleId =
-        localStorage.getItem("selectedVehicleId");
+  if (migrationResult?.success) {
+    const vehicles = JSON.parse(localStorage.getItem("vehicles") || "[]");
+    const currentSelectedVehicleId =
+      localStorage.getItem("selectedVehicleId");
 
-      if (
-        vehicles.length > 0 &&
-        !vehicles.some((v) => v.id === currentSelectedVehicleId)
-      ) {
-        localStorage.setItem("selectedVehicleId", vehicles[0].id);
-      }
-
-      window.location.assign("/Simple-Fuel-Tracker/#/");
-      return;
+    if (
+      vehicles.length > 0 &&
+      !vehicles.some((v) => v.id === currentSelectedVehicleId)
+    ) {
+      localStorage.setItem("selectedVehicleId", vehicles[0].id);
     }
 
+    setShowMigrationModal(false);
     setMigrationResult(null);
-  };
+    navigate("/");
+    window.location.reload();
+    return;
+  }
+
+  setMigrationResult(null);
+};
 
   const handleMigrationRetry = () => {
     if (migrationResult?.action) {
