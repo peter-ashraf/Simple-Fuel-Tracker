@@ -3,7 +3,6 @@ import {
   Pulse,
   TrendUp,
   CurrencyDollar,
-  GasPump,
   Wrench,
   Warning,
   Bell,
@@ -255,14 +254,17 @@ export default function Dashboard() {
               className="flex flex-col justify-between min-h-[120px] p-4"
             >
               <div className="flex items-center gap-1.5 mb-1">
-                <GasPump weight="duotone" className="w-3 h-3 text-amber-500" />
+                <CurrencyDollar weight="duotone" className="w-3 h-3 text-indigo-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                  {t("history")}
+                  {t("cost_per_km")}
                 </span>
               </div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                  {stats.totalFillUps}
+                  {costPerKm.toFixed(2)}
+                </span>
+                <span className="text-[10px] font-medium text-slate-500">
+                  {t("currency")}/km
                 </span>
               </div>
             </MetricCard>

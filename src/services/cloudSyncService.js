@@ -1414,6 +1414,10 @@ export const cloudSyncService = {
     }
   },
 
+  async uploadLocalChanges(userId, options = {}) {
+    return this.uploadLocalDataToCloud(userId, { silent: true, ...options });
+  },
+
   /**
    * Download cloud data to local (overwrites local)
    */
@@ -1493,7 +1497,11 @@ export const cloudSyncService = {
           station: f.station,
           notes: f.notes,
           fullTank: f.full_tank,
-          timestamp: f.created_at
+          timestamp: f.date,
+          createdAt: f.created_at,
+          updatedAt: f.updated_at,
+          stableKey: f.stable_key,
+          deletedAt: f.deleted_at
         }));
         localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(mappedFillups));
         result.counts.fillups = mappedFillups.length;
@@ -1520,7 +1528,11 @@ export const cloudSyncService = {
           odometer: m.odometer,
           nextDueDate: m.next_due_date,
           nextDueOdometer: m.next_due_odometer,
-          createdAt: m.created_at
+          createdAt: m.created_at,
+          updatedAt: m.updated_at,
+          stableKey: m.stable_key,
+          deletedAt: m.deleted_at,
+          timestamp: m.date
         }));
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
         result.counts.maintenance = mappedMaintenance.length;
@@ -2710,6 +2722,12 @@ export const cloudSyncService = {
     backgroundSyncPromise = (async () => {
       try {
         console.log('[Sync][outbox] Starting outbox processing');
+
+        const migrationDecision = localStorage.getItem(MIGRATION_DECISION_KEY);
+        if (migrationDecision === 'keep-local') {
+          console.log('[Sync][outbox] Skipping cloud upload because migration decision is keep-local');
+          return { success: true, count: 0, skipped: 'keep-local' };
+        }
         
         // Use a consistent snapshot of the outbox to avoid race conditions
         const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
@@ -2721,7 +2739,7 @@ export const cloudSyncService = {
 
         if (pendingMutations.length === 0) {
           console.log('[Sync][outbox] No pending mutations');
-          return { success: true, count: 0 };
+          return this.uploadLocalChanges(userId);
         }
 
         console.log(`[Sync][outbox] Processing ${pendingMutations.length} mutations`);
@@ -2739,7 +2757,8 @@ export const cloudSyncService = {
           }
         }
 
-        return { success: true, count: successCount };
+        const fallbackUpload = await this.uploadLocalChanges(userId);
+        return { success: fallbackUpload.success !== false, count: successCount, fallbackUpload };
       } catch (error) {
         console.error('[Sync][outbox] Critical failure:', error);
         return { success: false, error: error.message };
@@ -4182,7 +4201,7 @@ export const cloudSyncService = {
     nextDueODO: parsedNextDueOdometer,
     createdAt: cloudMaintenance.created_at,
     updatedAt: cloudMaintenance.updated_at,
-    timestamp: cloudMaintenance.created_at || cloudMaintenance.date || new Date().toISOString()
+    timestamp: cloudMaintenance.date || cloudMaintenance.created_at || new Date().toISOString()
   };
 
   if (index >= 0) {
