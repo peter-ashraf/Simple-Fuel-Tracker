@@ -4336,67 +4336,6 @@ export const cloudSyncService = {
   },
 
   /**
-   * Sync both sides - bidirectional merge
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Sync result
-   */
-  async syncBothSides(userId) {
-    const result = {
-      success: false,
-      action: 'sync-both',
-      message: '',
-      details: [],
-      counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
-      summary: { uploaded: 0, downloaded: 0, deletedFromCloud: 0, deletedFromLocal: 0, conflictsResolved: 0 }
-    };
-
-    try {
-      const detailedDiff = await this.getDetailedSyncDiff(userId);
-
-      // Check for conflicts first
-      if (detailedDiff.conflicts.length > 0) {
-        result.needsResolution = true;
-        result.conflicts = detailedDiff.conflicts;
-        result.nonConflicts = detailedDiff.nonConflicts;
-        result.summary.unchanged = detailedDiff.summary.identical;
-        result.message = `${detailedDiff.conflicts.length} conflict${detailedDiff.conflicts.length !== 1 ? 's' : ''} detected that require review.`;
-        return result;
-      }
-
-      const entities = [
-        { key: 'vehicles', type: 'vehicle' },
-        { key: 'fillups', type: 'fillup' },
-        { key: 'maintenance', type: 'maintenance' },
-        { key: 'tripEstimates', type: 'trip' }
-      ];
-
-      for (const ent of entities) {
-        const diff = detailedDiff.entities[ent.key];
-        const applyResult = await this.applyDiff(diff, 'sync-both', ent.type, userId);
-        
-        result.summary.uploaded += applyResult.uploaded;
-        result.summary.downloaded += applyResult.downloaded;
-        result.summary.deletedFromCloud += applyResult.deletedFromCloud;
-        result.summary.deletedFromLocal += applyResult.deletedFromLocal;
-        result.summary.conflictsResolved += applyResult.conflictsResolved;
-        result.counts[ent.key] = applyResult.uploaded + applyResult.downloaded;
-        result.details.push(...applyResult.errors);
-      }
-
-      result.success = result.details.length === 0;
-      result.message = result.success 
-        ? `Sync complete: ${result.summary.uploaded} uploaded, ${result.summary.downloaded} downloaded.`
-        : 'Sync completed with errors';
-    } catch (error) {
-      result.success = false;
-      result.message = 'Sync failed';
-      result.details.push(error.message);
-    }
-
-    return result;
-  },
-
-  /**
    * Upload local changes - local-first push to cloud
    * Enforces dependency ordering: vehicles -> fillups -> maintenance -> trips
    */
