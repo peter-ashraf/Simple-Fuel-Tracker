@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [predictedModalOpen, setPredictedModalOpen] = useState(false);
   const [selectedBarIdx, setSelectedBarIdx] = useState(null);
   const [selectedDotIdx, setSelectedDotIdx] = useState(null);
+  const [efficiencyUnit, setEfficiencyUnit] = useState("km_l");
   const recentTrips = [...activeVehicleFillUps].reverse().slice(0, 5);
   const isRtl = i18n.language.startsWith("ar");
 
@@ -131,8 +132,16 @@ export default function Dashboard() {
     stats.avgKmPerLiter > 0
       ? formatTo2Decimals(stats.avgKmPerLiter).toFixed(2)
       : "-";
+  const avgKm20L =
+    stats.avgKmPerLiter > 0
+      ? formatTo2Decimals(stats.avgKmPerLiter * 20).toFixed(2)
+      : "-";
   const avgL100 =
     stats.avgL100km > 0 ? formatTo2Decimals(stats.avgL100km).toFixed(2) : "-";
+  const displayedEfficiency =
+    efficiencyUnit === "km_20l" ? avgKm20L : avgKmL;
+  const displayedEfficiencyLabel =
+    efficiencyUnit === "km_20l" ? t("avg_km_20l_short") : t("avg_km_l_short");
 
   // --- Widget Data: Monthly Spending (last 6 months) ---
   const monthlySpending = useMemo(() => {
@@ -181,17 +190,27 @@ export default function Dashboard() {
           </div>
 
           <section className="grid grid-cols-2 gap-3 mb-6">
-            <MetricCard className="flex flex-col justify-between min-h-[120px] p-4">
+            <MetricCard
+              as="button"
+              type="button"
+              onClick={() =>
+                setEfficiencyUnit((current) =>
+                  current === "km_l" ? "km_20l" : "km_l",
+                )
+              }
+              aria-label={t("toggle_efficiency_metric")}
+              className="flex flex-col justify-between min-h-[120px] p-4 text-start transition-transform active:scale-[0.98]"
+            >
               <div className="flex items-center gap-1.5 mb-1">
                 <Pulse weight="duotone" className="w-3 h-3 text-emerald-500" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                  {t('avg_km_l_short')}
+                  {displayedEfficiencyLabel}
                 </span>
               </div>
               <span
                 className={`text-4xl font-bold tracking-tighter ${getEfficiencyColorStatus(stats.avgKmPerLiter)}`}
               >
-                {avgKmL}
+                {displayedEfficiency}
               </span>
             </MetricCard>
 

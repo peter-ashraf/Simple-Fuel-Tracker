@@ -30,6 +30,7 @@ export function calculateTripMetrics(fillUps, index) {
 
   return {
     distance: formatTo2Decimals(distance),
+    fuelConsumed: formatTo2Decimals(fuelConsumed),
     kmPerLiter: formatTo2Decimals(kmPerLiter),
     litersPer100km: formatTo2Decimals(litersPer100km),
     tripCost: formatTo2Decimals(tripCost),

@@ -11,6 +11,7 @@ import { StationSuggestion } from './StationSuggestion';
 import { useNavigate } from 'react-router-dom';
 import { DateInput } from './DateInput';
 import { useTranslation } from 'react-i18next';
+import { calculateTripMetrics } from '../utils/calculations';
 
 export default function FillUpForm() {
   const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceEntry, maintenanceEntries, activeVehicle, getCategoryById } = useFuel();
@@ -48,6 +49,11 @@ export default function FillUpForm() {
   const [stationError, setStationError] = useState(null);
   const [convertModal, setConvertModal] = useState({ isOpen: false, noteData: null });
   const [validationError, setValidationError] = useState('');
+  const [warningModal, setWarningModal] = useState({
+    isOpen: false,
+    message: '',
+    entry: null,
+  });
 
   const [liters, setLiters] = useState('');
   const [moneySpent, setMoneySpent] = useState('');
@@ -123,15 +129,31 @@ export default function FillUpForm() {
     }
   }, [liters, moneySpent, selectedFuelType, fuelPrices, lastEditedField]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if ((!liters && !moneySpent) || !odometer) return;
+  const findOdometerNeighbors = (entryDate) => {
+    const entryTime = entryDate.getTime();
+    const sorted = [...activeVehicleFillUps].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+
+    let previous = null;
+    let next = null;
+
+    sorted.forEach((fill) => {
+      const fillTime = new Date(fill.timestamp).getTime();
+      if (fillTime <= entryTime) previous = fill;
+      if (!next && fillTime > entryTime) next = fill;
+    });
+
+    return { previous, next };
+  };
+
+  const buildFillUpEntry = () => {
     const newOdometer = Number(odometer);
     const newDate = new Date(date);
     const now = new Date();
     newDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-    
-    addFillUp({
+
+    return {
       date: date,  // The actual fill-up date (YYYY-MM-DD format)
       timestamp: newDate.toISOString(),  // Full timestamp with time
       fuelType: selectedFuelType,
@@ -143,9 +165,84 @@ export default function FillUpForm() {
       tankLevelAfter: tankLevelAfter,
       tankCapacityLiters: activeVehicle?.tankCapacity || null,
       isPartialFill: tankLevelAfter < 100
-    });
-    
+    };
+  };
+
+  const validateEntry = (entry) => {
+    if (!activeVehicle) return t('no_vehicle_selected');
+    if (!entry.date || Number.isNaN(new Date(entry.timestamp).getTime())) {
+      return t('invalid_date');
+    }
+    if (new Date(entry.timestamp).getTime() > Date.now() + 60 * 1000) {
+      return t('future_date_error');
+    }
+    if (!Number.isFinite(entry.odometer) || entry.odometer <= 0) {
+      return t('invalid_odometer');
+    }
+    if (!Number.isFinite(entry.liters) || entry.liters <= 0) {
+      return t('invalid_liters');
+    }
+    if (!Number.isFinite(entry.pricePerLiter) || entry.pricePerLiter <= 0) {
+      return t('invalid_fuel_price');
+    }
+
+    const { previous, next } = findOdometerNeighbors(new Date(entry.timestamp));
+
+    if (previous && entry.odometer <= Number(previous.odometer)) {
+      return t('odometer_must_increase', {
+        value: Number(previous.odometer).toLocaleString(),
+      });
+    }
+
+    if (next && entry.odometer >= Number(next.odometer)) {
+      return t('odometer_must_be_below_next', {
+        value: Number(next.odometer).toLocaleString(),
+      });
+    }
+
+    return '';
+  };
+
+  const getEntryWarning = (entry) => {
+    const { previous } = findOdometerNeighbors(new Date(entry.timestamp));
+    if (!previous) return '';
+
+    const metrics = calculateTripMetrics([previous, entry], 1);
+    if (metrics.distance <= 0 || metrics.kmPerLiter <= 0) return '';
+
+    if (metrics.kmPerLiter < 4 || metrics.kmPerLiter > 30) {
+      return t('suspicious_efficiency_warning', {
+        value: metrics.kmPerLiter.toFixed(2),
+      });
+    }
+
+    return '';
+  };
+
+  const saveEntry = async (entry) => {
+    await addFillUp(entry);
     navigate('/');
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const entry = buildFillUpEntry();
+    const error = validateEntry(entry);
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+
+    setValidationError('');
+    const warning = getEntryWarning(entry);
+
+    if (warning) {
+      setWarningModal({ isOpen: true, message: warning, entry });
+      return;
+    }
+
+    saveEntry(entry);
   };
 
   const activeAlerts = maintenanceEntries.filter(entry => {
@@ -176,10 +273,17 @@ export default function FillUpForm() {
       </div>
 
       <form id="fillup-form" onSubmit={handleSubmit} className="space-y-5 pb-32">
+        {validationError && (
+          <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold flex items-start gap-2">
+            <WarningCircle weight="duotone" className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{validationError}</span>
+          </div>
+        )}
+
         <Card className="p-6">
            <div className="space-y-5">
               <div>
-                 <Label>{t('history')}</Label>
+                 <Label>{t('date')}</Label>
                  <DateInput value={date} onChange={setDate} required />
               </div>
 
@@ -256,14 +360,14 @@ export default function FillUpForm() {
         <Card className="p-6">
            <div className="space-y-4">
               <div>
-                 <Label>Station (Optional)</Label>
+                 <Label>{t('station')} ({t('optional')})</Label>
                  <div className="flex gap-2">
                     <Input type="text" value={station} onChange={e => setStation(e.target.value)} placeholder="..." className="flex-1" />
                     <button type="button" onClick={() => setShowStationModal(true)} className="px-3 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl"><MapPin weight="duotone" className="w-4 h-4" /></button>
                  </div>
               </div>
               <div>
-                 <Label>{t('config')} (Optional)</Label>
+                 <Label>{t('notes')} ({t('optional')})</Label>
                  <div className="space-y-2">
                    <textarea className="input-field min-h-[80px]" rows="2" value={notes} onChange={e => setNotes(e.target.value)} placeholder="..." />
                    {notes.trim() && (
@@ -278,6 +382,18 @@ export default function FillUpForm() {
 
     <StationSuggestion show={showStationModal} stations={stations} loading={stationLoading} error={stationError} permissionState={permissionState} onStationSelect={handleStationSelect} onDetectLocation={handleDetectStation} onAddUserStation={handleAddUserStation} onClose={() => setShowStationModal(false)} />
     <ConfirmModal isOpen={convertModal.isOpen} onClose={() => setConvertModal({ isOpen: false })} onConfirm={confirmConvertToMaintenanceLog} title={t('add_maintenance')} message={t('add_maint_confirm')} confirmText={t('save')} cancelText={t('cancel')} variant="info" />
+    <ConfirmModal
+      isOpen={warningModal.isOpen}
+      onClose={() => setWarningModal({ isOpen: false, message: '', entry: null })}
+      onConfirm={() => {
+        if (warningModal.entry) saveEntry(warningModal.entry);
+      }}
+      title={t('unusual_fillup')}
+      message={warningModal.message}
+      confirmText={t('save_anyway')}
+      cancelText={t('cancel')}
+      variant="warning"
+    />
   </>
   );
 }

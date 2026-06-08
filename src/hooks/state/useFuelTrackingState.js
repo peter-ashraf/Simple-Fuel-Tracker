@@ -116,7 +116,7 @@ export function useFuelTrackingState(selectedVehicleId) {
       
       if (index > 0) {
         validTripDistanceSum += metrics.distance;
-        validTripLitersSum += fill.liters;
+        validTripLitersSum += metrics.fuelConsumed;
       }
     });
 
@@ -131,7 +131,12 @@ export function useFuelTrackingState(selectedVehicleId) {
       avgL100km,
       totalCost: formatTo2Decimals(totalCost),
       totalDistance: formatTo2Decimals(validTripDistanceSum),
-      totalLiters: formatTo2Decimals(validTripLitersSum + (activeVehicleFillUpsByOdometer.length > 0 ? activeVehicleFillUpsByOdometer[0].liters : 0))
+      totalLiters: formatTo2Decimals(
+        activeVehicleFillUpsByOdometer.reduce(
+          (sum, fill) => sum + (Number(fill.liters) || 0),
+          0,
+        ),
+      )
     };
   }, [activeVehicleFillUpsByOdometer, activeVehicleFillUps.length]);
 

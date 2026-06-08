@@ -14,16 +14,16 @@ export const Card = forwardRef(({ className, children, ...props }, ref) => (
 ));
 Card.displayName = "Card"
 
-export const MetricCard = forwardRef(({ className, children, variant = "default", ...props }, ref) => {
+export const MetricCard = forwardRef(({ as: Component = "div", className, children, variant = "default", ...props }, ref) => {
   const variants = {
     default: "bg-slate-50 dark:bg-white/[0.03]",
     secondary: "bg-slate-100/80 dark:bg-white/[0.06]",
     accent: "bg-emerald-50/50 dark:bg-emerald-500/10"
   };
   return (
-    <div ref={ref} className={cn(`${variants[variant]} rounded-3xl p-5 relative overflow-hidden border-0`, className)} {...props}>
+    <Component ref={ref} className={cn(`${variants[variant]} rounded-3xl p-5 relative overflow-hidden border-0`, className)} {...props}>
       {children}
-    </div>
+    </Component>
   );
 });
 MetricCard.displayName = "MetricCard"

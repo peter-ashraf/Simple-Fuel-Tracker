@@ -502,23 +502,21 @@ export default function App() {
       <Header />
 
       <main className="flex-1 px-5 pt-20">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/add" element={<FillUpForm />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/trip-estimator" element={<TripCostEstimator />} />
-            <Route path="/tyre-calculator" element={<TyreCalculator />} />
-            <Route path="/maintenance" element={<Maintenance />} />
-            <Route path="/maintenance/add" element={<MaintenanceForm />} />
-            <Route
-              path="/maintenance/edit/:id"
-              element={<MaintenanceLogEdit />}
-            />
-            <Route path="/settings" element={<SettingsScreen />} />
-          </Routes>
-        </AnimatePresence>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/add" element={<FillUpForm />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/trip-estimator" element={<TripCostEstimator />} />
+          <Route path="/tyre-calculator" element={<TyreCalculator />} />
+          <Route path="/maintenance" element={<Maintenance />} />
+          <Route path="/maintenance/add" element={<MaintenanceForm />} />
+          <Route
+            path="/maintenance/edit/:id"
+            element={<MaintenanceLogEdit />}
+          />
+          <Route path="/settings" element={<SettingsScreen />} />
+        </Routes>
       </main>
 
       {/* Bottom Tab Bar */}
