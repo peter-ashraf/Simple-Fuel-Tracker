@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Path,
@@ -61,34 +61,9 @@ export default function TripCostEstimator() {
 
   const [selectedEstimateIds, setSelectedEstimateIds] = useState(new Set());
   const [isEstimateSelectionMode, setIsEstimateSelectionMode] = useState(false);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsUnitDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (tripDistance && parseFloat(tripDistance) > 0) calculateEstimate();
-    else setEstimate(null);
-  }, [
-    tripDistance,
-    distanceUnit,
-    manualConsumption,
-    manualFuelPrice,
-    useManualConsumption,
-    useManualPrice,
-    isRoundTrip,
-    activeVehicleFillUpsByOdometer,
-  ]);
-
   const [selectedEstimate, setSelectedEstimate] = useState(null);
 
-  const calculateEstimate = async () => {
+  const calculateEstimate = useCallback(async () => {
     setIsCalculating(true);
     const distanceInKm = convertDistance(
       parseFloat(tripDistance),
@@ -114,7 +89,41 @@ export default function TripCostEstimator() {
     );
     setEstimate({ ...result, distance: finalDistance });
     setIsCalculating(false);
-  };
+  }, [
+    activeVehicleFillUpsByOdometer,
+    distanceUnit,
+    isRoundTrip,
+    manualConsumption,
+    manualFuelPrice,
+    tripDistance,
+    useManualConsumption,
+    useManualPrice,
+  ]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsUnitDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (tripDistance && parseFloat(tripDistance) > 0) calculateEstimate();
+    else setEstimate(null);
+  }, [
+    tripDistance,
+    distanceUnit,
+    manualConsumption,
+    manualFuelPrice,
+    useManualConsumption,
+    useManualPrice,
+    isRoundTrip,
+    activeVehicleFillUpsByOdometer,
+    calculateEstimate,
+  ]);
 
   const getConfidenceColor = (confidence) => {
     switch (confidence) {

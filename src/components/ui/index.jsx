@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { createElement, forwardRef } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'framer-motion';
@@ -20,10 +20,14 @@ export const MetricCard = forwardRef(({ as: Component = "div", className, childr
     secondary: "bg-slate-100/80 dark:bg-white/[0.06]",
     accent: "bg-emerald-50/50 dark:bg-emerald-500/10"
   };
-  return (
-    <Component ref={ref} className={cn(`${variants[variant]} rounded-3xl p-5 relative overflow-hidden border-0`, className)} {...props}>
-      {children}
-    </Component>
+  return createElement(
+    Component,
+    {
+      ref,
+      className: cn(`${variants[variant]} rounded-3xl p-5 relative overflow-hidden border-0`, className),
+      ...props
+    },
+    children
   );
 });
 MetricCard.displayName = "MetricCard"

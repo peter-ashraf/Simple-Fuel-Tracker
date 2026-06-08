@@ -12,6 +12,39 @@ export function useNotifications() {
     }
   }, []);
 
+  // Send a notification
+  const sendNotification = useCallback((title, options = {}) => {
+    const { force = false, ...notificationOptions } = options;
+
+    if ((!notificationsEnabled && !force) || !('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      try {
+        const notification = new Notification(title, {
+          icon: '/icon.png',
+          badge: '/icon.png',
+          tag: notificationOptions.tag || 'fuel-tracker',
+          requireInteraction: notificationOptions.requireInteraction || false,
+          ...notificationOptions
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+          if (notificationOptions.onClick) {
+            notificationOptions.onClick();
+          }
+        };
+
+        return notification;
+      } catch (error) {
+        console.error('Error sending notification:', error);
+      }
+    }
+  }, [notificationsEnabled]);
+
   // Request notification permission
   const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) {
@@ -28,7 +61,8 @@ export function useNotifications() {
         // Send a test notification
         sendNotification('Notifications Enabled', {
           body: 'You will now receive maintenance reminders and alerts.',
-          icon: '/icon.png'
+          icon: '/icon.png',
+          force: true
         });
         return true;
       } else {
@@ -39,7 +73,7 @@ export function useNotifications() {
       console.error('Error requesting notification permission:', error);
       return false;
     }
-  }, [setNotificationsEnabled]);
+  }, [sendNotification, setNotificationsEnabled]);
 
   // Toggle notifications
   const toggleNotifications = useCallback(async () => {
@@ -52,37 +86,6 @@ export function useNotifications() {
       return await requestPermission();
     }
   }, [notificationsEnabled, setNotificationsEnabled, requestPermission]);
-
-  // Send a notification
-  const sendNotification = useCallback((title, options = {}) => {
-    if (!notificationsEnabled || !('Notification' in window)) {
-      return;
-    }
-
-    if (Notification.permission === 'granted') {
-      try {
-        const notification = new Notification(title, {
-          icon: '/icon.png',
-          badge: '/icon.png',
-          tag: options.tag || 'fuel-tracker',
-          requireInteraction: options.requireInteraction || false,
-          ...options
-        });
-
-        notification.onclick = () => {
-          window.focus();
-          notification.close();
-          if (options.onClick) {
-            options.onClick();
-          }
-        };
-
-        return notification;
-      } catch (error) {
-        console.error('Error sending notification:', error);
-      }
-    }
-  }, [notificationsEnabled]);
 
   // Check and send maintenance due notifications
   const checkMaintenanceReminders = useCallback((entries, currentOdometer) => {

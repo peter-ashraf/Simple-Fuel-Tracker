@@ -85,20 +85,26 @@ export default function TyreCalculator() {
   return (
     <>
       {createPortal(
-        <div className="fixed-button-container-no-nav">
-          <div className="max-w-lg mx-auto flex gap-3">
-            <button type="button" onClick={() => navigate('/')} className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
-              <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
-            </button>
-            <button type="button" onClick={() => { addTyreComparison(result); setSaved(true); setTimeout(() => setSaved(false), 3000); }} disabled={!result || saved} className="flex-1 px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/25 active:scale-[0.98]">
-              <FloppyDisk weight="duotone" className="w-5 h-5" /> <span>{saved ? t('save') : t('save')}</span>
-            </button>
+        <>
+          <div className="fixed left-1/2 bottom-28 z-40 flex w-full max-w-lg -translate-x-1/2 gap-3 px-4">
+            <button type="button" onClick={handleCalculate} className="flex-1 bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">{t('calculate')}</button>
+            <button type="button" onClick={handleReset} className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl"><ArrowCounterClockwise weight="duotone" className="w-5 h-5" /></button>
           </div>
-        </div>,
+          <div className="fixed-button-container-no-nav">
+            <div className="max-w-lg mx-auto flex gap-3">
+              <button type="button" onClick={() => navigate('/')} className="flex-1 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
+                <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('back')}</span>
+              </button>
+              <button type="button" onClick={() => { addTyreComparison(result); setSaved(true); setTimeout(() => setSaved(false), 3000); }} disabled={!result || saved} className="flex-1 px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-xl shadow-emerald-500/25 active:scale-[0.98]">
+                <FloppyDisk weight="duotone" className="w-5 h-5" /> <span>{saved ? t('save') : t('save')}</span>
+              </button>
+            </div>
+          </div>
+        </>,
         document.body
       )}
 
-      <PageWrapper className="space-y-6 pb-32">
+      <PageWrapper className="space-y-6 pb-56">
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Tire weight="duotone" className="w-6 h-6 text-emerald-500" /> {t('tyre_calculator')}
@@ -123,7 +129,7 @@ export default function TyreCalculator() {
           <div className="flex items-center justify-between">
              <h2 className="text-lg font-bold text-emerald-500">{t('tires')}</h2>
              <div className="relative">
-                <button onClick={() => setSizesOpen(!sizesOpen)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1">
+                <button type="button" onClick={() => setSizesOpen(!sizesOpen)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1">
                    {t('common_sizes')} <CaretDown weight="duotone" size={14} className={cn("transition-transform", sizesOpen && "rotate-180")} />
                 </button>
                 <AnimatePresence>
@@ -131,7 +137,7 @@ export default function TyreCalculator() {
                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={cn("absolute top-full mt-2 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-20", isRtl ? "left-0" : "right-0")}>
                         <div className="p-1 max-h-48 overflow-y-auto no-scrollbar">
                            {commonTyreSizes.map((s, i) => (
-                             <button key={i} onClick={() => { setNewTyre(s); setSizesOpen(false); }} className="w-full text-start px-3 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg">{s.label}</button>
+                             <button type="button" key={i} onClick={() => { setNewTyre(s); setSizesOpen(false); }} className="w-full text-start px-3 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg">{s.label}</button>
                            ))}
                         </div>
                      </motion.div>
@@ -148,11 +154,6 @@ export default function TyreCalculator() {
              {formatTyreSize(newTyre)}
           </div>
         </Card>
-
-        <div className="flex gap-3">
-          <button onClick={handleCalculate} className="flex-1 bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">{t('calculate')}</button>
-          <button onClick={handleReset} className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl"><ArrowCounterClockwise weight="duotone" className="w-5 h-5" /></button>
-        </div>
 
         {result && (
           <div className="space-y-6">
