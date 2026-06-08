@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Wrench, CalendarBlank, CurrencyDollar, Tag, CaretLeft } from '@phosphor-icons/react';
+import { Plus, Tag, CaretLeft } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, cn } from './ui';
 import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
-import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -15,9 +14,7 @@ export default function MaintenanceLogForm() {
   const isRtl = i18n.language.startsWith('ar');
   
   const [selectedCategories, setSelectedCategories] = useState(['oil_change']);
-  const [customCategoryName, setCustomCategoryName] = useState('');
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [cost, setCost] = useState('');
   const [odometer, setOdometer] = useState('');
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
@@ -32,16 +29,10 @@ export default function MaintenanceLogForm() {
     const now = new Date();
     baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    const finalCategories = [...selectedCategories];
-    if (selectedCategories.includes('custom') && customCategoryName.trim()) {
-      const customIndex = finalCategories.indexOf('custom');
-      finalCategories[customIndex] = customCategoryName.trim();
-    }
-
     addMaintenanceLog({
-      categoryIds: finalCategories,
+      categoryIds: selectedCategories,
       title: title.trim(),
-      description: description.trim(),
+      description: '',
       cost: cost ? Number(cost) : 0,
       odometer: odometer ? Number(odometer) : null,
       timestamp: baseDate.toISOString(),

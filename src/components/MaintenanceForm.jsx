@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Wrench, CalendarBlank, Tag, CaretLeft, Shield, CaretRight } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export default function MaintenanceForm() {
-  const { addMaintenanceEntry, activeVehicle, maintenanceSettings, maintenanceSystems, getCategoryById } = useFuel();
+  const { addMaintenanceEntry, maintenanceSettings, maintenanceSystems, getCategoryById } = useFuel();
   const navigate = useNavigate();
   const location = useLocation();
   const { t, i18n } = useTranslation();
@@ -16,13 +16,24 @@ export default function MaintenanceForm() {
   const queryParams = new URLSearchParams(location.search);
   const initialType = queryParams.get('type');
   
+  const getDefaultInterval = (categoryId) => {
+    if (!categoryId) return '';
+    const category = getCategoryById(categoryId);
+    return category?.defaultInterval?.value ? String(category.defaultInterval.value) : '';
+  };
+
   const [type, setType] = useState(initialType || '');
   const [performedAtODO, setPerformedAtODO] = useState('');
-  const [intervalKm, setIntervalKm] = useState('');
+  const [intervalKm, setIntervalKm] = useState(() => getDefaultInterval(initialType));
   const [safetyMarginKm, setSafetyMarginKm] = useState(maintenanceSettings.defaultSafetyMarginKm || 2000);
   const [notes, setNotes] = useState('');
 
   const [selectedSystemId, setSelectedSystemId] = useState(null);
+
+  const handleSelectType = (categoryId) => {
+    setType(categoryId);
+    setIntervalKm(getDefaultInterval(categoryId));
+  };
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
@@ -38,17 +49,6 @@ export default function MaintenanceForm() {
 
     navigate('/maintenance');
   };
-
-  useEffect(() => {
-    setSafetyMarginKm(maintenanceSettings.defaultSafetyMarginKm || 2000);
-  }, [maintenanceSettings.defaultSafetyMarginKm]);
-
-  useEffect(() => {
-    if (type) {
-      const category = getCategoryById(type);
-      if (category?.defaultInterval?.value) setIntervalKm(category.defaultInterval.value);
-    }
-  }, [type, getCategoryById]);
 
   if (!type) {
     return (
@@ -80,7 +80,7 @@ export default function MaintenanceForm() {
             {maintenanceSystems.find(s => s.id === selectedSystemId).categories.map(catId => {
               const cat = getCategoryById(catId);
               return (
-                <Card key={catId} className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setType(catId)}>
+                <Card key={catId} className="p-5 flex items-center justify-between cursor-pointer" onClick={() => handleSelectType(catId)}>
                   <div className="flex items-center gap-4">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
                     <span className="font-bold text-slate-900 dark:text-white">{t(cat.id)}</span>

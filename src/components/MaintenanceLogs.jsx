@@ -5,18 +5,15 @@ import { Card, PageWrapper, ConfirmModal, cn } from './ui';
 import { getMaintenanceCategory } from '../data/maintenanceCategories';
 import { format } from 'date-fns';
 import { formatCurrency2Dec } from '../utils/formatting';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export default function MaintenanceLogs() {
   const { maintenanceLogs, deleteMaintenanceLog, activeVehicle } = useFuel();
-  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [expandedCards, setExpandedCards] = useState(new Set());
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, logId: null });
 
   const filteredLogs = maintenanceLogs.filter(log => {
@@ -88,7 +85,7 @@ export default function MaintenanceLogs() {
       ) : (
         <div className="space-y-4">
           {filteredLogs.map((log) => (
-            <Card key={log.id} className="p-4" onClick={() => setExpandedCards(prev => { const s = new Set(prev); s.has(log.id) ? s.delete(log.id) : s.add(log.id); return s; })}>
+            <Card key={log.id} className="p-4">
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1">
                   <h3 className="font-bold text-slate-900 dark:text-white">{log.title}</h3>
