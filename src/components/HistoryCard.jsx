@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Trash, GasPump, CalendarBlank, MapPin, FloppyDisk, X, CheckSquare, Square } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal, Input, Label, FuelGaugeSlider, cn } from './ui';
-import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec, formatTo2Decimals } from '../utils/formatting';
+import { formatTo2Decimals } from '../utils/formatting';
 import { calculateEfficiencyThresholds, getEfficiencyTextClass } from '../utils/efficiencyThresholds';
 import './HistoryCard.css';
 import { useTranslation } from 'react-i18next';
 
-export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDelete, onUpdate, fuelPrices }) {
+export default function HistoryCard({ fill, index, fillUps, onDelete, onUpdate }) {
   const { t, i18n } = useTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
@@ -32,7 +32,6 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   const kmPerLiter = kmPerLiterRaw > 0 ? formatTo2Decimals(kmPerLiterRaw).toFixed(2) : '-';
   const litersPer100km = metrics.litersPer100km > 0 ? formatTo2Decimals(metrics.litersPer100km).toFixed(2) : '-';
   const tripDistance = metrics.distance > 0 ? formatTo2Decimals(metrics.distance).toFixed(2) : '-';
-  const isEstimated = metrics.isEstimated;
   const efficiencyThresholds = calculateEfficiencyThresholds(fillUps);
 
   const handleEdit = () => setIsFlipped(true);

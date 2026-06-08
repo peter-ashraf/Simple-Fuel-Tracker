@@ -19,13 +19,15 @@ import {
   CurrencyDollar, 
   CaretDown 
 } from '@phosphor-icons/react';
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { formatEfficiency2Dec, formatCurrency2Dec } from '../utils/formatting';
+import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
+import { formatEfficiency2Dec } from '../utils/formatting';
 import { calculateEfficiencyThresholds } from '../utils/efficiencyThresholds';
 import { useTranslation } from 'react-i18next';
 import chartjsPluginAnnotation from 'chartjs-plugin-annotation';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler, chartjsPluginAnnotation);
+
+const MotionDiv = motion.div;
 
 export default function Analytics() {
   const { activeVehicleFillUps, activeVehicle } = useFuel();
@@ -33,16 +35,15 @@ export default function Analytics() {
   const isRtl = i18n.language.startsWith('ar');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [activeGraphIndex, setActiveGraphIndex] = useState(0);
-  const [direction, setDirection] = useState(0);
   const graphDropdownRef = useRef(null);
   const [isGraphDropdownOpen, setIsGraphDropdownOpen] = useState(false);
 
-  const formatMonthLabel = (dateStr) => {
+  const formatMonthLabel = useCallback((dateStr) => {
     const d = new Date(dateStr + '-01');
     const monthName = t(format(d, 'MMMM'));
     const year = format(d, 'yyyy');
     return `${monthName} ${year}`;
-  };
+  }, [t]);
 
   const monthlyGroups = useMemo(() => {
     const groups = {};
@@ -78,7 +79,7 @@ export default function Analytics() {
     const avgEff = group.distance > 0 && group.totalLiters > 0 ? group.distance / group.totalLiters : 0;
     const costPerKm = group.distance > 0 ? group.totalCost / group.distance : 0;
     return { ...group, avgEff, costPerKm, monthLabel: formatMonthLabel(group.key) };
-  }, [monthlyGroups, selectedMonth, t]);
+  }, [monthlyGroups, selectedMonth, formatMonthLabel]);
 
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -114,7 +115,6 @@ export default function Analytics() {
   ];
 
   const paginate = (newIndex) => {
-    setDirection(newIndex > activeGraphIndex ? 1 : -1);
     setActiveGraphIndex(newIndex);
   };
 
@@ -143,7 +143,7 @@ export default function Analytics() {
             </button>
             <AnimatePresence>
               {isMonthDropdownOpen && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={cn("absolute top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50", isRtl ? "left-0" : "right-0")}>
+                <MotionDiv initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={cn("absolute top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50", isRtl ? "left-0" : "right-0")}>
                   <div className="p-1 max-h-60 overflow-y-auto no-scrollbar">
                     {yearsWithMonths.map(([year, months]) => (
                       <div key={year}>
@@ -156,7 +156,7 @@ export default function Analytics() {
                       </div>
                     ))}
                   </div>
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
           </div>
@@ -300,7 +300,7 @@ export default function Analytics() {
             </button>
             <AnimatePresence>
               {isGraphDropdownOpen && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={cn("absolute top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50", isRtl ? "left-0" : "right-0")}>
+                <MotionDiv initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={cn("absolute top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50", isRtl ? "left-0" : "right-0")}>
                   <div className="p-1">
                     {graphs.map((g, idx) => {
                       const Icon = g.icon;
@@ -311,7 +311,7 @@ export default function Analytics() {
                       );
                     })}
                   </div>
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
           </div>

@@ -1,11 +1,6 @@
 import {
   Trash,
   GasPump,
-  CalendarBlank,
-  MapPin,
-  Pencil,
-  FloppyDisk,
-  X,
   Check,
   Square,
   CheckSquare,
@@ -13,11 +8,13 @@ import {
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFuel } from "../hooks/useFuelContext";
-import { format } from "date-fns";
-import { calculateTripMetrics } from "../utils/calculations";
 import { PageWrapper, ConfirmModal, cn } from "./ui";
 import HistoryCard from "./HistoryCard";
 import { useTranslation } from "react-i18next";
+
+const MotionDiv = motion.div;
+const MotionLi = motion.li;
+const MotionButton = motion.button;
 
 export default function History() {
   const {
@@ -25,7 +22,6 @@ export default function History() {
     deleteFillUp,
     deleteMultipleFillUps,
     updateFillUp,
-    fuelPrices,
   } = useFuel();
   const { t, i18n } = useTranslation();
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -88,14 +84,14 @@ export default function History() {
               activeVehicleFillUps.length - 1 - reversedIndex;
             const isSelected = selectedIds.has(fill.id);
             return (
-              <motion.li
+              <MotionLi
                 key={fill.id}
                 className="relative flex items-center"
                 layout
               >
                 <AnimatePresence>
                   {selectionMode && (
-                    <motion.button
+                    <MotionButton
                       initial={{ opacity: 0, scale: 0.8, x: isRtl ? 10 : -10 }}
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.8, x: isRtl ? 10 : -10 }}
@@ -103,10 +99,10 @@ export default function History() {
                       className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 dark:border-slate-600"}`}
                     >
                       {isSelected && <Check weight="duotone" className="w-3.5 h-3.5" />}
-                    </motion.button>
+                    </MotionButton>
                   )}
                 </AnimatePresence>
-                <motion.div
+                <MotionDiv
                   className="flex-1"
                   animate={{
                     scaleX: selectionMode ? 0.92 : 1,
@@ -117,14 +113,12 @@ export default function History() {
                   <HistoryCard
                     fill={fill}
                     index={originalIndex}
-                    totalFillUps={activeVehicleFillUps.length}
                     fillUps={activeVehicleFillUps}
                     onDelete={deleteFillUp}
                     onUpdate={updateFillUp}
-                    fuelPrices={fuelPrices}
                   />
-                </motion.div>
-              </motion.li>
+                </MotionDiv>
+              </MotionLi>
             );
           })}
         </ul>
@@ -142,7 +136,7 @@ export default function History() {
 
       <AnimatePresence>
         {selectedIds.size > 0 && (
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
@@ -182,7 +176,7 @@ export default function History() {
                 {t("cancel")}
               </button>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
     </PageWrapper>

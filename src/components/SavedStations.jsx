@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { MapPin, ArrowSquareOut, Pencil, Trash, CircleNotch, X } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from './ui';
 import { gasStationService } from '../services/gasStationService';
+
+const MotionDiv = motion.div;
 
 export function SavedStations({ onStationUpdate }) {
   const [stations, setStations] = useState([]);
@@ -21,7 +22,7 @@ export function SavedStations({ onStationUpdate }) {
   };
 
   const openMap = (station) => {
-    const { latitude, longitude, name } = station;
+    const { latitude, longitude } = station;
     const osmUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}&zoom=18#map=18/${latitude}/${longitude}`;
     window.open(osmUrl, '_blank');
   };
@@ -102,7 +103,7 @@ export function SavedStations({ onStationUpdate }) {
   return (
     <div className="space-y-3">
       {stations.map((station) => (
-        <motion.div
+        <MotionDiv
           key={station.id}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
@@ -183,7 +184,7 @@ export function SavedStations({ onStationUpdate }) {
               </div>
             </div>
           )}
-        </motion.div>
+        </MotionDiv>
       ))}
     </div>
   );

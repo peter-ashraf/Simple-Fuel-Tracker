@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../components/ui';
 import { gasStationService } from '../services/gasStationService';
 
+const MotionDiv = motion.div;
+
 export function StationSuggestion({
   stations = [],
   loading = false,
@@ -13,7 +15,6 @@ export function StationSuggestion({
   onAddUserStation,
   onClose,
   show = false,
-  permissionState = 'prompt'
 }) {
   const [selectedStation, setSelectedStation] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -96,7 +97,7 @@ export function StationSuggestion({
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
-        <motion.div
+        <MotionDiv
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -106,7 +107,7 @@ export function StationSuggestion({
         />
         
         {/* Modal Content */}
-        <motion.div
+        <MotionDiv
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -309,7 +310,7 @@ export function StationSuggestion({
                   Found {stations.length} nearby station{stations.length !== 1 ? 's' : ''}
                 </p>
                 {stations.map((station) => (
-                  <motion.div
+                  <MotionDiv
                     key={station.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -358,7 +359,7 @@ export function StationSuggestion({
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </MotionDiv>
                 ))}
               </div>
             )}
@@ -398,7 +399,7 @@ export function StationSuggestion({
               </button>
             </div>
           )}
-        </motion.div>
+        </MotionDiv>
       </div>
     </AnimatePresence>
   );

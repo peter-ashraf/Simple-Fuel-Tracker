@@ -61,7 +61,7 @@ export const backupService = {
           }
           
           payload[key] = data;
-        } catch (e) {
+        } catch {
           payload[key] = value; // Fallback for non-JSON strings like theme
         }
       }

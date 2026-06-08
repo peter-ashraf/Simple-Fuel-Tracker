@@ -4,6 +4,8 @@ import { authService } from '../services/authService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import { GasPump, Envelope, Lock, UserPlus, SignIn, Eye, EyeSlash } from '@phosphor-icons/react';
 
+const MotionDiv = motion.div;
+
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -42,7 +44,7 @@ export default function LoginScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-black p-5">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -63,7 +65,7 @@ export default function LoginScreen() {
 
         {/* Syncing Indicator */}
         {syncing && (
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="mb-6 p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20"
@@ -74,7 +76,7 @@ export default function LoginScreen() {
                 Syncing your data...
               </p>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
 
         {/* Form */}
@@ -145,13 +147,13 @@ export default function LoginScreen() {
           )}
 
           {error && (
-            <motion.div
+            <MotionDiv
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="p-3 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-200 dark:border-red-500/20"
             >
               <p className="text-sm font-semibold text-red-700 dark:text-red-400">{error}</p>
-            </motion.div>
+            </MotionDiv>
           )}
 
           <button
@@ -192,7 +194,7 @@ export default function LoginScreen() {
         <p className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">
           Your data is encrypted and stored securely. You can delete your account at any time.
         </p>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 }

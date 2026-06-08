@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { CaretLeft, CaretRight, CalendarBlank as CalendarIcon } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const MotionDiv = motion.div;
+const MotionButton = motion.button;
+
 export function Calendar({ value, onChange, onClose }) {
   const [currentDate, setCurrentDate] = useState(new Date(value || new Date()));
   const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : new Date());
@@ -197,7 +200,7 @@ export function Calendar({ value, onChange, onClose }) {
   };
 
   return (
-    <motion.div
+    <MotionDiv
       initial={{ opacity: 0, scale: 0.95, y: -10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -208,7 +211,7 @@ export function Calendar({ value, onChange, onClose }) {
       <div className="p-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <motion.button
+          <MotionButton
             onClick={() => {
               if (view === 'days') {
                 handlePreviousMonth();
@@ -225,7 +228,7 @@ export function Calendar({ value, onChange, onClose }) {
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             <CaretLeft weight="duotone" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-          </motion.button>
+          </MotionButton>
           
           <div className="text-center">
             {view === 'days' && (
@@ -259,7 +262,7 @@ export function Calendar({ value, onChange, onClose }) {
             )}
           </div>
           
-          <motion.button
+          <MotionButton
             onClick={() => {
               if (view === 'days') {
                 handleNextMonth();
@@ -276,7 +279,7 @@ export function Calendar({ value, onChange, onClose }) {
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             <CaretRight weight="duotone" className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-          </motion.button>
+          </MotionButton>
         </div>
 
         {/* Content based on view */}
@@ -296,7 +299,7 @@ export function Calendar({ value, onChange, onClose }) {
 
             {/* Animated days grid */}
             <AnimatePresence mode="popLayout">
-              <motion.div
+              <MotionDiv
                 key={`days-${currentDate.getMonth()}-${currentDate.getFullYear()}`}
                 initial={{ x: slideDirection === 'right' ? 100 : slideDirection === 'left' ? -100 : 0, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
@@ -306,14 +309,14 @@ export function Calendar({ value, onChange, onClose }) {
                 <div className="grid grid-cols-7 gap-1">
                   {renderDays()}
                 </div>
-              </motion.div>
+              </MotionDiv>
             </AnimatePresence>
           </>
         )}
 
           <AnimatePresence mode="popLayout">
           {view === 'months' && (
-            <motion.div
+            <MotionDiv
               key={`months-${currentDate.getFullYear()}`}
               initial={{ x: slideDirection === 'right' ? 100 : slideDirection === 'left' ? -100 : 0, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -323,11 +326,11 @@ export function Calendar({ value, onChange, onClose }) {
               <div className="grid grid-cols-3 gap-2">
                 {renderMonths()}
               </div>
-            </motion.div>
+            </MotionDiv>
           )}
 
           {view === 'years' && (
-            <motion.div
+            <MotionDiv
               key={`years-${Math.floor(currentDate.getFullYear() / 10)}`}
               initial={{ x: slideDirection === 'right' ? 100 : slideDirection === 'left' ? -100 : 0, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -337,7 +340,7 @@ export function Calendar({ value, onChange, onClose }) {
               <div className="grid grid-cols-3 gap-2">
                 {renderYears()}
               </div>
-            </motion.div>
+            </MotionDiv>
           )}
         </AnimatePresence>
 
@@ -357,6 +360,6 @@ export function Calendar({ value, onChange, onClose }) {
           </button>
         </div>
       </div>
-    </motion.div>
+    </MotionDiv>
   );
 }

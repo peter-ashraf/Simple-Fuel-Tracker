@@ -11,7 +11,6 @@ import {
   CaretRight,
   ChartBar,
   TrendUp as TrendUpIcon,
-  Lightning,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
@@ -20,7 +19,6 @@ import { useFuel } from "../hooks/useFuelContext";
 import {
   calculateTripMetrics,
   calculateAverageDailyDistance,
-  formatPrediction,
 } from "../utils/calculations";
 import {
   calculateEfficiencyThresholds,
@@ -48,7 +46,6 @@ export default function Dashboard() {
   const [selectedBarIdx, setSelectedBarIdx] = useState(null);
   const [selectedDotIdx, setSelectedDotIdx] = useState(null);
   const [efficiencyUnit, setEfficiencyUnit] = useState("km_l");
-  const recentTrips = [...activeVehicleFillUps].reverse().slice(0, 5);
   const isRtl = i18n.language.startsWith("ar");
 
   const currentOdometer =
@@ -461,26 +458,6 @@ export default function Dashboard() {
                     );
                   })()}
                 </Card>
-              )}
-
-              {/* Cost per KM */}
-              {costPerKm > 0 && (
-                <MetricCard className="flex flex-col justify-between p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Lightning weight="duotone" className="w-3 h-3 text-violet-500" />
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                      {t('cost_per_km') || 'Cost / KM'}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                      {costPerKm.toFixed(2)}
-                    </span>
-                    <span className="text-[10px] font-medium text-slate-500">
-                      {t('currency')}/{t('unit_km_h')?.replace('/h','') || 'km'}
-                    </span>
-                  </div>
-                </MetricCard>
               )}
             </section>
           )}

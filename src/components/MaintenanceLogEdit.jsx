@@ -1,37 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Wrench, CalendarBlank, Tag, CaretLeft, Shield, Trash, FloppyDisk } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, ConfirmModal, cn } from './ui';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export default function MaintenanceLogEdit() {
-  const { maintenanceEntries, updateMaintenanceEntry, deleteMaintenanceEntry, activeVehicle, getCategoryById } = useFuel();
+  const { maintenanceEntries, updateMaintenanceEntry, deleteMaintenanceEntry, getCategoryById } = useFuel();
   const navigate = useNavigate();
   const { id } = useParams();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
   
-  const [log, setLog] = useState(null);
-  const [performedAtODO, setPerformedAtODO] = useState('');
-  const [intervalKm, setIntervalKm] = useState('');
-  const [safetyMarginKm, setSafetyMarginKm] = useState('');
-  const [notes, setNotes] = useState('');
+  const log = maintenanceEntries.find(l => String(l.id) === String(id));
+  const [performedAtODO, setPerformedAtODO] = useState(() => log?.performedAtODO ? String(log.performedAtODO) : '');
+  const [intervalKm, setIntervalKm] = useState(() => log?.intervalKm ? String(log.intervalKm) : '');
+  const [safetyMarginKm, setSafetyMarginKm] = useState(() => log?.safetyMarginKm ? String(log.safetyMarginKm) : '');
+  const [notes, setNotes] = useState(() => log?.notes || '');
   const [deleteModal, setDeleteModal] = useState(false);
-
-  useEffect(() => {
-    const foundLog = maintenanceEntries.find(l => String(l.id) === String(id));
-    if (foundLog) {
-      setLog(foundLog);
-      setPerformedAtODO(foundLog.performedAtODO ? String(foundLog.performedAtODO) : '');
-      setIntervalKm(foundLog.intervalKm ? String(foundLog.intervalKm) : '');
-      setSafetyMarginKm(foundLog.safetyMarginKm ? String(foundLog.safetyMarginKm) : '');
-      setNotes(foundLog.notes || '');
-    } else {
-      navigate('/maintenance');
-    }
-  }, [id, maintenanceEntries, navigate]);
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
@@ -51,7 +38,9 @@ export default function MaintenanceLogEdit() {
     navigate('/maintenance');
   };
 
-  if (!log) return null;
+  if (!log) {
+    return <Navigate to="/maintenance" replace />;
+  }
 
   const category = getCategoryById(log.type);
 

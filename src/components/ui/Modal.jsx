@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Warning, Trash, WarningCircle } from '@phosphor-icons/react';
 import { cn } from './index';
 
+const MotionDiv = motion.div;
+
 export const Modal = ({ 
   isOpen, 
   onClose, 
@@ -35,7 +37,7 @@ export const Modal = ({
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -45,7 +47,7 @@ export const Modal = ({
           />
           
           {/* Modal Content */}
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -84,7 +86,7 @@ export const Modal = ({
             <div className="relative">
               {children}
             </div>
-          </motion.div>
+          </MotionDiv>
         </div>
       )}
     </AnimatePresence>

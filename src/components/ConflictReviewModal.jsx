@@ -14,6 +14,8 @@ import {
 import { useState } from "react";
 import { cloudSyncService } from "../services/cloudSyncService";
 
+const MotionDiv = motion.div;
+
 export default function ConflictReviewModal({
   conflicts,
   nonConflicts,
@@ -23,7 +25,6 @@ export default function ConflictReviewModal({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [resolutions, setResolutions] = useState({});
-  const [batchResolution, setBatchResolution] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const currentConflict = conflicts[currentIndex];
@@ -50,7 +51,6 @@ export default function ConflictReviewModal({
       }
     });
     setResolutions((prev) => ({ ...prev, ...newResolutions }));
-    setBatchResolution(resolution);
   };
 
   const handlePrevious = () => {
@@ -198,7 +198,7 @@ export default function ConflictReviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -461,7 +461,7 @@ export default function ConflictReviewModal({
             </button>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 }

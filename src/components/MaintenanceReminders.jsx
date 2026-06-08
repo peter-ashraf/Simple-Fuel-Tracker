@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, Plus, CalendarBlank, Warning, Check, Trash, Pencil, GearSix, Wrench, CaretLeft } from '@phosphor-icons/react';
+import { Bell, Plus, CalendarBlank, Warning, Check, Trash, GearSix, Wrench, CaretLeft } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Card, PageWrapper, ConfirmModal } from './ui';
 import { MAINTENANCE_CATEGORIES, getMaintenanceCategory } from '../data/maintenanceCategories';
-import { format, addDays, addMonths, isAfter, isBefore, differenceInDays } from 'date-fns';
-import { formatCurrency2Dec } from '../utils/formatting';
+import { format, addMonths, differenceInDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 export default function MaintenanceReminders() {
@@ -20,7 +19,6 @@ export default function MaintenanceReminders() {
   const navigate = useNavigate();
   
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingReminder, setEditingReminder] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, reminderId: null });
   const [completeModal, setCompleteModal] = useState({ isOpen: false, reminderId: null });
 
@@ -65,6 +63,18 @@ export default function MaintenanceReminders() {
     return { status, daysUntilDue };
   };
 
+  const calculateNextDueDate = (reminder) => {
+    if (!reminder.lastCompletedDate) return reminder.dueDate;
+    
+    const lastCompleted = new Date(reminder.lastCompletedDate);
+    
+    if (reminder.timeInterval) {
+      return addMonths(lastCompleted, reminder.timeInterval);
+    }
+    
+    return reminder.dueDate;
+  };
+
   // Update next due dates for reminders
   useEffect(() => {
     maintenanceReminders.forEach(reminder => {
@@ -75,20 +85,7 @@ export default function MaintenanceReminders() {
         }
       }
     });
-  }, [maintenanceReminders]);
-
-  const calculateNextDueDate = (reminder) => {
-    if (!reminder.lastCompletedDate) return reminder.dueDate;
-    
-    const lastCompleted = new Date(reminder.lastCompletedDate);
-    const category = getMaintenanceCategory(reminder.categoryId);
-    
-    if (reminder.timeInterval) {
-      return addMonths(lastCompleted, reminder.timeInterval);
-    }
-    
-    return reminder.dueDate;
-  };
+  }, [maintenanceReminders, updateMaintenanceReminder]);
 
   const handleCompleteReminder = (reminderId) => {
     setCompleteModal({ isOpen: true, reminderId });
@@ -221,7 +218,6 @@ export default function MaintenanceReminders() {
         <div className="space-y-4">
           {sortedReminders.map((reminder) => {
             const reminderCategories = reminder.categoryIds || [reminder.categoryId];
-            const primaryCategory = getMaintenanceCategory(reminderCategories[0]);
             const status = getReminderStatus(reminder);
             const statusColor = getStatusColor(status.status);
             
@@ -300,13 +296,6 @@ export default function MaintenanceReminders() {
                       </button>
                     )}
                     <button
-                      onClick={() => setEditingReminder(reminder)}
-                      className="p-2 text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
-                      title="Edit reminder"
-                    >
-                      <Pencil weight="duotone" className="w-4 h-4" />
-                    </button>
-                    <button
                       onClick={() => setDeleteModal({ isOpen: true, reminderId: reminder.id })}
                       className="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                       title="Delete reminder"
@@ -356,16 +345,47 @@ export default function MaintenanceReminders() {
 
 // Add Reminder Form Component
 function AddReminderForm({ onSubmit, onCancel, currentOdometer }) {
+  const getDefaultReminderFields = (categoryId) => {
+    const category = getMaintenanceCategory(categoryId || 'oil_change');
+    if (!category.defaultInterval) {
+      return { timeInterval: '', odometerThreshold: '' };
+    }
+
+    if (category.defaultInterval.type === 'distance') {
+      return {
+        timeInterval: '',
+        odometerThreshold: String(category.defaultInterval.value + (currentOdometer || 0))
+      };
+    }
+
+    return {
+      timeInterval: String(category.defaultInterval.value),
+      odometerThreshold: ''
+    };
+  };
+
   const [selectedCategories, setSelectedCategories] = useState(['oil_change']);
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [timeInterval, setTimeInterval] = useState('');
-  const [odometerThreshold, setOdometerThreshold] = useState('');
+  const [timeInterval, setTimeInterval] = useState(() => getDefaultReminderFields('oil_change').timeInterval);
+  const [odometerThreshold, setOdometerThreshold] = useState(() => getDefaultReminderFields('oil_change').odometerThreshold);
   const [odometerOffset, setOdometerOffset] = useState('0');
 
-  const primaryCategory = getMaintenanceCategory(selectedCategories[0] || 'oil_change');
+  const handleCategoryToggle = (categoryId, checked) => {
+    const nextCategories = checked
+      ? [...selectedCategories, categoryId]
+      : selectedCategories.filter(id => id !== categoryId);
+    const normalizedCategories = nextCategories.length > 0 ? nextCategories : ['oil_change'];
+    setSelectedCategories(normalizedCategories);
+
+    if (normalizedCategories[0] !== selectedCategories[0]) {
+      const defaults = getDefaultReminderFields(normalizedCategories[0]);
+      setTimeInterval(defaults.timeInterval);
+      setOdometerThreshold(defaults.odometerThreshold);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -388,17 +408,6 @@ function AddReminderForm({ onSubmit, onCancel, currentOdometer }) {
       odometerOffset: odometerOffset ? Number(odometerOffset) : 0
     });
   };
-
-  // Auto-fill default values when primary category changes
-  useEffect(() => {
-    if (primaryCategory.defaultInterval) {
-      if (primaryCategory.defaultInterval.type === 'distance') {
-        setOdometerThreshold(String(primaryCategory.defaultInterval.value + (currentOdometer || 0)));
-      } else {
-        setTimeInterval(String(primaryCategory.defaultInterval.value));
-      }
-    }
-  }, [selectedCategories, primaryCategory, currentOdometer]);
 
   return (
     <>
@@ -452,13 +461,7 @@ function AddReminderForm({ onSubmit, onCancel, currentOdometer }) {
                     <input
                       type="checkbox"
                       checked={selectedCategories.includes(cat.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCategories([...selectedCategories, cat.id]);
-                        } else {
-                          setSelectedCategories(selectedCategories.filter(id => id !== cat.id));
-                        }
-                      }}
+                      onChange={(e) => handleCategoryToggle(cat.id, e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500/50"
                     />
                     <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }}></span>

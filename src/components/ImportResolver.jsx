@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, Modal, cn } from './ui';
 import { Check, X, Warning, CaretRight, FloppyDisk, Trash, Stack } from '@phosphor-icons/react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ImportResolver({ analysis, onCancel, onApply }) {
   const [currentStep, setCurrentStep] = useState(0); // 0: Overview, 1: Conflicts, 2: New Records
