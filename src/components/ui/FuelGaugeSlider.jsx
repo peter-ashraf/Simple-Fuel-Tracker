@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { cn } from './index';
 
 export function FuelGaugeSlider({ value, onChange, disabled = false }) {
