@@ -25,7 +25,7 @@ import TyreComparisonHistory from './TyreComparisonHistory';
 import { useTranslation } from 'react-i18next';
 
 export default function TyreCalculator() {
-  const { addTyreComparison, activeVehicle } = useFuel();
+  const { addTyreComparison, activeVehicle, stats } = useFuel();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
@@ -36,6 +36,7 @@ export default function TyreCalculator() {
   const [errors, setErrors] = useState([]);
   const [saved, setSaved] = useState(false);
   const [sizesOpen, setSizesOpen] = useState(false);
+  const [impactSpeedKmh, setImpactSpeedKmh] = useState(100);
 
   const handleCalculate = () => {
     setSaved(false);
@@ -51,7 +52,26 @@ export default function TyreCalculator() {
       return;
     }
     setErrors([]);
-    setResult(compareTyreSizes(originalTyre, newTyre, { speedKmh: 100, gearRatio: 1.0, finalDriveRatio: 3.5 }));
+    setResult(compareTyreSizes(originalTyre, newTyre, {
+      speedKmh: impactSpeedKmh,
+      gearRatio: 1.0,
+      finalDriveRatio: 3.5,
+      baselineKmPerLiter: stats.avgKmPerLiter,
+    }));
+  };
+
+  useEffect(() => {
+    if (!result) return;
+    setResult(compareTyreSizes(originalTyre, newTyre, {
+      speedKmh: impactSpeedKmh,
+      gearRatio: 1.0,
+      finalDriveRatio: 3.5,
+      baselineKmPerLiter: stats.avgKmPerLiter,
+    }));
+  }, [impactSpeedKmh]);
+
+  const toggleImpactSpeed = () => {
+    setImpactSpeedKmh((current) => (current === 100 ? 60 : 100));
   };
 
   const handleReset = () => {
@@ -189,16 +209,73 @@ export default function TyreCalculator() {
                <div className="grid grid-cols-3 gap-4 text-center pb-6 border-b border-slate-100 dark:border-white/5 mb-6">
                   <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('diameter')}</p><p className={cn("text-xl font-black", result.differences.diameterDifference > 0 ? "text-red-500" : "text-emerald-500")}>{result.differences.diameterDifference > 0 ? '+' : ''}{result.differences.diameterDifference}"</p></div>
                   <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('speed_impact')}</p><p className="text-xl font-black text-amber-500">{result.speedImpact.speedPercentageChange}</p></div>
-                  <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('actual_at_100')}</p><p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">{t('unit_km_h')}</span></p></div>
+                  <button
+                    type="button"
+                    onClick={toggleImpactSpeed}
+                    className="rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-white/5 active:scale-[0.98]"
+                    aria-label={t('toggle_speed_reference')}
+                  >
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      {t('actual_at_speed', { speed: result.speedImpact.speedometerSpeed })}
+                    </p>
+                    <p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">{t('unit_km_h')}</span></p>
+                  </button>
+               </div>
+
+               {/* Fuel Consumption Impact */}
+               <div className="rounded-2xl bg-violet-50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 p-4 mb-6">
+                 <div className="flex items-start justify-between gap-4 mb-4">
+                   <div>
+                     <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500 mb-1">
+                       {t('fuel_consumption_impact')}
+                     </p>
+                     <p className={cn(
+                       "text-2xl font-black",
+                       result.fuelImpact.consumptionChangePercent > 0 ? "text-red-500" : "text-emerald-500"
+                     )}>
+                       {result.fuelImpact.consumptionChangePercent > 0 ? '+' : ''}{result.fuelImpact.consumptionChangeFormatted}
+                     </p>
+                   </div>
+                   <div className="text-end">
+                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                       {t('expected_efficiency')}
+                     </p>
+                     <p className="text-sm font-black text-slate-900 dark:text-white">
+                       {result.fuelImpact.expectedKmPerLiter > 0 ? `${result.fuelImpact.expectedKmPerLiter.toFixed(2)} km/L` : '-'}
+                     </p>
+                     <p className="text-[10px] font-bold text-slate-500">
+                       {result.fuelImpact.expectedKmPer20Liter > 0 ? `${result.fuelImpact.expectedKmPer20Liter.toFixed(2)} km/20L` : t('limited_data')}
+                     </p>
+                   </div>
+                 </div>
+                 <p className="text-[10px] leading-relaxed text-violet-700 dark:text-violet-300">
+                   {result.fuelImpact.baselineKmPerLiter > 0
+                     ? t('fuel_impact_based_on_actual', { value: result.fuelImpact.baselineKmPerLiter.toFixed(2) })
+                     : t('fuel_impact_needs_history')}
+                 </p>
                </div>
 
                {/* RPM Impact */}
                <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rpm_change')} {t('rpm_at_100')}</h3>
-                    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", result.rpmImpact.newRPM > result.rpmImpact.originalRPM ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-500")}>
+                    <button
+                      type="button"
+                      onClick={toggleImpactSpeed}
+                      className="text-start rounded-lg transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+                      aria-label={t('toggle_speed_reference')}
+                    >
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {t('rpm_change')} {t('rpm_at_speed', { speed: result.speedImpact.speedometerSpeed })}
+                      </h3>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleImpactSpeed}
+                      className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", result.rpmImpact.newRPM > result.rpmImpact.originalRPM ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-500")}
+                      aria-label={t('toggle_speed_reference')}
+                    >
                       {result.rpmImpact.rpmPercentageChange}
-                    </span>
+                    </button>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">

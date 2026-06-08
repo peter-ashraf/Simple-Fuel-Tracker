@@ -24,6 +24,11 @@ import {
   formatPrediction,
 } from "../utils/calculations";
 import {
+  calculateEfficiencyThresholds,
+  getEfficiencyBarClass,
+  getEfficiencyTextClass,
+} from "../utils/efficiencyThresholds";
+import {
   formatTo2Decimals,
   formatCurrency2Dec,
   formatEfficiency2Dec,
@@ -35,6 +40,7 @@ export default function Dashboard() {
   const {
     stats,
     activeVehicleFillUps,
+    activeVehicleFillUpsByOdometer,
     maintenanceEntries,
     maintenanceSettings,
   } = useFuel();
@@ -121,12 +127,10 @@ export default function Dashboard() {
 
   const upcomingMaintenance = getUpcomingMaintenance();
 
-  const getEfficiencyColorStatus = (kmPerL) => {
-    if (!kmPerL || kmPerL === 0) return "text-slate-500";
-    if (kmPerL > 12) return "text-emerald-600";
-    if (kmPerL >= 8) return "text-amber-600";
-    return "text-red-600";
-  };
+  const efficiencyThresholds = useMemo(
+    () => calculateEfficiencyThresholds(activeVehicleFillUpsByOdometer),
+    [activeVehicleFillUpsByOdometer],
+  );
 
   const avgKmL =
     stats.avgKmPerLiter > 0
@@ -208,7 +212,7 @@ export default function Dashboard() {
                 </span>
               </div>
               <span
-                className={`text-4xl font-bold tracking-tighter ${getEfficiencyColorStatus(stats.avgKmPerLiter)}`}
+                className={`text-4xl font-bold tracking-tighter ${getEfficiencyTextClass(stats.avgKmPerLiter, efficiencyThresholds)}`}
               >
                 {displayedEfficiency}
               </span>
@@ -513,7 +517,7 @@ export default function Dashboard() {
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-1 h-6 rounded-full ${metrics.distance > 0 ? (metrics.kmPerLiter > 12 ? "bg-emerald-500" : metrics.kmPerLiter >= 8 ? "bg-amber-500" : "bg-red-500") : "bg-slate-600"}`}
+                          className={`w-1 h-6 rounded-full ${metrics.distance > 0 ? getEfficiencyBarClass(metrics.kmPerLiter, efficiencyThresholds) : "bg-slate-600"}`}
                         ></div>
                         <div>
                           <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -535,7 +539,7 @@ export default function Dashboard() {
                           </span>
                         </p>
                         <p
-                          className={`text-[10px] font-bold mt-0.5 ${getEfficiencyColorStatus(metrics.kmPerLiter)}`}
+                          className={`text-[10px] font-bold mt-0.5 ${getEfficiencyTextClass(metrics.kmPerLiter, efficiencyThresholds)}`}
                         >
                           {formatEfficiency2Dec(metrics.kmPerLiter)}
                         </p>

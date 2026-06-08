@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { calculateTripMetrics } from '../utils/calculations';
 import { ConfirmModal, Input, Label, FuelGaugeSlider, cn } from './ui';
 import { formatEfficiency2Dec, formatCurrency2Dec, formatVolume2Dec, formatDistance2Dec, formatTo2Decimals } from '../utils/formatting';
+import { calculateEfficiencyThresholds, getEfficiencyTextClass } from '../utils/efficiencyThresholds';
 import './HistoryCard.css';
 import { useTranslation } from 'react-i18next';
 
@@ -32,13 +33,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
   const litersPer100km = metrics.litersPer100km > 0 ? formatTo2Decimals(metrics.litersPer100km).toFixed(2) : '-';
   const tripDistance = metrics.distance > 0 ? formatTo2Decimals(metrics.distance).toFixed(2) : '-';
   const isEstimated = metrics.isEstimated;
-  
-  const getEfficiencyColorStatus = (kmPerL) => {
-    if (!kmPerL || kmPerL === "-" || kmPerL === 0 || isNaN(kmPerL)) return "text-slate-400";
-    if (kmPerL > 12) return "text-emerald-500";
-    if (kmPerL >= 8) return "text-amber-500";
-    return "text-red-500";
-  };
+  const efficiencyThresholds = calculateEfficiencyThresholds(fillUps);
 
   const handleEdit = () => setIsFlipped(true);
 
@@ -132,7 +127,7 @@ export default function HistoryCard({ fill, index, totalFillUps, fillUps, onDele
             </div>
             <div className="text-center space-y-1 border-s border-e border-slate-200 dark:border-white/[0.05]">
               <p className="text-[9px] uppercase font-black text-slate-400 tracking-[0.1em]">{t("avg_km_l_short")}</p>
-              <p className={cn("text-xs font-black", getEfficiencyColorStatus(kmPerLiterRaw))}>
+              <p className={cn("text-xs font-black", getEfficiencyTextClass(kmPerLiterRaw, efficiencyThresholds))}>
                 {index === 0 ? t("untracked") : kmPerLiter}
               </p>
             </div>

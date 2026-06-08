@@ -21,6 +21,7 @@ import {
 } from '@phosphor-icons/react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { formatEfficiency2Dec, formatCurrency2Dec } from '../utils/formatting';
+import { calculateEfficiencyThresholds } from '../utils/efficiencyThresholds';
 import { useTranslation } from 'react-i18next';
 import chartjsPluginAnnotation from 'chartjs-plugin-annotation';
 
@@ -103,6 +104,7 @@ export default function Analytics() {
   const sortedByEfficiency = [...tripData].sort((a,b) => b.kmPerLiter - a.kmPerLiter);
   const bestTrip = sortedByEfficiency[0];
   const worstTrip = sortedByEfficiency[sortedByEfficiency.length - 1];
+  const efficiencyThresholds = calculateEfficiencyThresholds(activeVehicleFillUps);
 
   const graphs = [
     { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
@@ -211,6 +213,77 @@ export default function Analytics() {
               <p className="text-[10px] text-slate-500 truncate">{activeVehicle?.name}</p>
            </MetricCard>
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Gauge weight="duotone" className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-bold">{t('efficiency_levels')}</h3>
+        </div>
+
+        <Card className="p-5">
+          {efficiencyThresholds.ready ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {t('vehicle_baseline')}
+                  </p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">
+                    {efficiencyThresholds.baseline.toFixed(2)} km/L
+                  </p>
+                </div>
+                <div className="text-end">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {t('samples_used')}
+                  </p>
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                    {efficiencyThresholds.sampleCount}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl bg-red-50 dark:bg-red-500/10 p-3 border border-red-100 dark:border-red-500/20">
+                  <p className="text-[9px] font-black uppercase text-red-500 mb-1">
+                    {t('low_level')}
+                  </p>
+                  <p className="text-xs font-bold text-red-700 dark:text-red-300">
+                    &lt; {efficiencyThresholds.low.toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 p-3 border border-amber-100 dark:border-amber-500/20">
+                  <p className="text-[9px] font-black uppercase text-amber-500 mb-1">
+                    {t('normal_level')}
+                  </p>
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                    {efficiencyThresholds.low.toFixed(2)}-{efficiencyThresholds.high.toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 p-3 border border-emerald-100 dark:border-emerald-500/20">
+                  <p className="text-[9px] font-black uppercase text-emerald-500 mb-1">
+                    {t('efficient_level')}
+                  </p>
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    ≥ {efficiencyThresholds.high.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {t('thresholds_learning')}
+              </p>
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                {t('thresholds_learning_description', {
+                  count: efficiencyThresholds.sampleCount,
+                  required: efficiencyThresholds.minSampleSize,
+                })}
+              </p>
+            </div>
+          )}
+        </Card>
       </section>
 
       <section className="space-y-6">

@@ -90,6 +90,40 @@ export function calculateRPMDifference(speedKmh, originalCircumferenceMm, newCir
 }
 
 /**
+ * Estimate fuel consumption impact from tyre size changes.
+ * This is a practical estimate using gearing change from circumference and
+ * rolling resistance proxy from tyre width, anchored to the vehicle's real
+ * average consumption when available.
+ */
+export function calculateFuelConsumptionImpact(originalTyre, newTyre, circumferenceDifference, baselineKmPerLiter = 0) {
+  const widthDifferencePercent =
+    ((Number(newTyre.width) - Number(originalTyre.width)) / Number(originalTyre.width)) * 100;
+
+  // Larger circumference lowers cruise RPM, while wider tyres usually add rolling resistance.
+  const gearingEffectPercent = -circumferenceDifference * 0.3;
+  const widthEffectPercent = widthDifferencePercent * 0.2;
+  const consumptionChangePercent = Math.max(
+    -15,
+    Math.min(15, gearingEffectPercent + widthEffectPercent),
+  );
+
+  const expectedKmPerLiter =
+    baselineKmPerLiter > 0
+      ? baselineKmPerLiter / (1 + consumptionChangePercent / 100)
+      : 0;
+
+  return {
+    baselineKmPerLiter: formatTo2Decimals(baselineKmPerLiter),
+    consumptionChangePercent: formatTo2Decimals(consumptionChangePercent),
+    consumptionChangeFormatted: formatPercentage2Dec(consumptionChangePercent),
+    expectedKmPerLiter: formatTo2Decimals(expectedKmPerLiter),
+    expectedKmPer20Liter: formatTo2Decimals(expectedKmPerLiter * 20),
+    gearingEffectPercent: formatTo2Decimals(gearingEffectPercent),
+    widthEffectPercent: formatTo2Decimals(widthEffectPercent)
+  };
+}
+
+/**
  * Complete tyre size comparison calculation
  * @param {object} originalTyre - { width, aspectRatio, rimSize }
  * @param {object} newTyre - { width, aspectRatio, rimSize }
@@ -97,7 +131,7 @@ export function calculateRPMDifference(speedKmh, originalCircumferenceMm, newCir
  * @returns {object} Complete comparison data
  */
 export function compareTyreSizes(originalTyre, newTyre, options = {}) {
-  const { speedKmh = 100, gearRatio = 1.0, finalDriveRatio = 3.5 } = options;
+  const { speedKmh = 100, gearRatio = 1.0, finalDriveRatio = 3.5, baselineKmPerLiter = 0 } = options;
   
   // Calculate original tyre specs
   const originalDiameter = calculateTyreDiameter(originalTyre.width, originalTyre.aspectRatio, originalTyre.rimSize);
@@ -120,6 +154,12 @@ export function compareTyreSizes(originalTyre, newTyre, options = {}) {
   
   // Calculate RPM impact
   const rpmData = calculateRPMDifference(speedKmh, originalCircumferenceMm, newCircumferenceMm, gearRatio, finalDriveRatio);
+  const fuelImpact = calculateFuelConsumptionImpact(
+    originalTyre,
+    newTyre,
+    circumferenceDifference,
+    baselineKmPerLiter,
+  );
   
   // Sidewall heights
   const originalSidewallMm = formatTo2Decimals((originalTyre.width * originalTyre.aspectRatio) / 100);
@@ -159,6 +199,7 @@ export function compareTyreSizes(originalTyre, newTyre, options = {}) {
       speedPercentageChange
     },
     rpmImpact: rpmData,
+    fuelImpact,
     timestamp: new Date().toISOString()
   };
 }
