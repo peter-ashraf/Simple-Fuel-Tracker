@@ -9,14 +9,13 @@ import { formatCurrency2Dec } from '../utils/formatting';
 import { useNavigate } from 'react-router-dom';
 
 export default function MaintenanceReminders() {
-  const { 
-    maintenanceReminders, 
-    addMaintenanceReminder, 
-    updateMaintenanceReminder, 
+  const {
+    maintenanceReminders,
+    addMaintenanceReminder,
+    updateMaintenanceReminder,
     deleteMaintenanceReminder,
-    maintenanceLogs,
     activeVehicleFillUps,
-    activeVehicle 
+    activeVehicle
   } = useFuel();
   const navigate = useNavigate();
   

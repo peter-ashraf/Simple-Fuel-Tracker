@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, Wrench, CalendarBlank, CurrencyDollar, Tag, CaretLeft } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
 import { Input, Label, Card, PageWrapper, cn } from './ui';
-import { MAINTENANCE_CATEGORIES, getMaintenanceCategory } from '../data/maintenanceCategories';
+import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

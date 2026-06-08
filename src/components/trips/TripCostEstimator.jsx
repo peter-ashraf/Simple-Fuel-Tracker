@@ -34,6 +34,144 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 
+const getConfidenceColor = (confidence) => {
+  switch (confidence) {
+    case "high":
+      return "text-emerald-500";
+    case "medium":
+      return "text-amber-500";
+    case "low":
+      return "text-orange-500";
+    default:
+      return "text-slate-400";
+  }
+};
+
+const EstimateDetails = ({ data, isModal = false, t, cn }) => (
+  <div className={cn("space-y-6", isModal && "p-6")}>
+    {!isModal && (
+      <div className="flex items-center gap-2">
+        <TrendUp weight="duotone" className="w-5 h-5 text-blue-500" />
+        <h2 className="text-lg font-bold">{t("estimated_cost")}</h2>
+      </div>
+    )}
+
+    <div className="grid grid-cols-2 gap-4">
+      <div className="text-center p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl border border-emerald-200 dark:border-emerald-500/20">
+        <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+          {(data.estimatedCost || 0).toFixed(0)}
+        </div>
+        <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-1 uppercase">
+          {t("currency")} {t("total_spent")}
+        </div>
+      </div>
+      <div className="text-center p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
+        <div className="text-3xl font-black text-blue-600 dark:text-blue-400">
+          {(data.estimatedLiters || 0).toFixed(1)}
+        </div>
+        <div className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mt-1 uppercase">
+          {t("liters")}
+        </div>
+      </div>
+    </div>
+
+    <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-white/10">
+      <div className="flex justify-between text-sm">
+        <span className="text-slate-500">{t("avg_consumption")}:</span>{" "}
+        <span className="font-bold">
+          {formatEfficiency2Dec(data.consumptionUsed)}
+        </span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-slate-500">{t("price")}:</span>{" "}
+        <span className="font-bold">
+          {(data.priceUsed || 0).toFixed(2)} {t("unit_egp_l")}
+        </span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-slate-500">{t("overview")}:</span>{" "}
+        <span className="font-bold">{t(data.methodUsed)}</span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-slate-500">{t("confidence")}:</span>
+        <div className="text-end">
+          <span
+            className={cn(
+              "font-bold block",
+              getConfidenceColor(data.confidence),
+            )}
+          >
+            {t(data.confidence)}
+          </span>
+          {data.sampleSize > 0 && (
+            <span className="text-[10px] text-slate-400 font-medium">
+              {t("based_on_x_fillups", { count: data.sampleSize })}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Confidence Messages */}
+    <AnimatePresence>
+      {data.confidence !== "high" && (
+        <motion.div
+          key="confidence-warning"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2"
+        >
+          <WarningCircle weight="duotone" className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div className="text-[11px] text-amber-700 dark:text-amber-400">
+            <p className="font-bold mb-0.5">{t("limited_data")}</p>
+            <p>{t("add_more_data_hint")}</p>
+          </div>
+        </motion.div>
+      )}
+      {data.confidence === "low" && data.sampleSize > 0 && (
+        <motion.div
+          key="confidence-hint"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2"
+        >
+          <Info weight="duotone" className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+          <div className="text-[11px] text-blue-700 dark:text-blue-400">
+            <p>{t("estimate_hint", { count: data.sampleSize })}</p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Raw Data Preview */}
+    {data.rawData && data.rawData.length > 0 && (
+      <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2 mb-3">
+          <ClockCounterClockwise weight="duotone" className="w-3.5 h-3.5 text-slate-400" />
+          <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            {t("recent_data_used")}
+          </h3>
+        </div>
+        <div className="space-y-2">
+          {data.rawData.slice(0, isModal ? 5 : 3).map((d, i) => (
+            <div
+              key={i}
+              className="flex justify-between items-center text-[11px]"
+            >
+              <span className="text-slate-500">{d.date}</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                {d.kmPerLiter} km/L @ {d.pricePerLiter} EGP
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 export default function TripCostEstimator() {
   const {
     activeVehicleFillUpsByOdometer,
@@ -124,144 +262,6 @@ export default function TripCostEstimator() {
     activeVehicleFillUpsByOdometer,
     calculateEstimate,
   ]);
-
-  const getConfidenceColor = (confidence) => {
-    switch (confidence) {
-      case "high":
-        return "text-emerald-500";
-      case "medium":
-        return "text-amber-500";
-      case "low":
-        return "text-orange-500";
-      default:
-        return "text-slate-400";
-    }
-  };
-
-  const EstimateDetails = ({ data, isModal = false }) => (
-    <div className={cn("space-y-6", isModal && "p-6")}>
-      {!isModal && (
-        <div className="flex items-center gap-2">
-          <TrendUp weight="duotone" className="w-5 h-5 text-blue-500" />
-          <h2 className="text-lg font-bold">{t("estimated_cost")}</h2>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="text-center p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl border border-emerald-200 dark:border-emerald-500/20">
-          <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
-            {(data.estimatedCost || 0).toFixed(0)}
-          </div>
-          <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-1 uppercase">
-            {t("currency")} {t("total_spent")}
-          </div>
-        </div>
-        <div className="text-center p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/20">
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400">
-            {(data.estimatedLiters || 0).toFixed(1)}
-          </div>
-          <div className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mt-1 uppercase">
-            {t("liters")}
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-white/10">
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">{t("avg_consumption")}:</span>{" "}
-          <span className="font-bold">
-            {formatEfficiency2Dec(data.consumptionUsed)}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">{t("price")}:</span>{" "}
-          <span className="font-bold">
-            {(data.priceUsed || 0).toFixed(2)} {t("unit_egp_l")}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">{t("overview")}:</span>{" "}
-          <span className="font-bold">{t(data.methodUsed)}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">{t("confidence")}:</span>
-          <div className="text-end">
-            <span
-              className={cn(
-                "font-bold block",
-                getConfidenceColor(data.confidence),
-              )}
-            >
-              {t(data.confidence)}
-            </span>
-            {data.sampleSize > 0 && (
-              <span className="text-[10px] text-slate-400 font-medium">
-                {t("based_on_x_fillups", { count: data.sampleSize })}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Confidence Messages */}
-      <AnimatePresence>
-        {data.confidence !== "high" && (
-          <motion.div
-            key="confidence-warning"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2"
-          >
-            <WarningCircle weight="duotone" className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-            <div className="text-[11px] text-amber-700 dark:text-amber-400">
-              <p className="font-bold mb-0.5">{t("limited_data")}</p>
-              <p>{t("add_more_data_hint")}</p>
-            </div>
-          </motion.div>
-        )}
-        {data.confidence === "low" && data.sampleSize > 0 && (
-          <motion.div
-            key="confidence-hint"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2"
-          >
-            <Info weight="duotone" className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-            <div className="text-[11px] text-blue-700 dark:text-blue-400">
-              <p>{t("estimate_hint", { count: data.sampleSize })}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Raw Data Preview */}
-      {data.rawData && data.rawData.length > 0 && (
-        <div className="pt-4 border-t border-slate-200 dark:border-white/10">
-          <div className="flex items-center gap-2 mb-3">
-            <ClockCounterClockwise weight="duotone" className="w-3.5 h-3.5 text-slate-400" />
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              {t("recent_data_used")}
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {data.rawData.slice(0, isModal ? 5 : 3).map((d, i) => (
-              <div
-                key={i}
-                className="flex justify-between items-center text-[11px]"
-              >
-                <span className="text-slate-500">{d.date}</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {d.kmPerLiter} km/L @ {d.pricePerLiter} EGP
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -469,7 +469,7 @@ export default function TripCostEstimator() {
 
         {estimate && (
           <Card>
-            <EstimateDetails data={estimate} />
+            <EstimateDetails data={estimate} t={t} cn={cn} />
           </Card>
         )}
 
@@ -550,7 +550,7 @@ export default function TripCostEstimator() {
         title={t("trip_estimator")}
       >
         {selectedEstimate && (
-          <EstimateDetails data={selectedEstimate} isModal />
+          <EstimateDetails data={selectedEstimate} isModal t={t} cn={cn} />
         )}
       </Modal>
     </>

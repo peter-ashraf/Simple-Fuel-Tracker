@@ -62,7 +62,6 @@ const ICON_MAP = {
 export default function Maintenance() {
   const {
     maintenanceEntries,
-    deleteMaintenanceEntry,
     activeVehicle,
     activeVehicleFillUps,
     maintenanceSettings,
