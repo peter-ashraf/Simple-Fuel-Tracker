@@ -3419,10 +3419,11 @@ export const cloudSyncService = {
           throw new Error(error);
         }
         return this.uploadSingleTripEstimate(record, userId);
-      default:
+      default: {
         const error = `Unknown entity type: ${type}`;
         console.error(`[Sync][uploadSingle] ${error}`);
         throw new Error(error);
+      }
     }
   },
 

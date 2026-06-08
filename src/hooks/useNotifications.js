@@ -1,16 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 
 export function useNotifications() {
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage('fueltracker-notifications-enabled', false);
-  const [permissionState, setPermissionState] = useState('default');
-
-  // Check notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window) {
-      setPermissionState(Notification.permission);
-    }
-  }, []);
+  const [permissionState, setPermissionState] = useState(() => (
+    'Notification' in window ? Notification.permission : 'default'
+  ));
 
   // Send a notification
   const sendNotification = useCallback((title, options = {}) => {
