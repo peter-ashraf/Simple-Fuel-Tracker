@@ -1,12 +1,15 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
 export const serviceHistoryPdf = {
-  generatePdf(vehicle, maintenanceEntries, t) {
+  async generatePdf(vehicle, maintenanceEntries, t) {
     if (!vehicle || !maintenanceEntries || maintenanceEntries.length === 0) {
       return false;
     }
+
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
 
     const doc = new jsPDF();
     const currentDate = format(new Date(), 'MMM d, yyyy');

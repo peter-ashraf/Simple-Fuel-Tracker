@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   Wrench,
   Plus,
@@ -69,7 +69,6 @@ export default function Maintenance() {
     getCategoryById,
     maintenanceSystems,
     setMaintenanceSystems,
-    addMaintenanceCategory,
     updateMaintenanceCategory,
   } = useFuel();
   const navigate = useNavigate();
@@ -85,7 +84,6 @@ export default function Maintenance() {
   const [editingSystemId, setEditingSystemId] = useState(null);
   const [editSystemName, setEditSystemName] = useState("");
   const [editSystemIcon, setEditSystemIcon] = useState("Wrench");
-  const [newSubCatName, setNewSubCatName] = useState("");
   const [isPickingIcon, setIsPickingIcon] = useState(false);
   const [renamingCatId, setRenamingCatId] = useState(null);
   const [renamingCatName, setRenamingCatName] = useState("");
@@ -180,7 +178,7 @@ export default function Maintenance() {
             fill="transparent"
             className="text-slate-100 dark:text-white/5"
           />
-          <motion.circle
+          <Motion.circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
@@ -379,22 +377,6 @@ export default function Maintenance() {
     setEditingSystemId(null);
   };
 
-  const handleAddSubCategory = () => {
-    if (!newSubCatName.trim() || !editingSystemId) return;
-    const newCat = addMaintenanceCategory({
-      name: newSubCatName,
-      color: editingSystem.color,
-    });
-    setMaintenanceSystems((prev) =>
-      prev.map((s) =>
-        s.id === editingSystemId
-          ? { ...s, categories: [...s.categories, newCat.id] }
-          : s,
-      ),
-    );
-    setNewSubCatName("");
-  };
-
   const handleAddSystem = () => {
     const newId = `system_${Date.now()}`;
     const newSystem = {
@@ -430,8 +412,8 @@ export default function Maintenance() {
     return translation === key ? name : translation;
   };
 
-  const handleExportPDF = () => {
-    serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t);
+  const handleExportPDF = async () => {
+    await serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t);
   };
 
   return (
@@ -450,7 +432,7 @@ export default function Maintenance() {
             className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold capitalize transition-all ${activeTab === tab ? "text-slate-900 dark:text-white" : "text-slate-500"}`}
           >
             {activeTab === tab && (
-              <motion.div
+              <Motion.div
                 layoutId="maintenanceActiveTab"
                 className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm"
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -463,7 +445,7 @@ export default function Maintenance() {
 
       <AnimatePresence mode="wait">
         {activeTab === "overview" && (
-          <motion.div
+          <Motion.div
             key="overview"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -522,11 +504,11 @@ export default function Maintenance() {
                 </Card>
               );
             })}
-          </motion.div>
+          </Motion.div>
         )}
 
         {activeTab === "history" && (
-          <motion.div
+          <Motion.div
             key="history"
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -561,16 +543,16 @@ export default function Maintenance() {
                         ? t("all_categories")
                         : t(getCategoryById(selectedCategory).id)}
                     </span>
-                    <motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }}>
+                    <Motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }}>
                       <CaretDown
                         weight="duotone"
                         className="w-4 h-4 text-slate-400"
                       />
-                    </motion.div>
+                    </Motion.div>
                   </button>
                   <AnimatePresence>
                     {dropdownOpen && (
-                      <motion.div className="absolute right-0 top-full mt-1 w-full bg-white dark:bg-slate-800 border rounded-xl shadow-xl z-50 overflow-hidden">
+                      <Motion.div className="absolute right-0 top-full mt-1 w-full bg-white dark:bg-slate-800 border rounded-xl shadow-xl z-50 overflow-hidden">
                         <div className="max-h-60 overflow-y-auto p-1">
                           <button
                             onClick={() => {
@@ -594,7 +576,7 @@ export default function Maintenance() {
                             </button>
                           ))}
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     )}
                   </AnimatePresence>
                 </div>
@@ -672,11 +654,11 @@ export default function Maintenance() {
                 })}
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
 
         {activeTab === "settings" && (
-          <motion.div
+          <Motion.div
             key="settings"
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -729,7 +711,7 @@ export default function Maintenance() {
               <Plus weight="bold" className="w-5 h-5" />
               <span className="text-sm font-bold">{t("add_system")}</span>
             </button>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 

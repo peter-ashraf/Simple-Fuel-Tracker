@@ -262,8 +262,8 @@ export default function Settings() {
     setNotificationError("Notification permission was not granted.");
   };
 
-  const handleExport = (type = "json") => {
-    if (type === "excel") excelService.exportData();
+  const handleExport = async (type = "json") => {
+    if (type === "excel") await excelService.exportData();
     else backupService.exportData();
   };
 

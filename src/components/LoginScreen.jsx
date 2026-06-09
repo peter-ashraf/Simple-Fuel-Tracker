@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { authService } from '../services/authService';
-import { cloudSyncService } from '../services/cloudSyncService';
 import { GasPump, Envelope, Lock, User, UserPlus, SignIn, Eye, EyeSlash } from '@phosphor-icons/react';
 
 const MotionDiv = motion.div;
@@ -32,6 +31,7 @@ export default function LoginScreen() {
 
       // Initialize sync after successful auth
       setSyncing(true);
+      const { cloudSyncService } = await import('../services/cloudSyncService');
       await cloudSyncService.initialize();
       setSyncing(false);
 

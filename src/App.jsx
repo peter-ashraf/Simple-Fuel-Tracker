@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import {
   Routes,
   Route,
@@ -20,29 +20,63 @@ import {
   Path,
   Tire,
 } from "@phosphor-icons/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 import { useFuel } from "./hooks/useFuelContext";
 import { useNotifications } from "./hooks/useNotifications";
 import { useTranslation } from "react-i18next";
 import { authService } from "./services/authService";
-import { cloudSyncService } from "./services/cloudSyncService";
-import { supabase } from "./lib/supabaseClient";
 
 // Pages
 import Dashboard from "./components/Dashboard";
 import History from "./components/History";
 import FillUpForm from "./components/FillUpForm";
-import Analytics from "./components/Analytics";
-import SettingsScreen from "./components/Settings";
-import TripCostEstimator from "./components/trips/TripCostEstimator";
-import TyreCalculator from "./components/TyreCalculator";
-import Maintenance from "./components/Maintenance";
-import MaintenanceForm from "./components/MaintenanceForm";
-import MaintenanceLogEdit from "./components/MaintenanceLogEdit";
 import LoginScreen from "./components/LoginScreen";
-import DataMigrationModal from "./components/DataMigrationModal";
+
+const Analytics = lazy(() => import("./components/Analytics"));
+const SettingsScreen = lazy(() => import("./components/Settings"));
+const TripCostEstimator = lazy(() =>
+  import("./components/trips/TripCostEstimator"),
+);
+const TyreCalculator = lazy(() => import("./components/TyreCalculator"));
+const Maintenance = lazy(() => import("./components/Maintenance"));
+const MaintenanceForm = lazy(() => import("./components/MaintenanceForm"));
+const MaintenanceLogEdit = lazy(() =>
+  import("./components/MaintenanceLogEdit"),
+);
+const DataMigrationModal = lazy(() => import("./components/DataMigrationModal"));
 
 const STARTUP_LOCAL_FALLBACK_MS = 800;
+
+const getCloudSyncService = () =>
+  import("./services/cloudSyncService").then(
+    ({ cloudSyncService }) => cloudSyncService,
+  );
+
+const hasLocalFuelData = () => {
+  try {
+    const readActiveRecords = (key) =>
+      JSON.parse(localStorage.getItem(key) || "[]").filter(
+        (record) => !record.deletedAt && !record.deleted_at,
+      );
+
+    return (
+      readActiveRecords("fueltracker-vehicles-v2").length > 0 ||
+      readActiveRecords("fueltracker-fillups-v2").length > 0 ||
+      readActiveRecords("fueltracker-maintenance-entries-v3").length > 0 ||
+      readActiveRecords("fueltracker-trip-estimates-v2").length > 0
+    );
+  } catch {
+    return false;
+  }
+};
+
+function PageLoading() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
@@ -94,7 +128,7 @@ function Header() {
               {activeVehicle ? activeVehicle.name : t("select_vehicle")}
             </span>
             {!isSettings && (
-              <motion.div
+              <Motion.div
                 animate={{ rotate: isOpen ? 180 : 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
               >
@@ -102,13 +136,13 @@ function Header() {
                   weight="duotone"
                   className="w-5 h-5 text-slate-400"
                 />
-              </motion.div>
+              </Motion.div>
             )}
           </button>
 
           <AnimatePresence>
             {isOpen && !isSettings && (
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{
@@ -138,7 +172,7 @@ function Header() {
                     </NavLink>
                   ))}
                 </div>
-              </motion.div>
+              </Motion.div>
             )}
           </AnimatePresence>
         </div>
@@ -151,17 +185,17 @@ function Header() {
           >
             <Wrench weight="duotone" className="w-4 h-4" />
             <span className="hidden sm:inline">{t("tools")}</span>
-            <motion.div
+            <Motion.div
               animate={{ rotate: featuresOpen ? 180 : 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
               <CaretDown weight="duotone" className="w-4 h-4" />
-            </motion.div>
+            </Motion.div>
           </button>
 
           <AnimatePresence>
             {featuresOpen && (
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{
@@ -205,7 +239,7 @@ function Header() {
                     {t("maintenance")}
                   </NavLink>
                 </div>
-              </motion.div>
+              </Motion.div>
             )}
           </AnimatePresence>
         </div>
@@ -234,14 +268,7 @@ export default function App() {
   const [migrationResult, setMigrationResult] = useState(null);
 
   // Check for due maintenance reminders on app open
-  const {
-    maintenanceReminders,
-    activeVehicleFillUps,
-    vehicles,
-    selectedVehicleId,
-    setSelectedVehicleId,
-    refreshLocalAppState,
-  } = useFuel();
+  const { maintenanceReminders, activeVehicleFillUps } = useFuel();
   const { checkMaintenanceReminders } = useNotifications();
 
   useEffect(() => {
@@ -253,16 +280,8 @@ export default function App() {
     let cancelled = false;
     let startupResolved = false;
 
-    const hasLocalData = () => {
-      try {
-        return cloudSyncService.hasLocalData();
-      } catch {
-        return false;
-      }
-    };
-
     const fallbackTimer = setTimeout(() => {
-      if (!startupResolved && hasLocalData()) {
+      if (!startupResolved && hasLocalFuelData()) {
         setLocalMode(true);
         setLoading(false);
       }
@@ -272,6 +291,7 @@ export default function App() {
       if (!session) return;
 
       try {
+        const cloudSyncService = await getCloudSyncService();
         const status = await cloudSyncService.initialize();
 
         if (status) {
@@ -307,7 +327,7 @@ export default function App() {
     };
 
     const checkSession = async () => {
-      if (!navigator.onLine && hasLocalData()) {
+      if (!navigator.onLine && hasLocalFuelData()) {
         startupResolved = true;
         clearTimeout(fallbackTimer);
         setLocalMode(true);
@@ -322,13 +342,15 @@ export default function App() {
       startupResolved = true;
       clearTimeout(fallbackTimer);
       setSession(currentSession);
-      setLocalMode(!currentSession && !navigator.onLine && hasLocalData());
+      setLocalMode(!currentSession && !navigator.onLine && hasLocalFuelData());
       setLoading(false);
 
       if (currentSession) {
-        cloudSyncService.getUserId().then((fetchedUserId) => {
-          if (!cancelled) setUserId(fetchedUserId);
-        });
+        getCloudSyncService().then((cloudSyncService) =>
+          cloudSyncService.getUserId().then((fetchedUserId) => {
+            if (!cancelled) setUserId(fetchedUserId);
+          }),
+        );
 
         runSync(currentSession).finally(() => {
           startupInitDone = true;
@@ -358,6 +380,7 @@ export default function App() {
           }
 
           // Fetch userId on sign-in
+          const cloudSyncService = await getCloudSyncService();
           const fetchedUserId = await cloudSyncService.getUserId();
           setUserId(fetchedUserId);
 
@@ -368,7 +391,7 @@ export default function App() {
         if (event === "SIGNED_OUT") {
           startupInitDone = false;
           setUserId(null);
-          setLocalMode(!navigator.onLine && hasLocalData());
+          setLocalMode(!navigator.onLine && hasLocalFuelData());
         }
       },
     );
@@ -380,53 +403,6 @@ export default function App() {
     };
   }, [navigate]);
 
-  const refreshAppFromLocalStorage = async () => {
-    const refreshedVehicles = JSON.parse(
-      localStorage.getItem("vehicles") || "[]",
-    );
-
-    if (!refreshedVehicles.length) {
-      setSelectedVehicleId(null);
-      window.dispatchEvent(new Event("storage"));
-      return;
-    }
-
-    const matchedVehicle = refreshedVehicles.find(
-      (v) => v.id === selectedVehicleId,
-    );
-
-    setSelectedVehicleId(
-      matchedVehicle ? matchedVehicle.id : refreshedVehicles[0].id,
-    );
-
-    window.dispatchEvent(new Event("storage"));
-  };
-
-  const refreshSyncStatus = async () => {
-    const status = await cloudSyncService.initialize();
-    setSyncStatus(status);
-
-    const migrationComplete =
-      localStorage.getItem("fueltracker-migration-complete") === "true";
-    const migrationDecision = localStorage.getItem(
-      "fueltracker-migration-decision",
-    );
-
-    const countsMatch =
-      status?.localCounts?.vehicles === status?.cloudCounts?.vehicles &&
-      status?.localCounts?.fillups === status?.cloudCounts?.fillups &&
-      status?.localCounts?.maintenance === status?.cloudCounts?.maintenance;
-
-    const hasConflicts = status?.detailedDiff?.conflicts?.length > 0;
-
-    const shouldShowModal =
-      !migrationComplete &&
-      !migrationDecision &&
-      (!countsMatch || hasConflicts);
-
-    setShowMigrationModal(shouldShowModal);
-  };
-
   const handleMigrationDecision = async (decision) => {
     if (migrationLoading) return null;
 
@@ -435,6 +411,7 @@ export default function App() {
     setMigrationResult(null);
 
     try {
+      const cloudSyncService = await getCloudSyncService();
       const userId = await cloudSyncService.getUserId();
       const result = await cloudSyncService.continueSyncAfterDecision(
         userId,
@@ -445,20 +422,6 @@ export default function App() {
         setSyncStatus(result);
         return result;
       }
-
-      //if (
-      //  result?.success &&
-      //  (decision === "download" || decision === "merge")
-      //) {
-      //  try {
-      // await refreshAppFromLocalStorage();
-      //  } catch (refreshError) {
-      //    console.error(
-      //      "[Sync][handleMigrationDecision] refreshAppFromLocalStorage failed after successful sync:",
-      //      refreshError,
-      //    );
-      //  }
-      //}
 
       setMigrationResult(result);
       return result;
@@ -546,21 +509,23 @@ export default function App() {
       <Header />
 
       <main className="flex-1 px-5 pt-20">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/add" element={<FillUpForm />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/trip-estimator" element={<TripCostEstimator />} />
-          <Route path="/tyre-calculator" element={<TyreCalculator />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/maintenance/add" element={<MaintenanceForm />} />
-          <Route
-            path="/maintenance/edit/:id"
-            element={<MaintenanceLogEdit />}
-          />
-          <Route path="/settings" element={<SettingsScreen />} />
-        </Routes>
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/add" element={<FillUpForm />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/trip-estimator" element={<TripCostEstimator />} />
+            <Route path="/tyre-calculator" element={<TyreCalculator />} />
+            <Route path="/maintenance" element={<Maintenance />} />
+            <Route path="/maintenance/add" element={<MaintenanceForm />} />
+            <Route
+              path="/maintenance/edit/:id"
+              element={<MaintenanceLogEdit />}
+            />
+            <Route path="/settings" element={<SettingsScreen />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Bottom Tab Bar */}
@@ -581,7 +546,7 @@ export default function App() {
               >
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
-                    <motion.div
+                    <Motion.div
                       whileTap={{ scale: 0.8 }}
                       className="flex flex-col items-center"
                     >
@@ -589,9 +554,9 @@ export default function App() {
                       <span className="text-[10px] font-semibold mt-0.5">
                         {t("dashboard")}
                       </span>
-                    </motion.div>
+                    </Motion.div>
                     {isActive && (
-                      <motion.div
+                      <Motion.div
                         layoutId="nav-pill"
                         className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
                         transition={{
@@ -618,7 +583,7 @@ export default function App() {
               >
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
-                    <motion.div
+                    <Motion.div
                       whileTap={{ scale: 0.8 }}
                       className="flex flex-col items-center"
                     >
@@ -629,9 +594,9 @@ export default function App() {
                       <span className="text-[10px] font-semibold mt-0.5">
                         {t("history")}
                       </span>
-                    </motion.div>
+                    </Motion.div>
                     {isActive && (
-                      <motion.div
+                      <Motion.div
                         layoutId="nav-pill"
                         className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
                         transition={{
@@ -665,7 +630,7 @@ export default function App() {
                         )
                       }
                     >
-                      <motion.div
+                      <Motion.div
                         whileTap={{ scale: 0.9, rotate: 90 }}
                         transition={{
                           type: "spring",
@@ -674,7 +639,7 @@ export default function App() {
                         }}
                       >
                         <Plus className="w-8 h-8" strokeWidth={2.5} />
-                      </motion.div>
+                      </Motion.div>
                     </NavLink>
                   );
                 })()}
@@ -693,7 +658,7 @@ export default function App() {
               >
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
-                    <motion.div
+                    <Motion.div
                       whileTap={{ scale: 0.8 }}
                       className="flex flex-col items-center"
                     >
@@ -704,9 +669,9 @@ export default function App() {
                       <span className="text-[10px] font-semibold mt-0.5">
                         {t("stats")}
                       </span>
-                    </motion.div>
+                    </Motion.div>
                     {isActive && (
-                      <motion.div
+                      <Motion.div
                         layoutId="nav-pill"
                         className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
                         transition={{
@@ -733,7 +698,7 @@ export default function App() {
               >
                 {({ isActive }) => (
                   <div className="flex flex-col items-center relative h-full justify-center">
-                    <motion.div
+                    <Motion.div
                       whileTap={{ scale: 0.8 }}
                       className="flex flex-col items-center"
                     >
@@ -741,9 +706,9 @@ export default function App() {
                       <span className="text-[10px] font-semibold mt-0.5">
                         {t("config")}
                       </span>
-                    </motion.div>
+                    </Motion.div>
                     {isActive && (
-                      <motion.div
+                      <Motion.div
                         layoutId="nav-pill"
                         className="absolute -bottom-1 w-8 h-1 bg-emerald-500 rounded-t-full"
                         transition={{
@@ -763,18 +728,20 @@ export default function App() {
       {/* Data Migration Modal */}
       <AnimatePresence>
         {(showMigrationModal || migrationResult) && (
-          <DataMigrationModal
-            syncStatus={syncStatus}
-            onDecision={handleMigrationDecision}
-            onCancel={handleMigrationCancel}
-            loading={migrationLoading}
-            loadingAction={migrationLoadingAction}
-            result={migrationResult}
-            onCloseResult={handleMigrationResultClose}
-            onRetry={handleMigrationRetry}
-            disableClose={migrationLoading}
-            userId={userId}
-          />
+          <Suspense fallback={null}>
+            <DataMigrationModal
+              syncStatus={syncStatus}
+              onDecision={handleMigrationDecision}
+              onCancel={handleMigrationCancel}
+              loading={migrationLoading}
+              loadingAction={migrationLoadingAction}
+              result={migrationResult}
+              onCloseResult={handleMigrationResultClose}
+              onRetry={handleMigrationRetry}
+              disableClose={migrationLoading}
+              userId={userId}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
     </div>

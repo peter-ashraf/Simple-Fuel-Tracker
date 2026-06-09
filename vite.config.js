@@ -2,17 +2,34 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
+import { visualizer } from 'rollup-plugin-visualizer'
+import process from 'node:process'
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
   const base = isProd ? '/Simple-Fuel-Tracker/' : '/';
+  const shouldAnalyze = process.env.ANALYZE === 'true';
 
   return {
     base,
     plugins: [
       react(),
       tailwindcss(),
-      VitePWA({
+      shouldAnalyze && visualizer({
+        filename: 'bundle-analysis.html',
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
+        open: false
+      }),
+      shouldAnalyze && visualizer({
+        filename: 'bundle-analysis-data.json',
+        gzipSize: true,
+        brotliSize: true,
+        template: 'raw-data',
+        open: false
+      }),
+      !shouldAnalyze && VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['icon.png', 'favicon.svg'],
         manifest: {

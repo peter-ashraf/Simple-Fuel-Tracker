@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
-import { cloudSyncService } from '../../services/cloudSyncService';
+import { syncLocalChangesInBackground } from './syncAfterMutation';
 
 export function useToolState(selectedVehicleId) {
   const [tripEstimates, setTripEstimates] = useLocalStorage('fueltracker-trip-estimates-v2', []);
@@ -13,30 +13,18 @@ export function useToolState(selectedVehicleId) {
       vehicleId: selectedVehicleId,
       timestamp: new Date().toISOString()
     }]);
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const deleteTripEstimate = async (id) => {
     setTripEstimates(prev => prev.filter(e => e.id !== id));
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const deleteMultipleTripEstimates = async (ids) => {
     const idsSet = new Set(ids);
     setTripEstimates(prev => prev.filter(e => !idsSet.has(e.id)));
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const addTyreComparison = async (comparison) => {
@@ -46,30 +34,18 @@ export function useToolState(selectedVehicleId) {
       vehicleId: selectedVehicleId,
       timestamp: new Date().toISOString()
     }]);
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const deleteTyreComparison = async (id) => {
     setTyreComparisons(prev => prev.filter(c => c.id !== id));
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const deleteMultipleTyreComparisons = async (ids) => {
     const idsSet = new Set(ids);
     setTyreComparisons(prev => prev.filter(c => !idsSet.has(c.id)));
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
   };
 
   const activeVehicleTripEstimates = useMemo(() => 

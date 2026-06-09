@@ -2,19 +2,8 @@ import { useMemo } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { calculateTripMetrics } from '../../utils/calculations';
 import { formatTo2Decimals } from '../../utils/formatting';
-import { cloudSyncService } from '../../services/cloudSyncService';
 import { v4 as uuidv4 } from 'uuid';
-
-const syncLocalChangesInBackground = () => {
-  if (!cloudSyncService.isOnline()) return;
-
-  cloudSyncService
-    .getUserId()
-    .then((userId) => {
-      if (userId) cloudSyncService.syncAfterMutation(userId).catch(() => {});
-    })
-    .catch(() => {});
-};
+import { syncLocalChangesInBackground } from './syncAfterMutation';
 
 export function useFuelTrackingState(selectedVehicleId) {
   const [fuelPrices, setFuelPrices] = useLocalStorage('fueltracker-prices-v2', { 92: 22.25, 95: 25.00, diesel: 20.50 });

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { v4 as uuidv4 } from 'uuid';
-import { cloudSyncService } from '../../services/cloudSyncService';
+import { syncLocalChangesInBackground } from './syncAfterMutation';
 
 export function useVehicleState() {
   const [vehicles, setVehicles] = useLocalStorage('fueltracker-vehicles-v2', [{ id: 'default', name: 'My Car', type: 'car' }]);
@@ -18,21 +18,13 @@ export function useVehicleState() {
     const newVehicle = { ...vehicle, id, stableKey };
     setVehicles(prev => [...prev, newVehicle]);
     setSelectedVehicleId(id);
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => console.error('[Sync][mutation] Background sync failed:', err));
-    }
+    syncLocalChangesInBackground();
     return newVehicle;
   };
 
   const editVehicle = async (id, updates) => {
     setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
-    // Trigger silent background sync after mutation
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => {});
-    }
+    syncLocalChangesInBackground();
   };
 
   const internalDeleteVehicle = (id) => {
@@ -58,13 +50,13 @@ export function useVehicleState() {
     
     // Mark all fillups for this vehicle as deleted
     const updatedFillups = fillups.map(f => f.vehicleId === id ? { ...f, deletedAt } : f);
+    localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(updatedFillups));
+    window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { entityKey: 'fillups' } }));
+
     // Mark vehicle as deleted
     const result = internalDeleteVehicle(id);
     if (result) {
-      const userId = await cloudSyncService.getUserId();
-      if (userId) {
-        cloudSyncService.syncAfterMutation(userId).catch(err => {});
-      }
+      syncLocalChangesInBackground();
     }
     return result;
   };

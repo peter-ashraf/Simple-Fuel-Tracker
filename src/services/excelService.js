@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx';
-
 // Keys mapped to sheets
 const SHEET_MAPPING = {
   'fueltracker-vehicles-v2': 'Vehicles',
@@ -12,7 +10,8 @@ const SHEET_MAPPING = {
 };
 
 export const excelService = {
-  exportData() {
+  async exportData() {
+    const XLSX = await import('xlsx');
     const workbook = XLSX.utils.book_new();
 
     // Loop through the relevant keys and create a sheet for each
@@ -156,6 +155,7 @@ export const excelService = {
   },
 
   async analyzeImport(file) {
+     const XLSX = await import('xlsx');
      return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
