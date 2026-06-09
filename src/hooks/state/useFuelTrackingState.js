@@ -21,9 +21,9 @@ export function useFuelTrackingState(selectedVehicleId) {
   const [fillUps, setFillUps] = useLocalStorage('fueltracker-fillups-v2', []);
 
   // --- APP-WIDE FILTERING ---
-  // Any record with deletedAt or lastAction 'DELETE' is considered non-existent for the UI
+  // Any record with deletedAt, pendingDelete, or lastAction 'DELETE' is considered non-existent for the UI
   const activeFillUps = useMemo(() => 
-    fillUps.filter(f => !f.deletedAt && f.lastAction !== 'DELETE'),
+    fillUps.filter(f => !f.deletedAt && !f.pendingDelete && f.lastAction !== 'DELETE'),
     [fillUps]
   );
 
@@ -66,11 +66,39 @@ export function useFuelTrackingState(selectedVehicleId) {
     const now = new Date().toISOString();
     setFillUps(prev => prev.map(f => 
       f.id === id 
-        ? { ...f, deletedAt: now, lastAction: 'DELETE', syncStatus: 'pending', retryCount: 0 } 
+        ? {
+            ...f,
+            pendingDelete: false,
+            pendingDeleteRequestedAt: null,
+            deletedAt: now,
+            updatedAt: now,
+            lastAction: 'DELETE',
+            syncStatus: 'pending',
+            retryCount: 0
+          }
         : f
     ));
     
     syncLocalChangesInBackground();
+  };
+
+  const requestDeleteFillUp = (id) => {
+    const now = new Date().toISOString();
+    setFillUps(prev => prev.map(f =>
+      f.id === id
+        ? { ...f, pendingDelete: true, pendingDeleteRequestedAt: now }
+        : f
+    ));
+  };
+
+  const undoDeleteFillUp = (id) => {
+    setFillUps(prev => prev.map(f => {
+      if (f.id !== id) return f;
+      const { pendingDelete, pendingDeleteRequestedAt, ...rest } = f;
+      void pendingDelete;
+      void pendingDeleteRequestedAt;
+      return rest;
+    }));
   };
 
   const deleteMultipleFillUps = async (ids) => {
@@ -78,7 +106,7 @@ export function useFuelTrackingState(selectedVehicleId) {
     const idsSet = new Set(ids);
     setFillUps(prev => prev.map(f => 
       idsSet.has(f.id) 
-        ? { ...f, deletedAt: now, lastAction: 'DELETE', syncStatus: 'pending', retryCount: 0 } 
+        ? { ...f, deletedAt: now, updatedAt: now, lastAction: 'DELETE', syncStatus: 'pending', retryCount: 0 }
         : f
     ));
     
@@ -144,6 +172,8 @@ export function useFuelTrackingState(selectedVehicleId) {
     activeVehicleFillUpsByOdometer,
     addFillUp,
     deleteFillUp,
+    requestDeleteFillUp,
+    undoDeleteFillUp,
     deleteMultipleFillUps,
     updateFillUp,
     stats

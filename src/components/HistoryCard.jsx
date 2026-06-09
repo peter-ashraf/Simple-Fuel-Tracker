@@ -42,12 +42,14 @@ export default function HistoryCard({ fill, index, fillUps, onDelete, onUpdate }
     baseDate.setHours(originalDate.getHours(), originalDate.getMinutes(), originalDate.getSeconds());
     
     onUpdate(fill.id, {
+      date: editForm.date,
       timestamp: baseDate.toISOString(),
       liters: Number(editForm.liters),
       odometer: Number(editForm.odometer),
       fuelType: editForm.fuelType,
       station: editForm.station.trim(),
       notes: editForm.notes.trim(),
+      totalCost: Number(editForm.totalCost),
       tankLevelAfter: showPartialSlider ? editForm.tankLevelAfter : 100,
       isPartialFill: showPartialSlider
     });

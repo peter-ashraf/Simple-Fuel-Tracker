@@ -1,11 +1,13 @@
 import {
+  ArrowCounterClockwise,
   Trash,
   GasPump,
   Check,
   Square,
   CheckSquare,
+  X,
 } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFuel } from "../hooks/useFuelContext";
 import { PageWrapper, ConfirmModal, cn } from "./ui";
@@ -15,11 +17,14 @@ import { useTranslation } from "react-i18next";
 const MotionDiv = motion.div;
 const MotionLi = motion.li;
 const MotionButton = motion.button;
+const DELETE_UNDO_SECONDS = 5;
 
 export default function History() {
   const {
     activeVehicleFillUps,
     deleteFillUp,
+    requestDeleteFillUp,
+    undoDeleteFillUp,
     deleteMultipleFillUps,
     updateFillUp,
   } = useFuel();
@@ -27,9 +32,97 @@ export default function History() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [pendingDeleteToast, setPendingDeleteToast] = useState(null);
+  const pendingDeleteRef = useRef(null);
+  const deleteTimeoutRef = useRef(null);
+  const deleteIntervalRef = useRef(null);
+  const mountedRef = useRef(true);
   const isRtl = i18n.language.startsWith("ar");
 
   const reversedTrips = [...activeVehicleFillUps].reverse();
+
+  const clearDeleteTimers = () => {
+    if (deleteTimeoutRef.current) {
+      clearTimeout(deleteTimeoutRef.current);
+      deleteTimeoutRef.current = null;
+    }
+
+    if (deleteIntervalRef.current) {
+      clearInterval(deleteIntervalRef.current);
+      deleteIntervalRef.current = null;
+    }
+  };
+
+  const finalizePendingDelete = () => {
+    const pending = pendingDeleteRef.current;
+    if (!pending) return;
+
+    clearDeleteTimers();
+    pendingDeleteRef.current = null;
+    deleteFillUp(pending.id);
+
+    if (mountedRef.current) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pending.id);
+        return next;
+      });
+      setPendingDeleteToast(null);
+    }
+  };
+
+  const handleUndoDelete = () => {
+    const pending = pendingDeleteRef.current;
+    if (!pending) return;
+
+    clearDeleteTimers();
+    pendingDeleteRef.current = null;
+    undoDeleteFillUp(pending.id);
+    setPendingDeleteToast(null);
+  };
+
+  const handleDeleteWithUndo = (id) => {
+    if (pendingDeleteRef.current) finalizePendingDelete();
+
+    const fill = activeVehicleFillUps.find((item) => item.id === id);
+    const deadline = Date.now() + DELETE_UNDO_SECONDS * 1000;
+    const pending = {
+      id,
+      label: fill ? `${fill.odometer.toLocaleString()} km` : t("delete"),
+      deadline,
+    };
+
+    pendingDeleteRef.current = pending;
+    requestDeleteFillUp(id);
+    setPendingDeleteToast({ ...pending, remaining: DELETE_UNDO_SECONDS });
+
+    deleteIntervalRef.current = setInterval(() => {
+      const current = pendingDeleteRef.current;
+      if (!current) return;
+
+      const remaining = Math.max(
+        0,
+        Math.ceil((current.deadline - Date.now()) / 1000),
+      );
+
+      if (mountedRef.current) {
+        setPendingDeleteToast((prev) =>
+          prev ? { ...prev, remaining } : prev,
+        );
+      }
+    }, 250);
+
+    deleteTimeoutRef.current = setTimeout(finalizePendingDelete, DELETE_UNDO_SECONDS * 1000);
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      if (deleteIntervalRef.current) clearInterval(deleteIntervalRef.current);
+    };
+  }, []);
 
   const toggleSelection = (id) => {
     const newSelected = new Set(selectedIds);
@@ -114,7 +207,7 @@ export default function History() {
                     fill={fill}
                     index={originalIndex}
                     fillUps={activeVehicleFillUps}
-                    onDelete={deleteFillUp}
+                    onDelete={handleDeleteWithUndo}
                     onUpdate={updateFillUp}
                   />
                 </MotionDiv>
@@ -133,6 +226,55 @@ export default function History() {
         confirmText={t("delete")}
         variant="danger"
       />
+
+      <AnimatePresence>
+        {pendingDeleteToast && (
+          <MotionDiv
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-[500px] -translate-x-1/2 overflow-hidden rounded-3xl border border-white/10 bg-slate-950 text-white shadow-2xl dark:bg-slate-800"
+          >
+            <div className="flex items-center gap-3 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-red-500/20 text-red-300">
+                <Trash weight="duotone" className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold">
+                  Entry removed: {pendingDeleteToast.label}
+                </p>
+                <p className="text-[10px] font-semibold text-slate-400">
+                  Deleting in {pendingDeleteToast.remaining}s
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleUndoDelete}
+                className="flex h-10 items-center gap-1.5 rounded-2xl bg-emerald-500 px-3 text-xs font-bold text-white transition hover:bg-emerald-400"
+              >
+                <ArrowCounterClockwise weight="duotone" className="h-4 w-4" />
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={finalizePendingDelete}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
+                aria-label="Close delete notification"
+              >
+                <X weight="bold" className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="h-1 bg-white/10">
+              <MotionDiv
+                className="h-full bg-red-400"
+                initial={{ width: "100%" }}
+                animate={{ width: "0%" }}
+                transition={{ duration: DELETE_UNDO_SECONDS, ease: "linear" }}
+              />
+            </div>
+          </MotionDiv>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedIds.size > 0 && (

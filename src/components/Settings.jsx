@@ -143,6 +143,15 @@ export default function Settings() {
     isOpen: false,
     action: null,
   });
+  const [recoveryDate, setRecoveryDate] = useState(
+    new Date().toISOString().substring(0, 10),
+  );
+  const [deletedFillups, setDeletedFillups] = useState([]);
+  const [isLoadingDeletedFillups, setIsLoadingDeletedFillups] = useState(false);
+  const [hasSearchedDeletedFillups, setHasSearchedDeletedFillups] =
+    useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+  const [restoringFillupId, setRestoringFillupId] = useState(null);
   const [accountForm, setAccountForm] = useState({
     username: "",
     newPassword: "",
@@ -443,6 +452,52 @@ export default function Settings() {
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleLoadDeletedFillups = async () => {
+    setRecoveryError("");
+    setIsLoadingDeletedFillups(true);
+
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        setRecoveryError("You must be logged in to recover cloud data.");
+        return;
+      }
+
+      const records = await cloudSyncService.getDeletedFillupsByDate(
+        userId,
+        recoveryDate,
+      );
+      setDeletedFillups(records);
+      setHasSearchedDeletedFillups(true);
+    } catch (error) {
+      setRecoveryError(error.message || "Failed to load deleted fill-ups.");
+    } finally {
+      setIsLoadingDeletedFillups(false);
+    }
+  };
+
+  const handleRestoreDeletedFillup = async (fillup) => {
+    setRecoveryError("");
+    setRestoringFillupId(fillup.id);
+
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        setRecoveryError("You must be logged in to recover cloud data.");
+        return;
+      }
+
+      await cloudSyncService.restoreDeletedFillup(userId, fillup);
+      setDeletedFillups((prev) => prev.filter((item) => item.id !== fillup.id));
+      refreshLocalStorageState();
+      showToast("Fill-up restored");
+    } catch (error) {
+      setRecoveryError(error.message || "Failed to restore fill-up.");
+    } finally {
+      setRestoringFillupId(null);
     }
   };
 
@@ -983,34 +1038,121 @@ export default function Settings() {
       )}
 
       {activeSettingsSection === "cloud" && (
-      <section className="pt-4">
-        <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
-          <Database weight="duotone" className="w-4 h-4" />{" "}
-          {t("backup_restore")}
-        </h3>
-        <Card className="px-5 py-6">
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <button
-              onClick={() => setFormatModal({ isOpen: true, type: "export" })}
-              className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"
-            >
-              <DownloadSimple weight="duotone" size={18} /> {t("export_data")}
-            </button>
-            <button
-              onClick={() => setFormatModal({ isOpen: true, type: "import" })}
-              className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"
-            >
-              <UploadSimple weight="duotone" size={18} /> {t("import_data")}
-            </button>
-          </div>
-          <button
-            onClick={handleOpenManualSync}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"
-          >
-            <CloudArrowUp weight="duotone" size={18} /> Manual Sync
-          </button>
-        </Card>
-      </section>
+        <>
+          <section className="pt-4">
+            <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+              <Database weight="duotone" className="w-4 h-4" />{" "}
+              {t("backup_restore")}
+            </h3>
+            <Card className="px-5 py-6">
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <button
+                  onClick={() =>
+                    setFormatModal({ isOpen: true, type: "export" })
+                  }
+                  className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"
+                >
+                  <DownloadSimple weight="duotone" size={18} />{" "}
+                  {t("export_data")}
+                </button>
+                <button
+                  onClick={() =>
+                    setFormatModal({ isOpen: true, type: "import" })
+                  }
+                  className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-sm"
+                >
+                  <UploadSimple weight="duotone" size={18} />{" "}
+                  {t("import_data")}
+                </button>
+              </div>
+              <button
+                onClick={handleOpenManualSync}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"
+              >
+                <CloudArrowUp weight="duotone" size={18} /> Manual Sync
+              </button>
+            </Card>
+          </section>
+
+          <section className="pt-4">
+            <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+              <Database weight="duotone" className="w-4 h-4" /> Cloud Recovery
+            </h3>
+            <Card className="px-5 py-6 space-y-4">
+              <div className="space-y-2">
+                <Label>Deleted fill-ups date</Label>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <Input
+                    type="date"
+                    value={recoveryDate}
+                    onChange={(e) => setRecoveryDate(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLoadDeletedFillups}
+                    disabled={isLoadingDeletedFillups || !recoveryDate}
+                    className="px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs disabled:opacity-50"
+                  >
+                    {isLoadingDeletedFillups ? "Searching..." : "Search"}
+                  </button>
+                </div>
+              </div>
+
+              {recoveryError && (
+                <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold">
+                  {recoveryError}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {deletedFillups.length === 0 && !isLoadingDeletedFillups && (
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {hasSearchedDeletedFillups
+                      ? "No deleted cloud fill-ups were found for this date. Only entries that were already synced to cloud can appear here."
+                      : "Search a date to find deleted cloud fill-ups that can be restored to this device."}
+                  </p>
+                )}
+
+                {deletedFillups.map((fillup) => {
+                  const isRestoring = restoringFillupId === fillup.id;
+                  return (
+                    <div
+                      key={fillup.id}
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white">
+                            {Number(fillup.odometer || 0).toLocaleString()} km
+                          </p>
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            {fillup.liters} L
+                            {fillup.total_cost != null
+                              ? ` - ${Number(fillup.total_cost).toFixed(2)} ${t("currency")}`
+                              : ""}
+                          </p>
+                          {fillup.station && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {fillup.station}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreDeletedFillup(fillup)}
+                          disabled={isRestoring}
+                          className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
+                        >
+                          {isRestoring ? "Restoring..." : "Restore"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </section>
+        </>
       )}
 
       {activeSettingsSection === "account" && (

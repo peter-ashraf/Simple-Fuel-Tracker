@@ -367,11 +367,35 @@ async function syncTombstonesToCloud(userId, localRecords, tableName) {
   let errors = 0;
   
   for (const record of deletedRecords) {
-    const { error } = await supabase.from(tableName).update({
-      deleted_at: record.deletedAt
-    }).eq('id', record.id).eq('user_id', userId);
+    const tombstonePayload = { deleted_at: record.deletedAt };
+    let error = null;
+    let updatedRows = [];
+
+    if (record.stableKey || record.stable_key) {
+      const result = await supabase
+        .from(tableName)
+        .update(tombstonePayload)
+        .eq('stable_key', record.stableKey || record.stable_key)
+        .eq('user_id', userId)
+        .select('id');
+
+      error = result.error;
+      updatedRows = result.data || [];
+    }
+
+    if (!error && updatedRows.length === 0 && isValidUuid(record.id)) {
+      const result = await supabase
+        .from(tableName)
+        .update(tombstonePayload)
+        .eq('id', record.id)
+        .eq('user_id', userId)
+        .select('id');
+
+      error = result.error;
+      updatedRows = result.data || [];
+    }
     
-    if (error) {
+    if (error || updatedRows.length === 0) {
       errors++;
     } else {
       synced++;
@@ -924,22 +948,22 @@ export const cloudSyncService = {
       const allMaintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
       const allTripEstimates = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
 
+      // Backfill stable keys on ALL records so tombstones are preserved.
+      const allVehiclesWithStableKeys = backfillStableKeys(allVehicles);
+      const allFillupsWithStableKeys = backfillStableKeysForFillups(allFillups);
+      const allMaintenanceWithStableKeys = backfillStableKeysForMaintenance(allMaintenance);
+
       // Only upload ACTIVE records (exclude soft-deleted tombstones)
-      const vehicles = allVehicles.filter(v => !v.deletedAt && !v.deleted_at && v.lastAction !== 'DELETE');
-      const fillups = allFillups.filter(f => !f.deletedAt && !f.deleted_at && f.lastAction !== 'DELETE');
-      const maintenance = allMaintenance.filter(m => !m.deletedAt && !m.deleted_at && m.lastAction !== 'DELETE');
+      const vehicles = allVehiclesWithStableKeys.filter(v => !v.deletedAt && !v.deleted_at && v.lastAction !== 'DELETE');
+      const fillups = allFillupsWithStableKeys.filter(f => !f.deletedAt && !f.deleted_at && f.lastAction !== 'DELETE');
+      const maintenance = allMaintenanceWithStableKeys.filter(m => !m.deletedAt && !m.deleted_at && m.lastAction !== 'DELETE');
       const tripEstimates = allTripEstimates.filter(t => !t.deletedAt && !t.deleted_at && t.lastAction !== 'DELETE');
 
       result.details.push(`Local records found: ${vehicles.length} vehicles, ${fillups.length} fillups, ${maintenance.length} maintenance, ${tripEstimates.length} trips (${allVehicles.length - vehicles.length} deleted vehicles excluded)`);
 
-      // Backfill stable keys for vehicles BEFORE remapping (to preserve identity)
-      const vehiclesWithStableKeys = backfillStableKeys(vehicles);
-
-      // Backfill stable keys for fillups BEFORE remapping (to preserve identity)
-      const fillupsWithStableKeys = backfillStableKeysForFillups(fillups);
-
-      // Backfill stable keys for maintenance BEFORE remapping (to preserve identity)
-      const maintenanceWithStableKeys = backfillStableKeysForMaintenance(maintenance);
+      const vehiclesWithStableKeys = vehicles;
+      const fillupsWithStableKeys = fillups;
+      const maintenanceWithStableKeys = maintenance;
 
 
       // Fetch existing cloud vehicles for deduplication (filter out deleted records)
@@ -1017,24 +1041,33 @@ export const cloudSyncService = {
         maintenance: existingMaintenance || [],
         tripEstimates: existingTripEstimates || []
       };
+
+      // Sync tombstones to cloud before uploading new/updated records or
+      // deciding that active records are already in sync.
+      const vehicleTombstoneSync = await syncTombstonesToCloud(userId, allVehiclesWithStableKeys, 'vehicles');
+      const fillupTombstoneSync = await syncTombstonesToCloud(userId, allFillupsWithStableKeys, 'fillups');
+      const maintenanceTombstoneSync = await syncTombstonesToCloud(userId, allMaintenanceWithStableKeys, 'maintenance');
+      const tripTombstoneSync = await syncTombstonesToCloud(userId, allTripEstimates, 'trip_estimates');
+      const tombstonesSynced =
+        vehicleTombstoneSync.synced +
+        fillupTombstoneSync.synced +
+        maintenanceTombstoneSync.synced +
+        tripTombstoneSync.synced;
+
+      result.details.push(`Tombstone sync: ${vehicleTombstoneSync.synced} vehicles, ${fillupTombstoneSync.synced} fillups, ${maintenanceTombstoneSync.synced} maintenance, ${tripTombstoneSync.synced} trips`);
       
       const changeDetection = detectChanges(localDataSummary, cloudDataSummary);
       
       if (!changeDetection.hasChanges) {
         result.success = true;
-        result.message = 'Nothing to upload. Cloud is already up to date.';
-        result.details.push('No new or changed records detected');
+        result.message = tombstonesSynced > 0
+          ? 'Deleted records synced. Cloud is up to date.'
+          : 'Nothing to upload. Cloud is already up to date.';
+        result.details.push(tombstonesSynced > 0
+          ? `Synced ${tombstonesSynced} deleted records`
+          : 'No new or changed records detected');
         return result;
       }
-      
-
-      // Sync tombstones to cloud before uploading new/updated records
-      const vehicleTombstoneSync = await syncTombstonesToCloud(userId, vehiclesWithStableKeys, 'vehicles');
-      const fillupTombstoneSync = await syncTombstonesToCloud(userId, remappedFillups, 'fillups');
-      const maintenanceTombstoneSync = await syncTombstonesToCloud(userId, remappedMaintenance, 'maintenance');
-      const tripTombstoneSync = await syncTombstonesToCloud(userId, remappedTripEstimates, 'trip_estimates');
-      
-      result.details.push(`Tombstone sync: ${vehicleTombstoneSync.synced} vehicles, ${fillupTombstoneSync.synced} fillups, ${maintenanceTombstoneSync.synced} maintenance, ${tripTombstoneSync.synced} trips`);
 
       let vehicleErrors = 0;
       let fillupErrors = 0;
@@ -2734,7 +2767,11 @@ export const cloudSyncService = {
         
         // Find all pending or failed mutations in FIFO order (by id which is timestamp or updatedAt)
         const pendingMutations = fillups
-          .filter(f => f.syncStatus === 'pending' || (f.syncStatus === 'failed' && (f.retryCount || 0) < 3))
+          .filter(f =>
+            f.syncStatus === 'pending' ||
+            (f.syncStatus === 'failed' && (f.retryCount || 0) < 3) ||
+            ((f.deletedAt || f.lastAction === 'DELETE') && !f.tombstoneVerifiedAt)
+          )
           .sort((a, b) => (a.updatedAt || a.timestamp || 0) > (b.updatedAt || b.timestamp || 0) ? 1 : -1);
 
         if (pendingMutations.length === 0) {
@@ -2844,8 +2881,9 @@ export const cloudSyncService = {
           return { success: true };
         }
 
-        // Newer cloud data wins (using 1s buffer for clock skew)
-        if (diffMs > 1000) {
+        // Newer cloud data wins for updates. Local deletes are tombstones and
+        // should still be applied so deleted records do not reappear.
+        if (diffMs > 1000 && record.lastAction !== 'DELETE') {
           console.log(`[Sync][outbox] Idempotency: Cloud has newer version for ${record.stableKey} by ${diffMs}ms. Triggering conflict.`);
           this.updateLocalSyncStatus(entityKey, record.id, { syncStatus: 'conflict' });
           return { success: false, error: 'conflict' };
@@ -2863,14 +2901,47 @@ export const cloudSyncService = {
 
       if (record.lastAction === 'DELETE') {
         // Tombstone: set deleted_at
-        ({ error } = await supabase
+        const tombstonePayload = {
+          deleted_at: record.deletedAt || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: tombstonedByStableKey, error: stableKeyDeleteError } = await supabase
           .from(table)
-          .update({
-            deleted_at: record.deletedAt || new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+          .update(tombstonePayload)
           .eq('stable_key', record.stableKey)
-          .eq('user_id', userId));
+          .eq('user_id', userId)
+          .select('id, stable_key');
+
+        error = stableKeyDeleteError;
+
+        if (!error && (!tombstonedByStableKey || tombstonedByStableKey.length === 0)) {
+          console.warn(`[Sync][outbox] Tombstone by stable_key matched 0 rows for ${record.stableKey}`);
+
+          if (this.isValidUuid(record.id)) {
+            const { data: tombstonedById, error: idDeleteError } = await supabase
+              .from(table)
+              .update(tombstonePayload)
+              .eq('id', record.id)
+              .eq('user_id', userId)
+              .select('id, stable_key');
+
+            error = idDeleteError;
+
+            if (!error && (!tombstonedById || tombstonedById.length === 0)) {
+              error = {
+                code: 'NO_TOMBSTONE_TARGET',
+                message: `No cloud ${entityKey} row matched delete for stable_key ${record.stableKey} or id ${record.id}`,
+              };
+            }
+          } else {
+            error = {
+              code: 'NO_TOMBSTONE_TARGET',
+              message: `No cloud ${entityKey} row matched delete for stable_key ${record.stableKey}`,
+            };
+          }
+        }
+
         console.log(`[Sync][outbox] Tombstone sent for ${record.stableKey}, error:`, error?.message ?? 'none');
       } else {
         // Upsert: try UPDATE first; if no rows affected, INSERT
@@ -2907,7 +2978,11 @@ export const cloudSyncService = {
       }
 
       // 5. Mark synced
-      this.updateLocalSyncStatus(entityKey, record.id, { syncStatus: 'synced', retryCount: 0 });
+      this.updateLocalSyncStatus(entityKey, record.id, {
+        syncStatus: 'synced',
+        retryCount: 0,
+        ...(record.lastAction === 'DELETE' ? { tombstoneVerifiedAt: new Date().toISOString() } : {})
+      });
       return { success: true };
 
     } catch (err) {
@@ -2943,6 +3018,9 @@ export const cloudSyncService = {
   mapLocalToCloud(record, entityKey) {
     if (entityKey === 'fillups') {
       const now = new Date().toISOString();
+      const fillupDate = record.date ||
+        (record.timestamp ? new Date(record.timestamp).toISOString().split('T')[0] : null);
+
       return {
         // Identity
         stable_key: record.stableKey,
@@ -2950,7 +3028,7 @@ export const cloudSyncService = {
         // Ownership
         vehicle_id: record.vehicleId,
         // Data fields — snake_case only, no camelCase, no 'timestamp'
-        date: record.date || null,
+        date: fillupDate,
         created_at: record.createdAt || now,
         odometer: record.odometer,
         liters: record.liters,
@@ -4036,6 +4114,96 @@ export const cloudSyncService = {
     }
     
     localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(fillups));
+  },
+
+  mapCloudFillupToLocal(fillup) {
+    return {
+      id: fillup.id,
+      vehicleId: fillup.vehicle_id,
+      date: fillup.date,
+      odometer: fillup.odometer,
+      liters: fillup.liters,
+      pricePerLiter: fillup.price_per_liter,
+      totalCost: fillup.total_cost,
+      station: fillup.station || '',
+      notes: fillup.notes || '',
+      fullTank: fillup.full_tank,
+      timestamp: fillup.date,
+      createdAt: fillup.created_at,
+      updatedAt: fillup.updated_at,
+      stableKey: fillup.stable_key,
+      deletedAt: fillup.deleted_at,
+      syncStatus: 'synced',
+    };
+  },
+
+  async getDeletedFillupsByDate(userId, date) {
+    if (!userId) throw new Error('User ID is required.');
+    if (!date) throw new Error('A date is required.');
+
+    const { data, error } = await supabase
+      .from('fillups')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to load deleted fill-ups: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async restoreDeletedFillup(userId, fillup) {
+    if (!userId) throw new Error('User ID is required.');
+    if (!fillup?.id) throw new Error('Fill-up ID is required.');
+
+    const now = new Date().toISOString();
+    const stableKey = fillup.stable_key || fillup.id;
+    const { data, error } = await supabase
+      .from('fillups')
+      .update({ deleted_at: null, updated_at: now, stable_key: stableKey })
+      .eq('id', fillup.id)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to restore fill-up: ${error.message}`);
+    }
+
+    const restored = this.mapCloudFillupToLocal(data);
+    const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+    const restoredKey = restored.stableKey || restored.id;
+    const existingIndex = fillups.findIndex((local) =>
+      (restored.stableKey && local.stableKey === restored.stableKey) ||
+      local.id === restored.id
+    );
+    const cleanedRestored = {
+      ...restored,
+      deletedAt: null,
+      pendingDelete: false,
+      pendingDeleteRequestedAt: null,
+      lastAction: 'UPDATE',
+      tombstoneVerifiedAt: null,
+    };
+
+    if (existingIndex >= 0) {
+      fillups[existingIndex] = {
+        ...fillups[existingIndex],
+        ...cleanedRestored,
+        stableKey: restoredKey,
+      };
+    } else {
+      fillups.push(cleanedRestored);
+    }
+
+    localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(fillups));
+    window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { entityKey: 'fillups' } }));
+
+    return cleanedRestored;
   },
 
   /**
