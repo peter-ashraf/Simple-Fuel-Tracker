@@ -14,5 +14,54 @@ SET username = lower(split_part(email, '@', 1))
 WHERE username IS NULL
   AND email IS NOT NULL;
 
-GRANT SELECT ON public.profiles TO anon, authenticated;
-GRANT UPDATE ON public.profiles TO authenticated;
+REVOKE SELECT ON public.profiles FROM anon;
+GRANT SELECT ON public.profiles TO authenticated;
+GRANT INSERT, UPDATE ON public.profiles TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.resolve_profile_email_by_username(input_username TEXT)
+RETURNS TEXT
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT email
+  FROM public.profiles
+  WHERE lower(username) = lower(trim(input_username))
+  LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.resolve_profile_email_by_username(TEXT) TO anon, authenticated;
+
+DO $$
+BEGIN
+  CREATE POLICY "profiles_select_own"
+    ON public.profiles
+    FOR SELECT
+    TO authenticated
+    USING (auth.uid() = id);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "profiles_insert_own"
+    ON public.profiles
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() = id);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "profiles_update_own"
+    ON public.profiles
+    FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

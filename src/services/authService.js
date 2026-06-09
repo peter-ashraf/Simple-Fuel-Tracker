@@ -13,10 +13,18 @@ export const authService = {
     const normalized = identifier.trim();
     if (this.isEmail(normalized)) return normalized;
 
+    const normalizedUsername = this.normalizeUsername(normalized);
+    const { data: resolvedEmail, error: rpcError } = await supabase
+      .rpc('resolve_profile_email_by_username', {
+        input_username: normalizedUsername,
+      });
+
+    if (!rpcError && resolvedEmail) return resolvedEmail;
+
     const { data, error } = await supabase
       .from('profiles')
       .select('email')
-      .ilike('username', this.normalizeUsername(normalized))
+      .ilike('username', normalizedUsername)
       .maybeSingle();
 
     if (error) throw error;
