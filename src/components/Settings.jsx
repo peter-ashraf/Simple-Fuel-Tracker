@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { createElement, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFuel } from "../hooks/useFuelContext";
 import { useTheme } from "../hooks/useTheme";
@@ -25,6 +25,8 @@ import {
   Database,
   SignOut,
   CloudArrowUp,
+  User,
+  Key,
 } from "@phosphor-icons/react";
 import { useLocationDetection } from "../hooks/useLocationDetection";
 import { gasStationService } from "../services/gasStationService";
@@ -36,6 +38,7 @@ import ImportResolver from "./ImportResolver";
 import { useNotifications } from "../hooks/useNotifications";
 import { useTranslation } from "react-i18next";
 import { authService } from "../services/authService";
+import { refreshLocalStorageState } from "../hooks/useLocalStorage";
 
 const MotionDiv = motion.div;
 
@@ -121,6 +124,8 @@ export default function Settings() {
   // Notifications
   const {
     notificationsEnabled,
+    permissionState,
+    isNotificationSupported,
     toggleNotifications,
   } = useNotifications();
 
@@ -138,6 +143,39 @@ export default function Settings() {
     isOpen: false,
     action: null,
   });
+  const [accountForm, setAccountForm] = useState({
+    username: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [notificationError, setNotificationError] = useState("");
+  const [activeSettingsSection, setActiveSettingsSection] = useState("account");
+  const settingsSections = [
+    { id: "account", label: "Account", icon: User },
+    { id: "vehicles", label: "Vehicles", icon: Car },
+    { id: "fuel", label: "Fuel", icon: CurrencyDollar },
+    { id: "cloud", label: "Cloud", icon: Database },
+    { id: "app", label: "App", icon: GearSix },
+  ];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    authService
+      .getProfile()
+      .then((profile) => {
+        if (!cancelled && profile?.username) {
+          setAccountForm((prev) => ({ ...prev, username: profile.username }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [toastMessage, setToastMessage] = useState("");
   const showToast = (msg) => {
@@ -185,6 +223,36 @@ export default function Settings() {
     clearLocation();
   };
 
+  const handleToggleNotifications = async () => {
+    setNotificationError("");
+
+    const enabled = await toggleNotifications();
+
+    if (enabled) {
+      showToast("Notifications enabled");
+      return;
+    }
+
+    if (notificationsEnabled) {
+      showToast("Notifications disabled");
+      return;
+    }
+
+    if (!isNotificationSupported) {
+      setNotificationError("This browser does not support notifications.");
+      return;
+    }
+
+    if (permissionState === "denied" || Notification.permission === "denied") {
+      setNotificationError(
+        "Notifications are blocked. Enable them from browser or PWA settings.",
+      );
+      return;
+    }
+
+    setNotificationError("Notification permission was not granted.");
+  };
+
   const handleExport = (type = "json") => {
     if (type === "excel") excelService.exportData();
     else backupService.exportData();
@@ -225,6 +293,51 @@ export default function Settings() {
     } catch (error) {
       console.error("Logout error:", error);
       showToast("Logout failed");
+    }
+  };
+
+  const handleSaveUsername = async () => {
+    setAccountError("");
+    setAccountSaving(true);
+
+    try {
+      const profile = await authService.updateUsername(accountForm.username);
+      setAccountForm((prev) => ({ ...prev, username: profile.username }));
+      showToast("Username updated");
+    } catch (error) {
+      setAccountError(error.message || "Failed to update username.");
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setAccountError("");
+
+    if (accountForm.newPassword.length < 6) {
+      setAccountError("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (accountForm.newPassword !== accountForm.confirmPassword) {
+      setAccountError("Passwords do not match.");
+      return;
+    }
+
+    setAccountSaving(true);
+
+    try {
+      await authService.updatePassword(accountForm.newPassword);
+      setAccountForm((prev) => ({
+        ...prev,
+        newPassword: "",
+        confirmPassword: "",
+      }));
+      showToast("Password updated");
+    } catch (error) {
+      setAccountError(error.message || "Failed to update password.");
+    } finally {
+      setAccountSaving(false);
     }
   };
 
@@ -317,6 +430,9 @@ export default function Settings() {
 
       setSyncResult(result);
       if (result.success) {
+        if (action === "download" || action === "merge") {
+          refreshLocalStorageState();
+        }
         showToast("Sync completed successfully");
       }
     } catch (error) {
@@ -384,6 +500,51 @@ export default function Settings() {
         </p>
       </div>
 
+      <div className="sticky top-20 z-30 rounded-2xl bg-white/90 dark:bg-slate-950/90 p-1 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-800/80 backdrop-blur">
+        <div className="grid grid-cols-5 gap-1">
+          {settingsSections.map(({ id, label, icon: Icon }) => {
+            const isActive = activeSettingsSection === id;
+
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveSettingsSection(id)}
+                className={cn(
+                  "relative flex min-h-12 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold transition-colors",
+                  isActive
+                    ? "text-slate-950 dark:text-white"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
+                )}
+                aria-pressed={isActive}
+              >
+                {isActive && (
+                  <MotionDiv
+                    layoutId="settingsSectionTab"
+                    className="absolute inset-0 rounded-xl bg-slate-100 dark:bg-slate-800 shadow-sm"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
+                )}
+                {createElement(Icon, {
+                  weight: "duotone",
+                  className: "relative z-10 h-4 w-4",
+                })}
+                <span className="relative z-10 hidden sm:inline">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <MotionDiv
+        key={activeSettingsSection}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18 }}
+        className="space-y-4"
+      >
+      {activeSettingsSection === "vehicles" && (
+        <>
       <section>
         <h3 className="text-xs font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
           <Car weight="duotone" className="w-4 h-4" /> {t("your_garage")}
@@ -559,43 +720,6 @@ export default function Settings() {
         </form>
       </section>
 
-      {/* Language Section */}
-      <section className="pt-4">
-        <h3 className="text-xs font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
-          <Globe weight="duotone" className="w-4 h-4" /> {t("language")}
-        </h3>
-        <Card className="px-5 py-6">
-          <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
-            {[
-              { id: "en", label: t("english") },
-              { id: "ar", label: t("arabic") },
-            ].map((lang) => (
-              <button
-                key={lang.id}
-                onClick={() => {
-                  i18n.changeLanguage(lang.id);
-                  showToast(t("updated"));
-                }}
-                className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  currentLanguage === lang.id
-                    ? "text-slate-900 dark:text-white"
-                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                }`}
-              >
-                {currentLanguage === lang.id && (
-                  <MotionDiv
-                    layoutId="settingsLangTab"
-                    className="absolute inset-0 bg-white dark:bg-orange-500 rounded-xl shadow-sm"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{lang.label}</span>
-              </button>
-            ))}
-          </div>
-        </Card>
-      </section>
-
       <section className="pt-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2 ms-1">
@@ -676,6 +800,47 @@ export default function Settings() {
           )}
         </Card>
       </section>
+        </>
+      )}
+
+      {activeSettingsSection === "app" && (
+        <>
+      {/* Language Section */}
+      <section className="pt-4">
+        <h3 className="text-xs font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+          <Globe weight="duotone" className="w-4 h-4" /> {t("language")}
+        </h3>
+        <Card className="px-5 py-6">
+          <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
+            {[
+              { id: "en", label: t("english") },
+              { id: "ar", label: t("arabic") },
+            ].map((lang) => (
+              <button
+                key={lang.id}
+                onClick={() => {
+                  i18n.changeLanguage(lang.id);
+                  showToast(t("updated"));
+                }}
+                className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                  currentLanguage === lang.id
+                    ? "text-slate-900 dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                }`}
+              >
+                {currentLanguage === lang.id && (
+                  <MotionDiv
+                    layoutId="settingsLangTab"
+                    className="absolute inset-0 bg-white dark:bg-orange-500 rounded-xl shadow-sm"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{lang.label}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      </section>
 
       <section className="pt-4">
         <h3 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
@@ -714,6 +879,46 @@ export default function Settings() {
       </section>
 
       <section className="pt-4">
+        <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+          <Bell weight="duotone" className="w-4 h-4" /> {t("notifications")}
+        </h3>
+        <Card className="px-5 py-6 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">
+                {t("maintenance")}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {notificationsEnabled
+                  ? "Maintenance reminders are enabled."
+                  : "Enable alerts for upcoming maintenance reminders."}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notificationsEnabled}
+              onClick={handleToggleNotifications}
+              className={`relative ms-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notificationsEnabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? (isRtl ? "-translate-x-5" : "translate-x-5") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
+              />
+            </button>
+          </div>
+          {notificationError && (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+              {notificationError}
+            </p>
+          )}
+        </Card>
+      </section>
+        </>
+      )}
+
+      {activeSettingsSection === "fuel" && (
+        <>
+      <section className="pt-4">
         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
           <NavigationArrow weight="duotone" className="w-4 h-4" />{" "}
           {t("location_services")}
@@ -729,7 +934,7 @@ export default function Settings() {
                 className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${locationEnabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${locationEnabled ? (isRtl ? "-translate-x-5" : "translate-x-5") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${locationEnabled ? (isRtl ? "-translate-x-6" : "translate-x-6") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
                 />
               </button>
             </div>
@@ -738,27 +943,6 @@ export default function Settings() {
               className="text-xs text-slate-500 dark:text-slate-400"
             >
               {t("clear_cache")}
-            </button>
-          </div>
-        </Card>
-      </section>
-
-      <section className="pt-4">
-        <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
-          <Bell weight="duotone" className="w-4 h-4" /> {t("notifications")}
-        </h3>
-        <Card className="px-5 py-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-slate-900 dark:text-white">
-              {t("maintenance")}
-            </p>
-            <button
-              onClick={toggleNotifications}
-              className={`relative ms-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? (isRtl ? "-translate-x-5" : "translate-x-5") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
-              />
             </button>
           </div>
         </Card>
@@ -795,7 +979,10 @@ export default function Settings() {
           </div>
         </Card>
       </section>
+        </>
+      )}
 
+      {activeSettingsSection === "cloud" && (
       <section className="pt-4">
         <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
           <Database weight="duotone" className="w-4 h-4" />{" "}
@@ -824,6 +1011,92 @@ export default function Settings() {
           </button>
         </Card>
       </section>
+      )}
+
+      {activeSettingsSection === "account" && (
+        <>
+      <section className="pt-4">
+        <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+          <User weight="duotone" className="w-4 h-4" /> Account
+        </h3>
+        <Card className="px-5 py-6 space-y-5">
+          {accountError && (
+            <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold">
+              {accountError}
+            </div>
+          )}
+
+          <div>
+            <Label className="flex items-center gap-2">
+              <User weight="duotone" className="w-4 h-4" /> Username
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                value={accountForm.username}
+                onChange={(e) =>
+                  setAccountForm((prev) => ({
+                    ...prev,
+                    username: e.target.value,
+                  }))
+                }
+                placeholder="username"
+                disabled={accountSaving}
+              />
+              <button
+                type="button"
+                onClick={handleSaveUsername}
+                disabled={accountSaving || !accountForm.username.trim()}
+                className="px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <Key weight="duotone" className="w-4 h-4" /> Change Password
+            </Label>
+            <Input
+              type="password"
+              value={accountForm.newPassword}
+              onChange={(e) =>
+                setAccountForm((prev) => ({
+                  ...prev,
+                  newPassword: e.target.value,
+                }))
+              }
+              placeholder="New password"
+              disabled={accountSaving}
+            />
+            <Input
+              type="password"
+              value={accountForm.confirmPassword}
+              onChange={(e) =>
+                setAccountForm((prev) => ({
+                  ...prev,
+                  confirmPassword: e.target.value,
+                }))
+              }
+              placeholder="Confirm password"
+              disabled={accountSaving}
+            />
+            <button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={
+                accountSaving ||
+                !accountForm.newPassword ||
+                !accountForm.confirmPassword
+              }
+              className="w-full py-3 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
+            >
+              Update Password
+            </button>
+          </div>
+        </Card>
+      </section>
 
       <section className="pt-8 mb-2">
         <button
@@ -840,6 +1113,9 @@ export default function Settings() {
           {t("reset_app")}
         </button>
       </section>
+        </>
+      )}
+      </MotionDiv>
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}

@@ -5,6 +5,17 @@ import { formatTo2Decimals } from '../../utils/formatting';
 import { cloudSyncService } from '../../services/cloudSyncService';
 import { v4 as uuidv4 } from 'uuid';
 
+const syncLocalChangesInBackground = () => {
+  if (!cloudSyncService.isOnline()) return;
+
+  cloudSyncService
+    .getUserId()
+    .then((userId) => {
+      if (userId) cloudSyncService.syncAfterMutation(userId).catch(() => {});
+    })
+    .catch(() => {});
+};
+
 export function useFuelTrackingState(selectedVehicleId) {
   const [fuelPrices, setFuelPrices] = useLocalStorage('fueltracker-prices-v2', { 92: 22.25, 95: 25.00, diesel: 20.50 });
   const [fillUps, setFillUps] = useLocalStorage('fueltracker-fillups-v2', []);
@@ -47,12 +58,8 @@ export function useFuelTrackingState(selectedVehicleId) {
     };
     
     setFillUps(prev => [...prev, newRecord]);
-    
-    // Trigger background sync
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => {});
-    }
+
+    syncLocalChangesInBackground();
   };
 
   const deleteFillUp = async (id) => {
@@ -63,11 +70,7 @@ export function useFuelTrackingState(selectedVehicleId) {
         : f
     ));
     
-    // Trigger background sync
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => {});
-    }
+    syncLocalChangesInBackground();
   };
 
   const deleteMultipleFillUps = async (ids) => {
@@ -79,11 +82,7 @@ export function useFuelTrackingState(selectedVehicleId) {
         : f
     ));
     
-    // Trigger background sync
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => {});
-    }
+    syncLocalChangesInBackground();
   };
 
   const updateFillUp = async (id, updatedData) => {
@@ -94,11 +93,7 @@ export function useFuelTrackingState(selectedVehicleId) {
         : f
     ));
     
-    // Trigger background sync
-    const userId = await cloudSyncService.getUserId();
-    if (userId) {
-      cloudSyncService.syncAfterMutation(userId).catch(err => {});
-    }
+    syncLocalChangesInBackground();
   };
 
   const stats = useMemo(() => {

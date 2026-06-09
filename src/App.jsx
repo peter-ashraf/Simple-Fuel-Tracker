@@ -42,6 +42,8 @@ import MaintenanceLogEdit from "./components/MaintenanceLogEdit";
 import LoginScreen from "./components/LoginScreen";
 import DataMigrationModal from "./components/DataMigrationModal";
 
+const STARTUP_LOCAL_FALLBACK_MS = 800;
+
 function Header() {
   const { vehicles, selectedVehicleId, setSelectedVehicleId } = useFuel();
   const { t, i18n } = useTranslation();
@@ -221,6 +223,7 @@ export default function App() {
   // Auth state
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [localMode, setLocalMode] = useState(false);
   const [userId, setUserId] = useState(null);
 
   // Migration modal state
@@ -247,6 +250,23 @@ export default function App() {
     // The onAuthStateChange listener is only allowed to run sync
     // for explicit SIGNED_IN events that happen AFTER the initial load.
     let startupInitDone = false;
+    let cancelled = false;
+    let startupResolved = false;
+
+    const hasLocalData = () => {
+      try {
+        return cloudSyncService.hasLocalData();
+      } catch {
+        return false;
+      }
+    };
+
+    const fallbackTimer = setTimeout(() => {
+      if (!startupResolved && hasLocalData()) {
+        setLocalMode(true);
+        setLoading(false);
+      }
+    }, STARTUP_LOCAL_FALLBACK_MS);
 
     const runSync = async (session) => {
       if (!session) return;
@@ -287,18 +307,35 @@ export default function App() {
     };
 
     const checkSession = async () => {
-      const currentSession = await authService.getSession();
-      setSession(currentSession);
-
-      // Fetch userId when session is available
-      if (currentSession) {
-        const fetchedUserId = await cloudSyncService.getUserId();
-        setUserId(fetchedUserId);
+      if (!navigator.onLine && hasLocalData()) {
+        startupResolved = true;
+        clearTimeout(fallbackTimer);
+        setLocalMode(true);
+        setLoading(false);
+        startupInitDone = true;
+        return;
       }
 
-      await runSync(currentSession);
+      const currentSession = await authService.getSession();
+      if (cancelled) return;
+
+      startupResolved = true;
+      clearTimeout(fallbackTimer);
+      setSession(currentSession);
+      setLocalMode(!currentSession && !navigator.onLine && hasLocalData());
       setLoading(false);
-      startupInitDone = true;
+
+      if (currentSession) {
+        cloudSyncService.getUserId().then((fetchedUserId) => {
+          if (!cancelled) setUserId(fetchedUserId);
+        });
+
+        runSync(currentSession).finally(() => {
+          startupInitDone = true;
+        });
+      } else {
+        startupInitDone = true;
+      }
     };
 
     checkSession();
@@ -312,6 +349,8 @@ export default function App() {
         if (event === "INITIAL_SESSION") return;
 
         if (event === "SIGNED_IN" && currentSession) {
+          setLocalMode(false);
+
           // Only run if startup is already complete; otherwise checkSession
           // handles it. This guards against near-simultaneous events.
           if (!startupInitDone) {
@@ -329,12 +368,17 @@ export default function App() {
         if (event === "SIGNED_OUT") {
           startupInitDone = false;
           setUserId(null);
+          setLocalMode(!navigator.onLine && hasLocalData());
         }
       },
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimer);
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const refreshAppFromLocalStorage = async () => {
     const refreshedVehicles = JSON.parse(
@@ -493,7 +537,7 @@ export default function App() {
   }
 
   // Show login screen if not authenticated
-  if (!session) {
+  if (!session && !localMode) {
     return <LoginScreen />;
   }
 

@@ -1,14 +1,38 @@
 import { supabase } from '../lib/supabaseClient';
 
 export const authService = {
+  normalizeUsername(username) {
+    return username.trim().toLowerCase();
+  },
+
+  isEmail(value) {
+    return value.includes('@');
+  },
+
+  async resolveLoginIdentifier(identifier) {
+    const normalized = identifier.trim();
+    if (this.isEmail(normalized)) return normalized;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email')
+      .ilike('username', this.normalizeUsername(normalized))
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data?.email) throw new Error('Username not found');
+    return data.email;
+  },
+
   /**
-   * Sign in with email and password
-   * @param {string} email 
+   * Sign in with email/username and password
+   * @param {string} identifier
    * @param {string} password 
    * @param {boolean} rememberMe 
    * @returns {Promise<Object>} User data or error
    */
-  async signIn(email, password, rememberMe = true) {
+  async signIn(identifier, password, rememberMe = true) {
+    const email = await this.resolveLoginIdentifier(identifier);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -23,17 +47,75 @@ export const authService = {
   },
 
   /**
-   * Sign up with email and password
+   * Sign up with username, email and password
+   * @param {string} username
    * @param {string} email 
    * @param {string} password 
    * @returns {Promise<Object>} User data or error
    */
-  async signUp(email, password) {
+  async signUp(username, email, password) {
+    const normalizedUsername = this.normalizeUsername(username);
+    if (!/^[a-z0-9_]{3,24}$/.test(normalizedUsername)) {
+      throw new Error('Username must be 3-24 characters and use only letters, numbers, or underscores.');
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
+    if (error) throw error;
+
+    if (data.user) {
+      await this.upsertProfile(data.user.id, normalizedUsername, email);
+    }
+
+    return data;
+  },
+
+  async getProfile() {
+    const user = await this.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || {
+      id: user.id,
+      username: user.email?.split('@')[0] || '',
+      email: user.email || '',
+    };
+  },
+
+  async upsertProfile(userId, username, email) {
+    const normalizedUsername = this.normalizeUsername(username);
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        username: normalizedUsername,
+        email,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updateUsername(username) {
+    const user = await this.getUser();
+    if (!user?.id || !user?.email) throw new Error('You must be logged in.');
+    return this.upsertProfile(user.id, username, user.email);
+  },
+
+  async updatePassword(password) {
+    const { data, error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
     return data;
   },

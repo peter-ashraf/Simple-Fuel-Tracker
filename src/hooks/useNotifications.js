@@ -2,16 +2,17 @@ import { useState, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 
 export function useNotifications() {
+  const isNotificationSupported = 'Notification' in window;
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage('fueltracker-notifications-enabled', false);
   const [permissionState, setPermissionState] = useState(() => (
-    'Notification' in window ? Notification.permission : 'default'
+    isNotificationSupported ? Notification.permission : 'unsupported'
   ));
 
   // Send a notification
   const sendNotification = useCallback((title, options = {}) => {
     const { force = false, ...notificationOptions } = options;
 
-    if ((!notificationsEnabled && !force) || !('Notification' in window)) {
+    if ((!notificationsEnabled && !force) || !isNotificationSupported) {
       return;
     }
 
@@ -38,12 +39,13 @@ export function useNotifications() {
         console.error('Error sending notification:', error);
       }
     }
-  }, [notificationsEnabled]);
+  }, [isNotificationSupported, notificationsEnabled]);
 
   // Request notification permission
   const requestPermission = useCallback(async () => {
-    if (!('Notification' in window)) {
+    if (!isNotificationSupported) {
       console.log('This browser does not support notifications');
+      setPermissionState('unsupported');
       return false;
     }
 
@@ -68,7 +70,7 @@ export function useNotifications() {
       console.error('Error requesting notification permission:', error);
       return false;
     }
-  }, [sendNotification, setNotificationsEnabled]);
+  }, [isNotificationSupported, sendNotification, setNotificationsEnabled]);
 
   // Toggle notifications
   const toggleNotifications = useCallback(async () => {
@@ -147,6 +149,7 @@ export function useNotifications() {
   return {
     notificationsEnabled,
     permissionState,
+    isNotificationSupported,
     toggleNotifications,
     requestPermission,
     sendNotification,

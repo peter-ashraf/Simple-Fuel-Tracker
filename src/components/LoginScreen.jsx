@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { authService } from '../services/authService';
 import { cloudSyncService } from '../services/cloudSyncService';
-import { GasPump, Envelope, Lock, UserPlus, SignIn, Eye, EyeSlash } from '@phosphor-icons/react';
+import { GasPump, Envelope, Lock, User, UserPlus, SignIn, Eye, EyeSlash } from '@phosphor-icons/react';
 
 const MotionDiv = motion.div;
 
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
+  const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,9 +25,9 @@ export default function LoginScreen() {
 
     try {
       if (isLogin) {
-        await authService.signIn(email, password, rememberMe);
+        await authService.signIn(identifier, password, rememberMe);
       } else {
-        await authService.signUp(email, password);
+        await authService.signUp(username, email, password);
       }
 
       // Initialize sync after successful auth
@@ -83,21 +85,48 @@ export default function LoginScreen() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Email
+              {isLogin ? 'Username or email' : 'Email'}
             </label>
             <div className="relative">
-              <Envelope weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              {isLogin ? (
+                <User weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              ) : (
+                <Envelope weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              )}
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type={isLogin ? 'text' : 'email'}
+                value={isLogin ? identifier : email}
+                onChange={(e) => isLogin ? setIdentifier(e.target.value) : setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
-                placeholder="your@email.com"
+                placeholder={isLogin ? 'username or email' : 'your@email.com'}
                 required
                 disabled={loading || syncing}
               />
             </div>
           </div>
+
+          {!isLogin && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Username
+              </label>
+              <div className="relative">
+                <User weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                  placeholder="username"
+                  required
+                  disabled={loading || syncing}
+                  minLength={3}
+                  maxLength={24}
+                  pattern="[A-Za-z0-9_]+"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
@@ -182,6 +211,7 @@ export default function LoginScreen() {
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
+              setPassword('');
             }}
             disabled={loading || syncing}
             className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition disabled:opacity-50"
