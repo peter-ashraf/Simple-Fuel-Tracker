@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, Input, Label, PageWrapper, cn, Modal } from "../ui";
 import { useFuel } from "../../hooks/useFuelContext";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import {
   calculateTripEstimate,
   convertConsumptionUnits,
@@ -196,6 +197,9 @@ export default function TripCostEstimator() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const [sampleSize, setSampleSize] = useLocalStorage("fueltracker-trip-sample-size", 5);
+  const [isSampleSizeDropdownOpen, setIsSampleSizeDropdownOpen] = useState(false);
+  const sampleSizeDropdownRef = useRef(null);
 
   const [selectedEstimateIds, setSelectedEstimateIds] = useState(new Set());
   const [isEstimateSelectionMode, setIsEstimateSelectionMode] = useState(false);
@@ -216,7 +220,7 @@ export default function TripCostEstimator() {
           : null,
       manualFuelPrice:
         useManualPrice && manualFuelPrice ? parseFloat(manualFuelPrice) : null,
-      sampleSize: 5,
+      sampleSize: sampleSize === 'total' ? null : sampleSize,
       excludeOutliers: true,
     };
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -236,12 +240,16 @@ export default function TripCostEstimator() {
     tripDistance,
     useManualConsumption,
     useManualPrice,
+    sampleSize,
   ]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsUnitDropdownOpen(false);
+      }
+      if (sampleSizeDropdownRef.current && !sampleSizeDropdownRef.current.contains(event.target)) {
+        setIsSampleSizeDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -363,6 +371,55 @@ export default function TripCostEstimator() {
                   )}
                 </AnimatePresence>
               </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Sample Size</Label>
+            <div className="relative" ref={sampleSizeDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsSampleSizeDropdownOpen(!isSampleSizeDropdownOpen)}
+                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-xs flex items-center justify-between"
+              >
+                <span>{sampleSize === 'total' ? 'All Entries' : `Last ${sampleSize} Entries`}</span>
+                <CaretDown weight="duotone"
+                  className={cn(
+                    "w-3 h-3 transition-transform",
+                    isSampleSizeDropdownOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              <AnimatePresence>
+                {isSampleSizeDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full mt-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-20"
+                  >
+                    <div className="p-1">
+                      {[5, 10, 'total'].map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => {
+                            setSampleSize(size);
+                            setIsSampleSizeDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full text-center px-3 py-2 text-xs font-bold rounded-lg transition-colors",
+                            sampleSize === size
+                              ? "bg-emerald-500 text-white"
+                              : "hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400",
+                          )}
+                        >
+                          {size === 'total' ? 'All Entries' : `Last ${size} Entries`}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

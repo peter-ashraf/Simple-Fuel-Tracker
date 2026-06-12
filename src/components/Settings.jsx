@@ -154,9 +154,11 @@ export default function Settings() {
   const [restoringFillupId, setRestoringFillupId] = useState(null);
   const [accountForm, setAccountForm] = useState({
     username: "",
+    oldPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
+  const [oldPasswordReadOnly, setOldPasswordReadOnly] = useState(true);
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [notificationError, setNotificationError] = useState("");
@@ -323,6 +325,11 @@ export default function Settings() {
   const handleChangePassword = async () => {
     setAccountError("");
 
+    if (!accountForm.oldPassword) {
+      setAccountError("Please enter your current password.");
+      return;
+    }
+
     if (accountForm.newPassword.length < 6) {
       setAccountError("Password must be at least 6 characters.");
       return;
@@ -336,9 +343,10 @@ export default function Settings() {
     setAccountSaving(true);
 
     try {
-      await authService.updatePassword(accountForm.newPassword);
+      await authService.updatePassword(accountForm.oldPassword, accountForm.newPassword);
       setAccountForm((prev) => ({
         ...prev,
+        oldPassword: "",
         newPassword: "",
         confirmPassword: "",
       }));
@@ -1152,6 +1160,20 @@ export default function Settings() {
               </div>
             </Card>
           </section>
+
+          <section className="pt-4">
+            <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+              <WarningCircle weight="duotone" className="w-4 h-4" /> Danger Zone
+            </h3>
+            <Card className="px-5 py-6">
+              <button
+                onClick={() => setFactoryResetModal(true)}
+                className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center"
+              >
+                {t("reset_app")}
+              </button>
+            </Card>
+          </section>
         </>
       )}
 
@@ -1202,6 +1224,21 @@ export default function Settings() {
             </Label>
             <Input
               type="password"
+              value={accountForm.oldPassword}
+              onChange={(e) =>
+                setAccountForm((prev) => ({
+                  ...prev,
+                  oldPassword: e.target.value,
+                }))
+              }
+              placeholder="Current password"
+              disabled={accountSaving}
+              readOnly={oldPasswordReadOnly}
+              onFocus={() => setOldPasswordReadOnly(false)}
+              autoComplete="off"
+            />
+            <Input
+              type="password"
               value={accountForm.newPassword}
               onChange={(e) =>
                 setAccountForm((prev) => ({
@@ -1229,6 +1266,7 @@ export default function Settings() {
               onClick={handleChangePassword}
               disabled={
                 accountSaving ||
+                !accountForm.oldPassword ||
                 !accountForm.newPassword ||
                 !accountForm.confirmPassword
               }
@@ -1243,16 +1281,10 @@ export default function Settings() {
       <section className="pt-8 mb-2">
         <button
           onClick={handleLogout}
-          className="w-full py-4 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition flex justify-center gap-2 items-center mb-3"
+          className="w-full py-4 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition flex justify-center gap-2 items-center"
         >
           <SignOut weight="duotone" className="w-5 h-5" />
           {t("logout")}
-        </button>
-        <button
-          onClick={() => setFactoryResetModal(true)}
-          className="w-full py-4 rounded-[1.5rem] border border-red-500/20 text-red-500 font-bold hover:bg-red-500/10 transition flex justify-center gap-2 items-center"
-        >
-          {t("reset_app")}
         </button>
       </section>
         </>
