@@ -78,10 +78,10 @@ export function calculateTripEstimate(fillUps, tripDistance, options = {}) {
     filteredMetrics = removeOutliers(tripMetricsList, 'kmPerLiter');
   }
 
-  // Take recent samples
+  // Take recent samples (if sampleSize is null, use all available data)
   const recentMetrics = filteredMetrics
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, sampleSize);
+    .slice(0, sampleSize || filteredMetrics.length);
 
   // Calculate weighted average consumption (newer data gets more weight)
   const weightedConsumption = calculateWeightedAverage(recentMetrics, 'kmPerLiter');
