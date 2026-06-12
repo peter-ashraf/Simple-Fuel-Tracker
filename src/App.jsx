@@ -31,6 +31,7 @@ import Dashboard from "./components/Dashboard";
 import History from "./components/History";
 import FillUpForm from "./components/FillUpForm";
 import LoginScreen from "./components/LoginScreen";
+import AppUpdatePrompt from "./components/AppUpdatePrompt";
 
 const Analytics = lazy(() => import("./components/Analytics"));
 const SettingsScreen = lazy(() => import("./components/Settings"));
@@ -744,6 +745,8 @@ export default function App() {
           </Suspense>
         )}
       </AnimatePresence>
+
+      <AppUpdatePrompt />
     </div>
   );
 }

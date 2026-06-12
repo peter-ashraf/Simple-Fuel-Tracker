@@ -305,13 +305,7 @@ export const backupService = {
     });
 
     // 5. Merge Maintenance Logs and Reminders
-    const backupMaint = payload['fueltracker-maintenance-entries-v3'] || [];
-    backupMaint.forEach(bm => {
-      if (!localMaint.find(lm => lm.id === bm.id)) {
-        localMaint.push(bm);
-      }
-    });
-
+    // Note: Maintenance entries already handled in newRecords section to avoid duplication
     const backupReminders = payload['fueltracker-maintenance-reminders-v2'] || [];
     backupReminders.forEach(br => {
       if (!localReminders.find(lr => lr.id === br.id)) {
@@ -356,3 +350,4 @@ export const backupService = {
     window.location.reload();
   }
 };
+
