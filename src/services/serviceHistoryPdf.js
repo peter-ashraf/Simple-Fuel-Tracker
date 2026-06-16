@@ -25,19 +25,43 @@ export const serviceHistoryPdf = {
 
     // Table Data
     const tableColumn = [
-      t('date') || "Date", 
-      t('odometer') || "Odometer", 
-      t('service_type') || "Service Type", 
+      t('date') || "Date",
+      t('odometer') || "Odometer",
+      t('service_type') || "Service Type",
+      t('distance') || "Interval",
+      t('next_due') || "Next Due",
+      t('price') || "Cost",
       t('notes') || "Notes"
     ];
     
     const tableRows = maintenanceEntries.map(entry => {
-      const entryDate = format(new Date(entry.timestamp), 'MMM d, yyyy');
-      const odo = `${entry.performedAtODO.toLocaleString()} km`;
+      let metadata = {};
+      if (entry.description && typeof entry.description === 'string') {
+        try {
+          const parsed = JSON.parse(entry.description);
+          metadata = parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+          metadata = {};
+        }
+      }
+      const entryDate = format(new Date(entry.date || entry.timestamp || entry.createdAt), 'MMM d, yyyy');
+      const odometer = Number(entry.performedAtODO ?? entry.odometer ?? 0);
+      const interval = Number(entry.intervalKm ?? entry.distance ?? metadata.distance ?? 0);
+      const nextDue = Number(entry.nextDueODO ?? entry.nextDueOdometer ?? entry.next_due_odometer ?? 0);
+      const cost = entry.cost !== undefined && entry.cost !== null ? Number(entry.cost) : null;
+      const odo = odometer ? `${odometer.toLocaleString()} km` : '-';
       const type = t(entry.type) || entry.type;
-      const notes = entry.notes || '-';
+      const notes = entry.notes || metadata.notes || '-';
       
-      return [entryDate, odo, type, notes];
+      return [
+        entryDate,
+        odo,
+        type,
+        interval ? `${interval.toLocaleString()} km` : '-',
+        nextDue ? `${nextDue.toLocaleString()} km` : '-',
+        cost !== null && !Number.isNaN(cost) ? `${cost.toFixed(2)}` : '-',
+        notes
+      ];
     });
 
     // Generate Table

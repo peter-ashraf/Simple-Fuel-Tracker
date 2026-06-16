@@ -59,6 +59,8 @@ export function FuelProvider({ children }) {
     deleteMaintenanceReminder,
     addMaintenanceEntry,
     updateMaintenanceEntry,
+    requestMaintenanceEntryDelete,
+    undoMaintenanceEntryDelete,
     deleteMaintenanceEntry,
     deleteMultipleMaintenanceEntries,
     addMaintenanceCategory,
@@ -154,6 +156,8 @@ export function FuelProvider({ children }) {
     maintenanceEntries: activeVehicleMaintenanceEntries,
     addMaintenanceEntry,
     updateMaintenanceEntry,
+    requestMaintenanceEntryDelete,
+    undoMaintenanceEntryDelete,
     deleteMaintenanceEntry,
     deleteMultipleMaintenanceEntries,
 

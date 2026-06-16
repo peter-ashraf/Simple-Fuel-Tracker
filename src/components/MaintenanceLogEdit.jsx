@@ -6,6 +6,16 @@ import { Input, Label, Card, PageWrapper, ConfirmModal, cn } from './ui';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+const parseDescription = (description) => {
+  if (!description || typeof description !== 'string') return {};
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { notes: description };
+  }
+};
+
 export default function MaintenanceLogEdit() {
   const { maintenanceEntries, updateMaintenanceEntry, deleteMaintenanceEntry, getCategoryById } = useFuel();
   const navigate = useNavigate();
@@ -14,19 +24,33 @@ export default function MaintenanceLogEdit() {
   const isRtl = i18n.language.startsWith('ar');
   
   const log = maintenanceEntries.find(l => String(l.id) === String(id));
-  const [performedAtODO, setPerformedAtODO] = useState(() => log?.performedAtODO ? String(log.performedAtODO) : '');
-  const [intervalKm, setIntervalKm] = useState(() => log?.intervalKm ? String(log.intervalKm) : '');
-  const [safetyMarginKm, setSafetyMarginKm] = useState(() => log?.safetyMarginKm ? String(log.safetyMarginKm) : '');
-  const [notes, setNotes] = useState(() => log?.notes || '');
+  const parsedDescription = parseDescription(log?.description);
+  const [date, setDate] = useState(() => (log?.date || log?.timestamp || new Date().toISOString()).substring(0, 10));
+  const [performedAtODO, setPerformedAtODO] = useState(() => {
+    const value = log?.performedAtODO ?? log?.odometer;
+    return value !== undefined && value !== null ? String(value) : '';
+  });
+  const [intervalKm, setIntervalKm] = useState(() => {
+    const value = log?.intervalKm ?? log?.distance ?? parsedDescription.distance;
+    return value !== undefined && value !== null ? String(value) : '';
+  });
+  const [safetyMarginKm, setSafetyMarginKm] = useState(() => {
+    const value = log?.safetyMarginKm ?? log?.safety ?? parsedDescription.safety;
+    return value !== undefined && value !== null ? String(value) : '';
+  });
+  const [cost, setCost] = useState(() => log?.cost !== undefined && log?.cost !== null ? String(log.cost) : '');
+  const [notes, setNotes] = useState(() => log?.notes || parsedDescription.notes || '');
   const [deleteModal, setDeleteModal] = useState(false);
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     if (!performedAtODO || !intervalKm) return;
     updateMaintenanceEntry(log.id, {
+      date,
       performedAtODO: Number(performedAtODO),
       intervalKm: Number(intervalKm),
       safetyMarginKm: Number(safetyMarginKm),
+      cost: cost ? Number(cost) : null,
       notes: notes.trim()
     });
     navigate('/maintenance');
@@ -79,6 +103,10 @@ export default function MaintenanceLogEdit() {
             <Card className="p-6">
               <div className="space-y-6">
                 <div>
+                  <Label className="flex items-center gap-2"><CalendarBlank weight="duotone" className="w-4 h-4" /> {t('date')} *</Label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                </div>
+                <div>
                   <Label className="flex items-center gap-2"><CalendarBlank weight="duotone" className="w-4 h-4" /> {t('odometer')} (km) *</Label>
                   <Input type="number" value={performedAtODO} onChange={(e) => setPerformedAtODO(e.target.value)} placeholder="..." required />
                 </div>
@@ -88,12 +116,16 @@ export default function MaintenanceLogEdit() {
                     <Input type="number" value={intervalKm} onChange={(e) => setIntervalKm(e.target.value)} placeholder="..." required />
                   </div>
                   <div>
-                    <Label className="flex items-center gap-2"><Shield weight="duotone" className="w-4 h-4" /> Safety</Label>
+                    <Label className="flex items-center gap-2"><Shield weight="duotone" className="w-4 h-4" /> {t('safety_margin')}</Label>
                     <Input type="number" value={safetyMarginKm} onChange={(e) => setSafetyMarginKm(e.target.value)} placeholder="..." />
                   </div>
                 </div>
                 <div>
-                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" /> {t('config')}</Label>
+                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" /> {t('price')} ({t('currency')})</Label>
+                  <Input type="number" step="0.01" min="0" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t('optional')} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" /> {t('notes')}</Label>
                   <textarea className="input-field min-h-[100px]" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="..." />
                 </div>
               </div>

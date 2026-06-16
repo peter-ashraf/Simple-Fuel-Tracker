@@ -1,6 +1,6 @@
 import { useFuel } from '../hooks/useFuelContext';
 import { Card, MetricCard, PageWrapper, cn } from './ui';
-import { calculateTripMetrics } from '../utils/calculations';
+import { calculateAverageDailyDistance, calculateTripMetrics } from '../utils/calculations';
 import { format } from 'date-fns';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
@@ -106,6 +106,7 @@ export default function Analytics() {
   const bestTrip = sortedByEfficiency[0];
   const worstTrip = sortedByEfficiency[sortedByEfficiency.length - 1];
   const efficiencyThresholds = calculateEfficiencyThresholds(activeVehicleFillUps);
+  const predictiveDailyDistance = calculateAverageDailyDistance(activeVehicleFillUps);
 
   const graphs = [
     { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
@@ -283,6 +284,27 @@ export default function Analytics() {
               </p>
             </div>
           )}
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {t('predictive_daily_distance')}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t('predictive_daily_distance_description')}
+              </p>
+            </div>
+            <div className="text-end">
+              <p className="text-2xl font-black text-slate-900 dark:text-white">
+                {predictiveDailyDistance > 0 ? predictiveDailyDistance.toFixed(1) : '-'}
+              </p>
+              <p className="text-[10px] font-bold uppercase text-slate-400">
+                {t('km_day')}
+              </p>
+            </div>
+          </div>
         </Card>
       </section>
 

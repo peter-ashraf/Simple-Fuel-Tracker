@@ -43,6 +43,7 @@ export default function Dashboard() {
   } = useFuel();
   const { t, i18n } = useTranslation();
   const [predictedModalOpen, setPredictedModalOpen] = useState(false);
+  const [selectedMaintenanceDetail, setSelectedMaintenanceDetail] = useState(null);
   const [selectedBarIdx, setSelectedBarIdx] = useState(null);
   const [selectedDotIdx, setSelectedDotIdx] = useState(null);
   const [efficiencyUnit, setEfficiencyUnit] = useState("km_l");
@@ -122,6 +123,34 @@ export default function Dashboard() {
   };
 
   const upcomingMaintenance = getUpcomingMaintenance();
+
+  const getMaintenanceDetailRows = (item) => {
+    if (!item) return [];
+
+    const serviceDate = item.date || item.timestamp
+      ? format(new Date(item.date || item.timestamp), "MMM d, yyyy")
+      : "-";
+    const projectedDate = item.projectedDate
+      ? format(item.projectedDate, "MMM d, yyyy")
+      : "-";
+    const performedOdo = Number(item.performedAtODO ?? item.odometer ?? 0);
+    const interval = Number(item.intervalKm ?? item.distance ?? 0);
+    const safety = Number(item.safetyMarginKm ?? item.safety ?? 0);
+    const nextDue = Number(item.nextDueODO ?? item.next_due_odometer ?? 0);
+
+    return [
+      [t("date"), serviceDate],
+      [t("odometer"), performedOdo ? `${performedOdo.toLocaleString()} km` : "-"],
+      [t("current_mileage"), `${currentOdometer.toLocaleString()} km`],
+      [t("distance"), interval ? `${interval.toLocaleString()} km` : "-"],
+      [t("safety_margin"), safety ? `${safety.toLocaleString()} km` : "-"],
+      [t("next_due"), nextDue ? `${nextDue.toLocaleString()} km` : "-"],
+      [t("remaining"), `${item.kmRemaining.toLocaleString()} ${t("km_left")}`],
+      [t("due_soon"), projectedDate],
+      [t("price"), item.cost != null ? `${Number(item.cost).toFixed(2)} ${t("currency")}` : "-"],
+      [t("notes"), item.notes || "-"],
+    ];
+  };
 
   const efficiencyThresholds = useMemo(
     () => calculateEfficiencyThresholds(activeVehicleFillUpsByOdometer),
@@ -532,34 +561,68 @@ export default function Dashboard() {
 
         <Modal
           isOpen={predictedModalOpen}
-          onClose={() => setPredictedModalOpen(false)}
-          title={t("due_soon")}
+          onClose={() => {
+            setPredictedModalOpen(false);
+            setSelectedMaintenanceDetail(null);
+          }}
+          title={
+            selectedMaintenanceDetail
+              ? t(selectedMaintenanceDetail.categoryId)
+              : t("due_soon")
+          }
         >
           <div className="space-y-2 p-1">
-            {upcomingMaintenance.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-1.5 h-10 rounded-full"
-                    style={{ backgroundColor: item.categoryColor }}
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-blue-700 dark:text-blue-400">
-                      {t(item.categoryId)}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {item.kmRemaining.toLocaleString()} {t('km_left')}
-                    </p>
-                  </div>
-                  <div className="text-end text-xs font-bold text-blue-600 dark:text-blue-400">
-                    {format(item.projectedDate, "MMM d")}
-                  </div>
+            {selectedMaintenanceDetail ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMaintenanceDetail(null)}
+                  className="mb-2 text-xs font-bold uppercase text-blue-600 dark:text-blue-400"
+                >
+                  {t("back")}
+                </button>
+                <div className="space-y-2">
+                  {getMaintenanceDetailRows(selectedMaintenanceDetail).map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="flex items-start justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3 dark:bg-white/[0.04]"
+                    >
+                      <span className="text-xs font-bold text-slate-500">{label}</span>
+                      <span className="max-w-[60%] text-end text-sm font-bold text-slate-900 dark:text-white">
+                        {value}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
+              </>
+            ) : (
+              upcomingMaintenance.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => setSelectedMaintenanceDetail(item)}
+                  className="w-full rounded-2xl p-4 text-start bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 transition-transform active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-1.5 h-10 rounded-full"
+                      style={{ backgroundColor: item.categoryColor }}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-400">
+                        {t(item.categoryId)}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {item.kmRemaining.toLocaleString()} {t('km_left')}
+                      </p>
+                    </div>
+                    <div className="text-end text-xs font-bold text-blue-600 dark:text-blue-400">
+                      {format(item.projectedDate, "MMM d")}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </Modal>
       </PageWrapper>

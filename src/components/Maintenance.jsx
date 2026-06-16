@@ -38,7 +38,6 @@ import { useFuel } from "../hooks/useFuelContext";
 import { serviceHistoryPdf } from "../services/serviceHistoryPdf";
 import {
   Card,
-  PageWrapper,
   ConfirmModal,
   Modal,
   Input,
@@ -59,6 +58,56 @@ const ICON_MAP = {
   Disc: ICON_MAP_DATA.Tire,
 };
 
+function MaintenanceUndoToast({ label, t, onUndo, onClose }) {
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, 5 - Math.floor((Date.now() - startedAt) / 1000));
+      setCountdown(remaining);
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <Motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 24 }}
+      className="fixed bottom-24 left-1/2 z-[80] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-slate-900 dark:text-white">
+            {t("maintenance_deleted_pending")}
+          </p>
+          <p className="truncate text-xs font-semibold text-slate-500">
+            {label} - {countdown}s
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onUndo}
+            className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white"
+          >
+            {t("undo")}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          >
+            {t("close")}
+          </button>
+        </div>
+      </div>
+    </Motion.div>
+  );
+}
+
 export default function Maintenance() {
   const {
     maintenanceEntries,
@@ -70,6 +119,12 @@ export default function Maintenance() {
     maintenanceSystems,
     setMaintenanceSystems,
     updateMaintenanceCategory,
+    addMaintenanceCategory,
+    updateMaintenanceSettings,
+    updateCategorySettings,
+    requestMaintenanceEntryDelete,
+    undoMaintenanceEntryDelete,
+    deleteMaintenanceEntry,
   } = useFuel();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -79,6 +134,9 @@ export default function Maintenance() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [selectedSystemId, setSelectedSystemId] = useState(null);
+  const [selectedMaintenanceItemId, setSelectedMaintenanceItemId] = useState(null);
+  const [deleteToast, setDeleteToast] = useState(null);
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState(null);
 
   // Modals & Editing State
   const [editingSystemId, setEditingSystemId] = useState(null);
@@ -93,9 +151,15 @@ export default function Maintenance() {
   // Confirm Modals
   const [confirmDeleteSystem, setConfirmDeleteSystem] = useState(null); // stores id
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null); // stores id
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const categoryDropdownRef = useRef(null);
+  const deleteMaintenanceEntryRef = useRef(deleteMaintenanceEntry);
   const isRtl = i18n.language.startsWith("ar");
+
+  useEffect(() => {
+    deleteMaintenanceEntryRef.current = deleteMaintenanceEntry;
+  }, [deleteMaintenanceEntry]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -110,6 +174,16 @@ export default function Maintenance() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!deleteToast) return undefined;
+    const timeout = setTimeout(() => {
+      deleteMaintenanceEntryRef.current(deleteToast.entryId);
+      setDeleteToast(null);
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [deleteToast]);
 
   const currentOdometer =
     activeVehicleFillUps.length > 0
@@ -203,7 +277,9 @@ export default function Maintenance() {
   };
 
   const categoryProgress = useMemo(() => {
-    return categories.map((cat) => {
+    return categories
+      .filter((cat) => maintenanceSettings?.categorySettings?.[cat.id]?.enabled !== false)
+      .map((cat) => {
       const logs = maintenanceEntries
         .filter((e) => e.type === cat.id)
         .sort(
@@ -251,6 +327,9 @@ export default function Maintenance() {
         status,
         isTracked,
         intervalKm: interval,
+        safetyMarginKm: margin,
+        nextDueODO,
+        latestLog: latestCompletion || null,
         latestLogId: latestCompletion?.id || null,
       };
     });
@@ -314,6 +393,9 @@ export default function Maintenance() {
 
   const activeSystem = selectedSystemId
     ? systemStatus.find((s) => s.id === selectedSystemId)
+    : null;
+  const selectedMaintenanceItem = selectedMaintenanceItemId && activeSystem
+    ? activeSystem.categories.find((item) => item.id === selectedMaintenanceItemId)
     : null;
   const editingSystem = editingSystemId
     ? maintenanceSystems.find((s) => s.id === editingSystemId)
@@ -392,6 +474,23 @@ export default function Maintenance() {
     setEditSystemIcon(newSystem.icon);
   };
 
+  const handleAddCustomCategory = async () => {
+    if (!newCategoryName.trim() || !editingSystemId) return;
+    const category = await addMaintenanceCategory({
+      id: `custom_${Date.now()}`,
+      name: newCategoryName.trim(),
+      color: "#64748b",
+      defaultInterval: { value: 10000, unit: "km" },
+      defaultSafetyMarginKm: maintenanceSettings.defaultSafetyMarginKm || 2000
+    });
+    setMaintenanceSystems((prev) => prev.map((system) =>
+      system.id === editingSystemId
+        ? { ...system, categories: Array.from(new Set([...(system.categories || []), category.id])) }
+        : system
+    ));
+    setNewCategoryName("");
+  };
+
   const handleDeleteSubCategory = () => {
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
@@ -412,46 +511,112 @@ export default function Maintenance() {
     return translation === key ? name : translation;
   };
 
+  const translateCategoryName = (category) => {
+    if (!category) return t("unknown");
+    const translation = t(category.id);
+    return translation === category.id ? category.name : translation;
+  };
+
+  const getMaintenanceDetailRows = (item) => {
+    if (!item) return [];
+    const log = item.latestLog || {};
+    const displayDate = log.date || log.timestamp
+      ? format(new Date(log.date || log.timestamp), "MMM d, yyyy")
+      : "-";
+    const performedOdo = Number(log.performedAtODO ?? log.odometer ?? 0);
+    const nextDue = Number(item.nextDueODO ?? log.nextDueODO ?? log.next_due_odometer ?? 0);
+    const safetyMargin = Number(item.safetyMarginKm ?? log.safetyMarginKm ?? log.safety ?? 0);
+    const remainingText = item.status === "overdue"
+      ? `${Math.abs(item.remainingKm).toLocaleString()} ${t("overdue")}`
+      : `${item.remainingKm.toLocaleString()} ${t("km_left")}`;
+
+    return [
+      [t("date"), displayDate],
+      [t("odometer"), performedOdo ? `${performedOdo.toLocaleString()} km` : "-"],
+      [t("current_mileage"), `${currentOdometer.toLocaleString()} km`],
+      [t("distance"), item.intervalKm ? `${Number(item.intervalKm).toLocaleString()} km` : "-"],
+      [t("safety_margin"), safetyMargin ? `${safetyMargin.toLocaleString()} km` : "-"],
+      [t("next_due"), nextDue ? `${nextDue.toLocaleString()} km` : "-"],
+      [t("remaining"), remainingText],
+      [t("price"), log.cost != null ? `${Number(log.cost).toFixed(2)} ${t("currency")}` : "-"],
+      [t("notes"), log.notes || "-"]
+    ];
+  };
+
+  const startMaintenanceDelete = async (entryId, label) => {
+    if (!entryId) return;
+    await requestMaintenanceEntryDelete(entryId);
+    setSelectedMaintenanceItemId(null);
+    setSelectedSystemId(null);
+    setDeleteToast({ entryId, label });
+  };
+
+  const requestMaintenanceDeleteConfirmation = (entryId, label) => {
+    if (!entryId) return;
+    setConfirmDeleteEntry({ entryId, label });
+  };
+
+  const confirmMaintenanceDelete = async () => {
+    if (!confirmDeleteEntry) return;
+    await startMaintenanceDelete(confirmDeleteEntry.entryId, confirmDeleteEntry.label);
+    setConfirmDeleteEntry(null);
+  };
+
+  const undoMaintenanceDelete = async () => {
+    if (!deleteToast) return;
+    await undoMaintenanceEntryDelete(deleteToast.entryId);
+    setDeleteToast(null);
+  };
+
+  const finalizeMaintenanceDelete = async () => {
+    if (!deleteToast) return;
+    await deleteMaintenanceEntry(deleteToast.entryId);
+    setDeleteToast(null);
+  };
+
   const handleExportPDF = async () => {
     await serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t);
   };
 
   return (
-    <PageWrapper className="pb-24">
-      <div className="mb-6">
-        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-          {t("maintenance")}
-        </h2>
+    <div className="fixed inset-x-0 bottom-24 top-20 mx-auto flex w-full max-w-lg flex-col overflow-hidden px-5">
+      <div className="z-30 -mx-1 shrink-0 space-y-5 bg-white/95 px-1 pb-4 pt-1 backdrop-blur-xl dark:bg-black/95">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+            {t("maintenance")}
+          </h2>
+        </div>
+
+        <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
+          {["overview", "history", "settings"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold capitalize transition-all ${activeTab === tab ? "text-slate-900 dark:text-white" : "text-slate-500"}`}
+            >
+              {activeTab === tab && (
+                <Motion.div
+                  layoutId="maintenanceActiveTab"
+                  className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{t(tab)}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-2 mb-8 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl relative z-20">
-        {["overview", "history", "settings"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold capitalize transition-all ${activeTab === tab ? "text-slate-900 dark:text-white" : "text-slate-500"}`}
-          >
-            {activeTab === tab && (
-              <Motion.div
-                layoutId="maintenanceActiveTab"
-                className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm"
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-            )}
-            <span className="relative z-10">{t(tab)}</span>
-          </button>
-        ))}
-      </div>
-
-      <AnimatePresence mode="wait">
-        {activeTab === "overview" && (
-          <Motion.div
-            key="overview"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="grid grid-cols-2 gap-4"
-          >
+      <div className="min-h-0 flex-1 overflow-y-auto pb-24 no-scrollbar">
+        <AnimatePresence mode="wait">
+          {activeTab === "overview" && (
+            <Motion.div
+              key="overview"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="grid grid-cols-2 gap-4"
+            >
             {systemStatus.map((system) => {
               const isOverdue = system.status === "overdue";
               const Icon = ICON_MAP[system.icon] || Wrench;
@@ -504,8 +669,8 @@ export default function Maintenance() {
                 </Card>
               );
             })}
-          </Motion.div>
-        )}
+            </Motion.div>
+          )}
 
         {activeTab === "history" && (
           <Motion.div
@@ -663,8 +828,36 @@ export default function Maintenance() {
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
-            className="grid grid-cols-1 gap-3"
+            className="grid grid-cols-1 gap-4"
           >
+            <Card className="p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  {t("defaults")}
+                </h3>
+                <p className="text-xs font-semibold text-slate-500">
+                  {t("maintenance_defaults_hint")}
+                </p>
+              </div>
+              <div>
+                <Label>{t("safety_margin")} (km)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={maintenanceSettings.defaultSafetyMarginKm || 0}
+                  onChange={(event) =>
+                    updateMaintenanceSettings({
+                      defaultSafetyMarginKm: Number(event.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+            </Card>
+
+            <h3 className="px-1 text-xs font-black uppercase tracking-wider text-slate-400">
+              {t("systems")}
+            </h3>
+
             {maintenanceSystems.map((system) => {
               const Icon = ICON_MAP[system.icon] || Wrench;
               return (
@@ -713,63 +906,150 @@ export default function Maintenance() {
             </button>
           </Motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
 
       <Modal
         isOpen={!!selectedSystemId}
-        onClose={() => setSelectedSystemId(null)}
+        onClose={() => {
+          setSelectedSystemId(null);
+          setSelectedMaintenanceItemId(null);
+        }}
         title={translateSystemName(activeSystem?.name || "")}
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-          {activeSystem?.categories.map((item) => (
-            <Card
-              key={item.id}
-              className="p-4 bg-slate-50 dark:bg-white/[0.02] cursor-pointer"
-              onClick={() => {
-                setSelectedSystemId(null);
-                navigate(
-                  item.isTracked
-                    ? `/maintenance/edit/${item.latestLogId}`
-                    : `/maintenance/add?type=${item.id}`,
-                );
-              }}
-            >
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {t(item.id)}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-400">
-                    {Math.round(100 - item.progressPercent)}% {t("healthy")}
-                  </span>
+          {selectedMaintenanceItem ? (
+            <Card className="p-5 bg-slate-50 dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => setSelectedMaintenanceItemId(null)}
+                className="mb-4 text-xs font-bold text-emerald-500 uppercase"
+              >
+                {t("back")}
+              </button>
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                    {translateCategoryName(selectedMaintenanceItem)}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {selectedMaintenanceItem.isTracked
+                      ? `${Math.max(0, Math.round(100 - selectedMaintenanceItem.progressPercent))}% ${t("healthy")}`
+                      : t("untracked")}
+                  </p>
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] font-black uppercase",
-                    item.status === "overdue"
-                      ? "text-red-500"
-                      : "text-emerald-500",
+                    "rounded-full px-3 py-1 text-[10px] font-black uppercase",
+                    selectedMaintenanceItem.status === "overdue"
+                      ? "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-300"
+                      : selectedMaintenanceItem.status === "due-soon"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
                   )}
                 >
-                  {t(item.status)}
+                  {t(selectedMaintenanceItem.status)}
                 </span>
               </div>
-              {!item.isUntracked && (
-                <div className="space-y-2">
-                  <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500"
-                      style={{ width: `${item.progressPercent}%` }}
-                    />
+
+              {selectedMaintenanceItem.isTracked ? (
+                <>
+                  <div className="space-y-2">
+                    {getMaintenanceDetailRows(selectedMaintenanceItem).map(([label, value]) => (
+                      <div key={label} className="flex items-start justify-between gap-4 rounded-2xl bg-white dark:bg-slate-950/40 px-4 py-3">
+                        <span className="text-xs font-bold text-slate-500">{label}</span>
+                        <span className="max-w-[60%] text-end text-sm font-bold text-slate-900 dark:text-white">{value}</span>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-slate-500">
-                    {t("next_due")}: {item.remainingKm.toLocaleString()}{" "}
-                    {t("km_left")}
+                  <div className="mt-5 grid grid-cols-[1fr_auto] gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSystemId(null);
+                        setSelectedMaintenanceItemId(null);
+                        navigate(`/maintenance/edit/${selectedMaintenanceItem.latestLogId}`);
+                      }}
+                      className="rounded-2xl bg-slate-900 py-3 text-sm font-bold text-white dark:bg-white dark:text-slate-950"
+                    >
+                      {t("edit")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requestMaintenanceDeleteConfirmation(selectedMaintenanceItem.latestLogId, translateCategoryName(selectedMaintenanceItem))}
+                      className="rounded-2xl bg-red-50 px-4 py-3 text-red-500 dark:bg-red-500/10"
+                    >
+                      <Trash weight="duotone" className="w-5 h-5" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-slate-500">
+                    {t("maintenance_untracked_hint")}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSystemId(null);
+                      setSelectedMaintenanceItemId(null);
+                      navigate(`/maintenance/add?type=${selectedMaintenanceItem.id}`);
+                    }}
+                    className="w-full rounded-2xl bg-emerald-500 py-3 text-sm font-bold text-white"
+                  >
+                    {t("add_maintenance")}
+                  </button>
                 </div>
               )}
             </Card>
-          ))}
+          ) : (
+            activeSystem?.categories.map((item) => (
+              <Card
+                key={item.id}
+                className="p-4 bg-slate-50 dark:bg-white/[0.02] cursor-pointer"
+                onClick={() => setSelectedMaintenanceItemId(item.id)}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {translateCategoryName(item)}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {item.isTracked
+                        ? `${Math.max(0, Math.round(100 - item.progressPercent))}% ${t("healthy")}`
+                        : t("untracked")}
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      "text-[10px] font-black uppercase",
+                      item.status === "overdue"
+                        ? "text-red-500"
+                        : item.status === "due-soon"
+                          ? "text-amber-500"
+                          : "text-emerald-500",
+                    )}
+                  >
+                    {t(item.status)}
+                  </span>
+                </div>
+                {item.isTracked && (
+                  <div className="space-y-2">
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500"
+                        style={{ width: `${Math.min(100, Math.max(0, item.progressPercent))}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      {t("next_due")}: {item.remainingKm.toLocaleString()}{" "}
+                      {t("km_left")}
+                    </p>
+                  </div>
+                )}
+              </Card>
+            ))
+          )}
         </div>
       </Modal>
 
@@ -778,96 +1058,155 @@ export default function Maintenance() {
         onClose={() => setEditingSystemId(null)}
         title={t("edit") + " " + t("systems")}
       >
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsPickingIcon(true)}
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 hover:opacity-90 transition-opacity relative group overflow-hidden"
-              style={{ backgroundColor: editingSystem?.color }}
-            >
-              {(() => {
-                const Icon = ICON_MAP[editSystemIcon] || Wrench;
-                return <Icon weight="duotone" className="w-7 h-7" />;
-              })()}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Pencil weight="bold" className="w-4 h-4 text-white" />
+        <div className="flex max-h-[72vh] flex-col gap-4">
+          <div className="shrink-0 space-y-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsPickingIcon(true)}
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 hover:opacity-90 transition-opacity relative group overflow-hidden"
+                style={{ backgroundColor: editingSystem?.color }}
+              >
+                {(() => {
+                  const Icon = ICON_MAP[editSystemIcon] || Wrench;
+                  return <Icon weight="duotone" className="w-7 h-7" />;
+                })()}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Pencil weight="bold" className="w-4 h-4 text-white" />
+                </div>
+                <div className="absolute top-1 right-1 w-4 h-4 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                  <Pencil weight="bold" className="w-2.5 h-2.5 text-white" />
+                </div>
+              </button>
+              <div className="flex-1">
+                <Label>{t("system_name")}</Label>
+                <Input
+                  value={editSystemName}
+                  onChange={(e) => setEditSystemName(e.target.value)}
+                  placeholder={t("systems")}
+                />
               </div>
-              <div className="absolute top-1 right-1 w-4 h-4 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <Pencil weight="bold" className="w-2.5 h-2.5 text-white" />
-              </div>
-            </button>
-            <div className="flex-1">
-              <Label>{t("system_name")}</Label>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] gap-2">
               <Input
-                value={editSystemName}
-                onChange={(e) => setEditSystemName(e.target.value)}
-                placeholder={t("systems")}
+                value={newCategoryName}
+                onChange={(event) => setNewCategoryName(event.target.value)}
+                placeholder={t("custom_category")}
               />
+              <button
+                type="button"
+                onClick={handleAddCustomCategory}
+                disabled={!newCategoryName.trim()}
+                className="rounded-xl bg-slate-900 px-4 text-xs font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+              >
+                {t("add")}
+              </button>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
             {editingSystem?.categories.map((catId) => {
               const cat = getCategoryById(catId);
               const isRenaming = renamingCatId === catId;
+              const catSettings = maintenanceSettings?.categorySettings?.[catId] || {};
+              const enabled = catSettings.enabled !== false;
+              const interval = catSettings.intervalKm ?? cat.defaultInterval?.value ?? 0;
+              const margin = catSettings.safetyMarginKm ?? cat.defaultSafetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
               return (
                 <div
                   key={catId}
-                  className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl"
+                  className="space-y-3 p-3 bg-slate-50 dark:bg-white/5 rounded-2xl"
                 >
-                  {isRenaming ? (
-                    <input
-                      autoFocus
-                      className="bg-white dark:bg-slate-800 rounded px-2 py-1 text-xs w-full"
-                      value={renamingCatName}
-                      onChange={(e) => setRenamingCatName(e.target.value)}
-                      onBlur={() =>
-                        handleRenameCategory(catId, renamingCatName)
-                      }
-                    />
-                  ) : (
-                    <span className="text-xs font-bold">
-                      {t(cat.id) || cat.name}
-                    </span>
-                  )}
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        if (isRenaming) {
-                          handleRenameCategory(catId, renamingCatName);
-                        } else {
-                          setRenamingCatId(catId);
-                          setRenamingCatName(cat.name);
+                  <div className="flex items-center justify-between gap-3">
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        className="bg-white dark:bg-slate-800 rounded px-2 py-1 text-xs w-full"
+                        value={renamingCatName}
+                        onChange={(e) => setRenamingCatName(e.target.value)}
+                        onBlur={() =>
+                          handleRenameCategory(catId, renamingCatName)
                         }
-                      }}
-                      className={cn(
-                        "p-1.5 transition-colors",
-                        isRenaming || justSavedCatId === catId
-                          ? "text-emerald-500"
-                          : "text-slate-400",
-                      )}
-                    >
-                      {isRenaming ? (
-                        <Check weight="bold" className="w-3.5 h-3.5" />
-                      ) : justSavedCatId === catId ? (
-                        <Check weight="bold" className="w-3.5 h-3.5" />
-                      ) : (
-                        <Pencil weight="duotone" className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteCat(catId)}
-                      className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                    >
-                      <Trash weight="duotone" className="w-3.5 h-3.5" />
-                    </button>
+                      />
+                    ) : (
+                      <span className="text-xs font-bold">
+                        {translateCategoryName(cat)}
+                      </span>
+                    )}
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => updateCategorySettings(catId, { enabled: !enabled })}
+                        className={cn(
+                          "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors",
+                          enabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "inline-block h-4 w-4 rounded-full bg-white transition-transform",
+                            enabled ? (isRtl ? "-translate-x-1" : "translate-x-5") : (isRtl ? "-translate-x-5" : "translate-x-1"),
+                          )}
+                        />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (isRenaming) {
+                            handleRenameCategory(catId, renamingCatName);
+                          } else {
+                            setRenamingCatId(catId);
+                            setRenamingCatName(cat.name);
+                          }
+                        }}
+                        className={cn(
+                          "p-1.5 transition-colors",
+                          isRenaming || justSavedCatId === catId
+                            ? "text-emerald-500"
+                            : "text-slate-400",
+                        )}
+                      >
+                        {isRenaming || justSavedCatId === catId ? (
+                          <Check weight="bold" className="w-3.5 h-3.5" />
+                        ) : (
+                          <Pencil weight="duotone" className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteCat(catId)}
+                        className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      >
+                        <Trash weight="duotone" className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px]">{t("distance")}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={interval}
+                        onChange={(event) => updateCategorySettings(catId, { intervalKm: Number(event.target.value) || 0 })}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">{t("safety_margin")}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={margin}
+                        onChange={(event) => updateCategorySettings(catId, { safetyMarginKm: Number(event.target.value) || 0 })}
+                        className="text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex shrink-0 gap-3 pt-1">
             <button
               onClick={() => setConfirmDeleteSystem(editingSystemId)}
               className="p-4 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl transition-all active:scale-[0.98]"
@@ -925,12 +1264,34 @@ export default function Maintenance() {
         variant="danger"
       />
 
+      <ConfirmModal
+        isOpen={!!confirmDeleteEntry}
+        onClose={() => setConfirmDeleteEntry(null)}
+        onConfirm={confirmMaintenanceDelete}
+        title={t("delete")}
+        message={`${t("delete")} ${confirmDeleteEntry?.label || t("maintenance")}?`}
+        confirmText={t("delete")}
+        cancelText={t("cancel")}
+        variant="danger"
+      />
+
       <IconPicker
         isOpen={isPickingIcon}
         onClose={() => setIsPickingIcon(false)}
         currentIcon={editSystemIcon}
         onSelect={setEditSystemIcon}
       />
-    </PageWrapper>
+
+      <AnimatePresence>
+        {deleteToast && (
+          <MaintenanceUndoToast
+            label={deleteToast.label}
+            t={t}
+            onUndo={undoMaintenanceDelete}
+            onClose={finalizeMaintenanceDelete}
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

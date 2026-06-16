@@ -2764,15 +2764,30 @@ export const cloudSyncService = {
         
         // Use a consistent snapshot of the outbox to avoid race conditions
         const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
+        const maintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
         
         // Find all pending or failed mutations in FIFO order (by id which is timestamp or updatedAt)
-        const pendingMutations = fillups
+        const fillupMutations = fillups
           .filter(f =>
             f.syncStatus === 'pending' ||
             (f.syncStatus === 'failed' && (f.retryCount || 0) < 3) ||
             ((f.deletedAt || f.lastAction === 'DELETE') && !f.tombstoneVerifiedAt)
           )
-          .sort((a, b) => (a.updatedAt || a.timestamp || 0) > (b.updatedAt || b.timestamp || 0) ? 1 : -1);
+          .map(record => ({ record, entityKey: 'fillups' }));
+
+        const maintenanceMutations = maintenance
+          .filter(m =>
+            m.syncStatus === 'pending' ||
+            (m.syncStatus === 'failed' && (m.retryCount || 0) < 3) ||
+            ((m.deletedAt || m.deleted_at || m.lastAction === 'DELETE') && !m.tombstoneVerifiedAt)
+          )
+          .map(record => ({ record, entityKey: 'maintenance' }));
+
+        const pendingMutations = [...fillupMutations, ...maintenanceMutations]
+          .sort((a, b) =>
+            (a.record.updatedAt || a.record.timestamp || 0) >
+            (b.record.updatedAt || b.record.timestamp || 0) ? 1 : -1
+          );
 
         if (pendingMutations.length === 0) {
           console.log('[Sync][outbox] No pending mutations');
@@ -2782,10 +2797,10 @@ export const cloudSyncService = {
         console.log(`[Sync][outbox] Processing ${pendingMutations.length} mutations`);
         let successCount = 0;
 
-        for (const record of pendingMutations) {
+        for (const { record, entityKey } of pendingMutations) {
           if (!this.isOnline()) break;
 
-          const result = await this.processSingleOutboxMutation(userId, record, 'fillups');
+          const result = await this.processSingleOutboxMutation(userId, record, entityKey);
           if (result.success) successCount++;
           else {
             console.warn(`[Sync][outbox] Mutation failed for ${record.id}:`, result.error);
@@ -2812,7 +2827,7 @@ export const cloudSyncService = {
    * Process a single outbox mutation with idempotency and lifecycle management
    */
   async processSingleOutboxMutation(userId, record, entityKey) {
-    const tableMap = { fillups: 'fillups', vehicles: 'vehicles' };
+    const tableMap = { fillups: 'fillups', vehicles: 'vehicles', maintenance: 'maintenance' };
     const table = tableMap[entityKey];
 
     // 1. Mark in_progress locally
@@ -3000,7 +3015,11 @@ export const cloudSyncService = {
    * Internal helper to update a single record's sync metadata locally
    */
   updateLocalSyncStatus(entityKey, id, updates) {
-    const localKeyMap = { fillups: 'fueltracker-fillups-v2', vehicles: 'fueltracker-vehicles-v2' };
+    const localKeyMap = {
+      fillups: 'fueltracker-fillups-v2',
+      vehicles: 'fueltracker-vehicles-v2',
+      maintenance: 'fueltracker-maintenance-entries-v3'
+    };
     const localKey = localKeyMap[entityKey];
     if (!localKey) return;
 
@@ -3043,6 +3062,47 @@ export const cloudSyncService = {
         // Sync metadata
         updated_at: record.updatedAt || now,
         deleted_at: record.deletedAt || null
+      };
+    }
+    if (entityKey === 'maintenance') {
+      const now = new Date().toISOString();
+      let nestedMeta = {};
+      if (typeof record.description === 'string') {
+        try {
+          const trimmed = record.description.trim();
+          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            nestedMeta = JSON.parse(trimmed);
+          }
+        } catch {
+          console.log('[Sync][mapLocalToCloud] Maintenance description is plain text.');
+        }
+      }
+      const maintenanceDate = record.date ||
+        (record.timestamp ? new Date(record.timestamp).toISOString().split('T')[0] : null) ||
+        (record.createdAt ? new Date(record.createdAt).toISOString().split('T')[0] : now.split('T')[0]);
+      const odometer = record.odometer ?? record.performedAtODO ?? null;
+      const distance = record.distance ?? record.intervalKm ?? nestedMeta.distance ?? null;
+      const safety = record.safety ?? record.safetyMarginKm ?? nestedMeta.safety ?? null;
+      const notes = record.notes ?? nestedMeta.notes ?? '';
+      const nextDueOdometer = record.next_due_odometer ??
+        record.nextDueOdometer ??
+        record.nextDueODO ??
+        (odometer != null && distance != null ? Number(odometer) + Number(distance) : null);
+
+      return {
+        stable_key: record.stableKey || record.stable_key,
+        user_id: null,
+        vehicle_id: record.vehicleId || record.vehicle_id,
+        date: maintenanceDate,
+        type: record.type || null,
+        description: JSON.stringify({ distance, safety, notes }),
+        cost: record.cost !== undefined && record.cost !== null && record.cost !== '' ? Number(record.cost) : null,
+        odometer: odometer !== null ? Number(odometer) : null,
+        next_due_date: record.nextDueDate || record.next_due_date || null,
+        next_due_odometer: nextDueOdometer,
+        created_at: record.createdAt || record.created_at || now,
+        updated_at: record.updatedAt || record.updated_at || now,
+        deleted_at: record.deletedAt || record.deleted_at || null
       };
     }
     return record;
@@ -3819,6 +3879,9 @@ export const cloudSyncService = {
     maintenance.date ??
     maintenance.maintenanceDate ??
     maintenance.maintenance_date ??
+    (maintenance.timestamp ? new Date(maintenance.timestamp).toISOString().split('T')[0] : null) ??
+    (maintenance.createdAt ? new Date(maintenance.createdAt).toISOString().split('T')[0] : null) ??
+    (maintenance.created_at ? new Date(maintenance.created_at).toISOString().split('T')[0] : null) ??
     null;
   const maintenanceType = maintenance.type ?? null;
   const createdAt = maintenance.createdAt ?? maintenance.created_at ?? null;
@@ -3862,7 +3925,9 @@ export const cloudSyncService = {
   if (typeof maintenance.metadata === 'string') {
     try {
       nestedMeta = JSON.parse(maintenance.metadata);
-    } catch (e) {}
+    } catch {
+      nestedMeta = {};
+    }
   } else if (typeof maintenance.metadata === 'object' && maintenance.metadata !== null) {
     nestedMeta = maintenance.metadata;
   }
@@ -4206,6 +4271,84 @@ export const cloudSyncService = {
     return cleanedRestored;
   },
 
+  async getDeletedMaintenanceByDate(userId, date) {
+    if (!userId) throw new Error('User ID is required.');
+    if (!date) throw new Error('A date is required.');
+
+    const { data, error } = await supabase
+      .from('maintenance')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to load deleted maintenance entries: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async restoreDeletedMaintenance(userId, maintenance) {
+    if (!userId) throw new Error('User ID is required.');
+    if (!maintenance?.id) throw new Error('Maintenance entry ID is required.');
+
+    const now = new Date().toISOString();
+    const stableKey = maintenance.stable_key || maintenance.id;
+    const { data, error } = await supabase
+      .from('maintenance')
+      .update({ deleted_at: null, updated_at: now, stable_key: stableKey })
+      .eq('id', maintenance.id)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to restore maintenance entry: ${error.message}`);
+    }
+
+    const before = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    this.downloadSingleMaintenance(data);
+    const after = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    const restoredStableKey = data.stable_key || stableKey;
+    const restored = after.find((item) =>
+      (restoredStableKey && (item.stableKey === restoredStableKey || item.stable_key === restoredStableKey)) ||
+      item.id === data.id
+    );
+    const cleanedRestored = restored ? {
+      ...restored,
+      deletedAt: null,
+      deleted_at: null,
+      pendingDelete: false,
+      pendingDeleteRequestedAt: null,
+      lastAction: 'UPDATE',
+      tombstoneVerifiedAt: null,
+      updatedAt: now,
+      updated_at: now,
+      stableKey: restoredStableKey,
+      stable_key: restoredStableKey
+    } : null;
+
+    if (cleanedRestored) {
+      const existingIndex = after.findIndex((item) =>
+        (restoredStableKey && (item.stableKey === restoredStableKey || item.stable_key === restoredStableKey)) ||
+        item.id === data.id
+      );
+      if (existingIndex >= 0) {
+        after[existingIndex] = cleanedRestored;
+        localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(after));
+      }
+    } else {
+      localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(before));
+    }
+
+    window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { entityKey: 'maintenance' } }));
+    window.dispatchEvent(new Event('fueltracker-local-storage-refresh'));
+
+    return cleanedRestored;
+  },
+
   /**
    * Delete a fill-up from cloud (tombstone)
    * @param {Object} fillup - Local fill-up record
@@ -4308,7 +4451,7 @@ export const cloudSyncService = {
         extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
         extractedNotes = parsedConfig.notes || '';
       }
-    } catch (e) {
+    } catch {
       console.log('[Sync] Description is regular text string.');
     }
   }
@@ -4442,9 +4585,48 @@ export const cloudSyncService = {
    * Delete a maintenance entry from cloud (tombstone)
    */
   async deleteMaintenanceFromCloud(maintenance, userId) {
+    const tombstonePayload = { deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const stableKey = maintenance.stableKey || maintenance.stable_key;
+    let error = null;
+    let matched = false;
+
+    if (stableKey) {
+      const { data, error: stableKeyError } = await supabase
+        .from('maintenance')
+        .update(tombstonePayload)
+        .eq('stable_key', stableKey)
+        .eq('user_id', userId)
+        .select('id');
+
+      error = stableKeyError;
+      matched = !error && data && data.length > 0;
+    }
+
+    if (!error && !matched && maintenance.id) {
+      const { data, error: idError } = await supabase
+        .from('maintenance')
+        .update(tombstonePayload)
+        .eq('id', maintenance.id)
+        .eq('user_id', userId)
+        .select('id');
+
+      error = idError;
+      matched = !error && data && data.length > 0;
+    }
+
+    if (!error && !matched) {
+      error = { message: `No cloud maintenance row matched ${stableKey || maintenance.id}` };
+    }
+
+    if (error) {
+      throw new Error(`Failed to delete maintenance ${maintenance.id} from cloud: ${error.message}`);
+    }
+  },
+
+  async hardDeleteMaintenanceFromCloud(maintenance, userId) {
     const { error } = await supabase
       .from('maintenance')
-      .update({ deleted_at: new Date().toISOString() })
+      .delete()
       .eq('id', maintenance.id)
       .eq('user_id', userId);
     

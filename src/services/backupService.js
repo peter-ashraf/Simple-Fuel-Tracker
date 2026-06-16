@@ -18,6 +18,66 @@ const APP_KEYS = [
   'fueltracker-maintenance-reminders-v2'
 ];
 
+const dateOnly = (value) => {
+  if (!value) return new Date().toISOString().substring(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? new Date().toISOString().substring(0, 10)
+    : parsed.toISOString().substring(0, 10);
+};
+
+const parseMaintenanceDescription = (description) => {
+  if (!description || typeof description !== 'string') return {};
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { notes: description };
+  }
+};
+
+const normalizeMaintenanceRecord = (record) => {
+  const now = new Date().toISOString();
+  const metadata = parseMaintenanceDescription(record.description);
+  const odometer = Number(record.odometer ?? record.performedAtODO ?? 0) || 0;
+  const intervalKm = Number(record.intervalKm ?? record.distance ?? metadata.distance ?? 0) || 0;
+  const safety = Number(record.safetyMarginKm ?? record.safety ?? metadata.safety ?? 2000) || 0;
+  const nextDue = Number(record.nextDueODO ?? record.nextDueOdometer ?? record.next_due_odometer ?? (intervalKm ? odometer + intervalKm : 0)) || 0;
+  const stableKey = record.stableKey ?? record.stable_key ?? uuidv4();
+  const date = dateOnly(record.date ?? record.timestamp ?? record.createdAt ?? record.created_at);
+  const notes = record.notes ?? metadata.notes ?? '';
+
+  return {
+    ...record,
+    id: record.id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    stableKey,
+    stable_key: stableKey,
+    date,
+    timestamp: date,
+    type: record.type || 'custom',
+    odometer,
+    performedAtODO: odometer,
+    distance: intervalKm,
+    intervalKm,
+    safety,
+    safetyMarginKm: safety,
+    nextDueODO: nextDue,
+    nextDueOdometer: nextDue,
+    next_due_odometer: nextDue,
+    notes,
+    description: JSON.stringify({ distance: intervalKm, safety, notes }),
+    cost: record.cost !== undefined && record.cost !== null && record.cost !== '' ? Number(record.cost) : null,
+    createdAt: record.createdAt ?? record.created_at ?? now,
+    updatedAt: record.updatedAt ?? record.updated_at ?? now,
+    deletedAt: record.deletedAt ?? record.deleted_at ?? null,
+    pendingDelete: false,
+    pendingDeleteRequestedAt: null,
+    lastAction: record.deletedAt || record.deleted_at ? 'DELETE' : 'UPDATE',
+    tombstoneVerifiedAt: record.tombstoneVerifiedAt ?? null
+  };
+};
+
 export const backupService = {
   /**
    * Export all app data as a JSON file
@@ -277,7 +337,7 @@ export const backupService = {
         } else if (record.type === 'vehicle') {
           localVehicles.push(record.data);
         } else if (record.type === 'maintenance') {
-          localMaint.push(record.data);
+          localMaint.push(normalizeMaintenanceRecord(record.data));
         } else if (record.type === 'maintenance-reminder') {
           localReminders.push(record.data);
         } else if (record.type === 'trip-estimate') {

@@ -147,11 +147,13 @@ export default function Settings() {
     new Date().toISOString().substring(0, 10),
   );
   const [deletedFillups, setDeletedFillups] = useState([]);
+  const [deletedMaintenance, setDeletedMaintenance] = useState([]);
   const [isLoadingDeletedFillups, setIsLoadingDeletedFillups] = useState(false);
   const [hasSearchedDeletedFillups, setHasSearchedDeletedFillups] =
     useState(false);
   const [recoveryError, setRecoveryError] = useState("");
   const [restoringFillupId, setRestoringFillupId] = useState(null);
+  const [restoringMaintenanceId, setRestoringMaintenanceId] = useState(null);
   const [accountForm, setAccountForm] = useState({
     username: "",
     oldPassword: "",
@@ -474,14 +476,15 @@ export default function Settings() {
         return;
       }
 
-      const records = await cloudSyncService.getDeletedFillupsByDate(
-        userId,
-        recoveryDate,
-      );
-      setDeletedFillups(records);
+      const [fillupRecords, maintenanceRecords] = await Promise.all([
+        cloudSyncService.getDeletedFillupsByDate(userId, recoveryDate),
+        cloudSyncService.getDeletedMaintenanceByDate(userId, recoveryDate),
+      ]);
+      setDeletedFillups(fillupRecords);
+      setDeletedMaintenance(maintenanceRecords);
       setHasSearchedDeletedFillups(true);
     } catch (error) {
-      setRecoveryError(error.message || "Failed to load deleted fill-ups.");
+      setRecoveryError(error.message || "Failed to load deleted cloud records.");
     } finally {
       setIsLoadingDeletedFillups(false);
     }
@@ -506,6 +509,28 @@ export default function Settings() {
       setRecoveryError(error.message || "Failed to restore fill-up.");
     } finally {
       setRestoringFillupId(null);
+    }
+  };
+
+  const handleRestoreDeletedMaintenance = async (maintenance) => {
+    setRecoveryError("");
+    setRestoringMaintenanceId(maintenance.id);
+
+    try {
+      const userId = await cloudSyncService.getUserId();
+      if (!userId) {
+        setRecoveryError("You must be logged in to recover cloud data.");
+        return;
+      }
+
+      await cloudSyncService.restoreDeletedMaintenance(userId, maintenance);
+      setDeletedMaintenance((prev) => prev.filter((item) => item.id !== maintenance.id));
+      refreshLocalStorageState();
+      showToast("Maintenance entry restored");
+    } catch (error) {
+      setRecoveryError(error.message || "Failed to restore maintenance entry.");
+    } finally {
+      setRestoringMaintenanceId(null);
     }
   };
 
@@ -1088,7 +1113,7 @@ export default function Settings() {
             </h3>
             <Card className="px-5 py-6 space-y-4">
               <div className="space-y-2">
-                <Label>Deleted fill-ups date</Label>
+                <Label>Deleted cloud records date</Label>
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                   <Input
                     type="date"
@@ -1113,11 +1138,17 @@ export default function Settings() {
               )}
 
               <div className="space-y-3">
-                {deletedFillups.length === 0 && !isLoadingDeletedFillups && (
+                {deletedFillups.length === 0 && deletedMaintenance.length === 0 && !isLoadingDeletedFillups && (
                   <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                     {hasSearchedDeletedFillups
-                      ? "No deleted cloud fill-ups were found for this date. Only entries that were already synced to cloud can appear here."
-                      : "Search a date to find deleted cloud fill-ups that can be restored to this device."}
+                      ? "No deleted cloud fill-ups or maintenance entries were found for this date. Only entries that were already synced to cloud can appear here."
+                      : "Search a date to find deleted cloud fill-ups and maintenance entries that can be restored to this device."}
+                  </p>
+                )}
+
+                {deletedFillups.length > 0 && (
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Fill-ups
                   </p>
                 )}
 
@@ -1148,6 +1179,75 @@ export default function Settings() {
                         <button
                           type="button"
                           onClick={() => handleRestoreDeletedFillup(fillup)}
+                          disabled={isRestoring}
+                          className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
+                        >
+                          {isRestoring ? "Restoring..." : "Restore"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {deletedMaintenance.length > 0 && (
+                  <p className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Maintenance
+                  </p>
+                )}
+
+                {deletedMaintenance.map((entry) => {
+                  const isRestoring = restoringMaintenanceId === entry.id;
+                  let notes = "";
+                  let interval = null;
+                  let safety = null;
+                  if (entry.description) {
+                    try {
+                      const parsed = JSON.parse(entry.description);
+                      notes = parsed.notes || "";
+                      interval = parsed.distance ?? null;
+                      safety = parsed.safety ?? null;
+                    } catch {
+                      notes = entry.description;
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white">
+                            {t(entry.type) || entry.type || "Maintenance"}
+                          </p>
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            {Number(entry.odometer || 0).toLocaleString()} km
+                            {entry.cost != null
+                              ? ` - ${Number(entry.cost).toFixed(2)} ${t("currency")}`
+                              : ""}
+                          </p>
+                          {(interval || safety) && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {interval ? `${Number(interval).toLocaleString()} km` : ""}
+                              {interval && safety ? " / " : ""}
+                              {safety ? `${Number(safety).toLocaleString()} km safety` : ""}
+                            </p>
+                          )}
+                          {notes && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {notes}
+                            </p>
+                          )}
+                          {entry.deleted_at && (
+                            <p className="text-[10px] font-semibold text-red-400">
+                              Deleted {new Date(entry.deleted_at).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreDeletedMaintenance(entry)}
                           disabled={isRestoring}
                           className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
                         >

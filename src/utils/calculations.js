@@ -1,5 +1,6 @@
 import { formatTo2Decimals } from './formatting';
-import { differenceInDays } from 'date-fns';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function calculateTripMetrics(fillUps, index) {
   const current = fillUps[index];
@@ -39,29 +40,61 @@ export function calculateTripMetrics(fillUps, index) {
 }
 
 /**
- * Calculate average daily driving distance from fill-up history
- * @param {Array} fillUps - Array of fill-up objects with timestamp and odometer
+ * Calculate average daily driving distance from all valid fill-up intervals.
+ * @param {Array} fillUps - Array of fill-up objects with date/timestamp and odometer
  * @returns {number} Average daily distance in km, or 0 if insufficient data
  */
 export function calculateAverageDailyDistance(fillUps) {
   if (!fillUps || fillUps.length < 2) return 0;
-  
-  // Sort by date
-  const sorted = [...fillUps].sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+
+  const sorted = fillUps
+    .map((fillUp) => {
+      const rawDate = fillUp.date || fillUp.timestamp || fillUp.createdAt;
+      const date = rawDate ? new Date(rawDate) : null;
+      const odometer = Number(fillUp.odometer);
+
+      return {
+        date,
+        odometer,
+      };
+    })
+    .filter(
+      (fillUp) =>
+        fillUp.date &&
+        !Number.isNaN(fillUp.date.getTime()) &&
+        Number.isFinite(fillUp.odometer),
+    )
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const intervals = [];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1];
+    const current = sorted[index];
+    const distance = current.odometer - previous.odometer;
+    const days = (current.date.getTime() - previous.date.getTime()) / DAY_MS;
+
+    if (distance <= 0 || days <= 0) continue;
+
+    intervals.push({
+      distance,
+      days,
+      endDate: current.date,
+    });
+  }
+
+  if (intervals.length === 0) return 0;
+
+  const totalDistance = intervals.reduce(
+    (total, interval) => total + interval.distance,
+    0,
   );
-  
-  const firstFillUp = sorted[0];
-  const lastFillUp = sorted[sorted.length - 1];
-  
-  const totalDistance = lastFillUp.odometer - firstFillUp.odometer;
-  const totalDays = differenceInDays(
-    new Date(lastFillUp.timestamp),
-    new Date(firstFillUp.timestamp)
+  const totalDays = intervals.reduce(
+    (total, interval) => total + interval.days,
+    0,
   );
-  
+
   if (totalDays <= 0) return 0;
-  
+
   return formatTo2Decimals(totalDistance / totalDays);
 }
 

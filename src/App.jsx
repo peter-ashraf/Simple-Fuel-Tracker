@@ -269,7 +269,7 @@ export default function App() {
   const [migrationResult, setMigrationResult] = useState(null);
 
   // Check for due maintenance reminders on app open
-  const { maintenanceReminders, activeVehicleFillUps } = useFuel();
+  const { maintenanceEntries, activeVehicleFillUps } = useFuel();
   const { checkMaintenanceReminders } = useNotifications();
 
   useEffect(() => {
@@ -386,7 +386,6 @@ export default function App() {
           setUserId(fetchedUserId);
 
           await runSync(currentSession);
-          navigate("/");
         }
 
         if (event === "SIGNED_OUT") {
@@ -485,11 +484,11 @@ export default function App() {
 
     // Check for due reminders (with a small delay to ensure everything is loaded)
     const timer = setTimeout(() => {
-      checkMaintenanceReminders(maintenanceReminders, currentOdometer);
+      checkMaintenanceReminders(maintenanceEntries, currentOdometer);
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [maintenanceReminders, activeVehicleFillUps, checkMaintenanceReminders]);
+  }, [maintenanceEntries, activeVehicleFillUps, checkMaintenanceReminders]);
 
   // Show loading state
   if (loading) {

@@ -23,9 +23,11 @@ export default function MaintenanceForm() {
   };
 
   const [type, setType] = useState(initialType || '');
+  const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [performedAtODO, setPerformedAtODO] = useState('');
   const [intervalKm, setIntervalKm] = useState(() => getDefaultInterval(initialType));
   const [safetyMarginKm, setSafetyMarginKm] = useState(maintenanceSettings.defaultSafetyMarginKm || 2000);
+  const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
 
   const [selectedSystemId, setSelectedSystemId] = useState(null);
@@ -41,9 +43,11 @@ export default function MaintenanceForm() {
 
     addMaintenanceEntry({
       type: type,
+      date,
       performedAtODO: Number(performedAtODO),
       intervalKm: Number(intervalKm),
       safetyMarginKm: Number(safetyMarginKm),
+      cost: cost ? Number(cost) : null,
       notes: notes.trim()
     });
 
@@ -57,7 +61,7 @@ export default function MaintenanceForm() {
           <button onClick={() => navigate('/maintenance')} className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest mb-4">
             <CaretLeft weight="duotone" className={cn("w-4 h-4", isRtl && "rotate-180")} /> {t('back')}
           </button>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white">{t('select_vehicle')}</h2>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white">{t('select_service')}</h2>
         </div>
 
         {!selectedSystemId ? (
@@ -129,6 +133,10 @@ export default function MaintenanceForm() {
             <Card className="p-6">
               <div className="space-y-6">
                 <div>
+                  <Label className="flex items-center gap-2"><CalendarBlank weight="duotone" className="w-4 h-4" /> {t('date')} *</Label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                </div>
+                <div>
                   <Label className="flex items-center gap-2"><CalendarBlank weight="duotone" className="w-4 h-4" /> {t('odometer')} (km) *</Label>
                   <Input type="number" value={performedAtODO} onChange={(e) => setPerformedAtODO(e.target.value)} placeholder={t('current_mileage')} min="0" required />
                 </div>
@@ -143,7 +151,11 @@ export default function MaintenanceForm() {
                   </div>
                 </div>
                 <div>
-                  <Label className="flex items-center gap-2"><Tag weight="duotone" className="w-4 h-4" /> {t('config')}</Label>
+                  <Label className="flex items-center gap-2"><Tag weight="duotone" className="w-4 h-4" /> {t('price')} ({t('currency')})</Label>
+                  <Input type="number" step="0.01" min="0" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t('optional')} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-2"><Tag weight="duotone" className="w-4 h-4" /> {t('notes')}</Label>
                   <textarea className="input-field min-h-[100px]" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="..." />
                 </div>
               </div>
