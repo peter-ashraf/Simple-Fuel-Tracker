@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
-import "../styles/app-update-prompt.css";
+import { useTranslation } from "react-i18next";
+import { Modal } from "./ui";
 
 function AppUpdatePrompt() {
   const [registration, setRegistration] = useState(null);
   const [isApplying, setIsApplying] = useState(false);
   const hasReloadedRef = useRef(false);
   const fallbackReloadRef = useRef(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const handleUpdateAvailable = (event) => {
@@ -51,8 +53,6 @@ function AppUpdatePrompt() {
     };
   }, []);
 
-  if (!registration) return null;
-
   const applyUpdate = () => {
     setIsApplying(true);
 
@@ -68,36 +68,41 @@ function AppUpdatePrompt() {
   };
 
   return (
-    <div
-      className="app-update-prompt"
-      role="status"
-      aria-live="polite"
-      aria-label="App update available"
+    <Modal
+      isOpen={!!registration}
+      onClose={() => {
+        if (!isApplying) setRegistration(null);
+      }}
+      title={t("app_update_available_title")}
+      size="sm"
     >
-      <div className="app-update-copy">
-        <strong>Update available</strong>
-        <span>Reload to use the latest version.</span>
+      <div className="space-y-5 p-1">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <p className="text-sm font-semibold leading-relaxed text-emerald-800 dark:text-emerald-200">
+            {t("app_update_available_description")}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-600 transition-colors disabled:opacity-60 dark:bg-slate-800 dark:text-slate-300"
+            onClick={() => setRegistration(null)}
+            disabled={isApplying}
+          >
+            {t("later")}
+          </button>
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-500 py-3 text-xs font-bold text-white transition-colors disabled:opacity-60"
+            onClick={applyUpdate}
+            disabled={isApplying}
+          >
+            {isApplying ? t("reloading") : t("reload_and_update")}
+          </button>
+        </div>
       </div>
-      <div className="app-update-actions">
-        <button
-          type="button"
-          className="app-update-button app-update-button-primary"
-          onClick={applyUpdate}
-          disabled={isApplying}
-        >
-          {isApplying ? "Reloading" : "Reload"}
-        </button>
-        <button
-          type="button"
-          className="app-update-button"
-          onClick={() => setRegistration(null)}
-          disabled={isApplying}
-          aria-label="Dismiss update prompt"
-        >
-          Later
-        </button>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

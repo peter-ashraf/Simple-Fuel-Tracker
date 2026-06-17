@@ -2,7 +2,7 @@ import { createElement, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFuel } from "../hooks/useFuelContext";
 import { useTheme } from "../hooks/useTheme";
-import { Card, Input, Label, cn, PageWrapper, Modal, ConfirmModal } from "./ui";
+import { Card, Input, Label, cn, Modal, ConfirmModal } from "./ui";
 import {
   Trash,
   Plus,
@@ -27,6 +27,7 @@ import {
   CloudArrowUp,
   User,
   Key,
+  ArrowClockwise,
 } from "@phosphor-icons/react";
 import { useLocationDetection } from "../hooks/useLocationDetection";
 import { gasStationService } from "../services/gasStationService";
@@ -41,6 +42,10 @@ import { authService } from "../services/authService";
 import { refreshLocalStorageState } from "../hooks/useLocalStorage";
 
 const MotionDiv = motion.div;
+const MIN_APP_UPDATE_CHECK_MS = 900;
+
+const wait = (duration) =>
+  new Promise((resolve) => setTimeout(resolve, duration));
 
 export default function Settings() {
   const {
@@ -164,6 +169,11 @@ export default function Settings() {
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [notificationError, setNotificationError] = useState("");
+  const [isCheckingAppUpdate, setIsCheckingAppUpdate] = useState(false);
+  const [appUpdateCheckModal, setAppUpdateCheckModal] = useState({
+    isOpen: false,
+    status: null,
+  });
   const [activeSettingsSection, setActiveSettingsSection] = useState("account");
   const settingsSections = [
     { id: "account", label: "Account", icon: User },
@@ -264,6 +274,106 @@ export default function Settings() {
     }
 
     setNotificationError("Notification permission was not granted.");
+  };
+
+  const showAppUpdateCheckModal = (status) => {
+    setAppUpdateCheckModal({ isOpen: true, status });
+  };
+
+  const notifyUpdateAvailable = (registration) => {
+    window.dispatchEvent(
+      new CustomEvent("app-update-available", {
+        detail: { registration, source: "manual" },
+      }),
+    );
+  };
+
+  const waitForWaitingServiceWorker = (registration) =>
+    new Promise((resolve) => {
+      if (registration.waiting) {
+        resolve(registration);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        registration.removeEventListener("updatefound", handleUpdateFound);
+        resolve(null);
+      }, 5000);
+
+      function finish(result) {
+        clearTimeout(timeout);
+        registration.removeEventListener("updatefound", handleUpdateFound);
+        resolve(result);
+      }
+
+      function handleUpdateFound() {
+        const worker = registration.installing;
+
+        if (!worker) {
+          finish(null);
+          return;
+        }
+
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed") {
+            finish(registration.waiting ? registration : null);
+          }
+        });
+      }
+
+      registration.addEventListener("updatefound", handleUpdateFound);
+    });
+
+  const handleManualAppUpdateCheck = async () => {
+    if (isCheckingAppUpdate) return;
+
+    setIsCheckingAppUpdate(true);
+    setAppUpdateCheckModal({ isOpen: true, status: "checking" });
+    const minimumCheckingTime = wait(MIN_APP_UPDATE_CHECK_MS);
+
+    try {
+      if (!("serviceWorker" in navigator)) {
+        await minimumCheckingTime;
+        showAppUpdateCheckModal("error");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.getRegistration();
+
+      if (!registration) {
+        await minimumCheckingTime;
+        showAppUpdateCheckModal("none");
+        return;
+      }
+
+      if (registration.waiting) {
+        await minimumCheckingTime;
+        notifyUpdateAvailable(registration);
+        setAppUpdateCheckModal({ isOpen: false, status: null });
+        return;
+      }
+
+      const waitingForUpdate = waitForWaitingServiceWorker(registration);
+      await registration.update();
+
+      const updatedRegistration = await waitingForUpdate;
+
+      if (updatedRegistration?.waiting) {
+        await minimumCheckingTime;
+        notifyUpdateAvailable(updatedRegistration);
+        setAppUpdateCheckModal({ isOpen: false, status: null });
+        return;
+      }
+
+      await minimumCheckingTime;
+      showAppUpdateCheckModal("none");
+    } catch (error) {
+      console.error("[Settings][update-check] Manual app update check failed:", error);
+      await minimumCheckingTime;
+      showAppUpdateCheckModal("error");
+    } finally {
+      setIsCheckingAppUpdate(false);
+    }
   };
 
   const handleExport = async (type = "json") => {
@@ -578,59 +688,68 @@ export default function Settings() {
   const currentLanguage = i18n.language.startsWith("ar") ? "ar" : "en";
 
   return (
-    <PageWrapper className="space-y-6 pb-1">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          {t("settings")}
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {t("settings_description")}
-        </p>
-      </div>
+    <div className="fixed inset-x-0 bottom-24 top-20 mx-auto flex w-full max-w-lg flex-col overflow-hidden px-5">
+      <div className="z-30 -mx-1 shrink-0 space-y-5 bg-white/95 px-1 pb-4 pt-1 backdrop-blur-xl dark:bg-black/95">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+            {t("settings")}
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {t("settings_description")}
+          </p>
+        </div>
 
-      <div className="sticky top-20 z-30 rounded-2xl bg-white/90 dark:bg-slate-950/90 p-1 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-800/80 backdrop-blur">
-        <div className="grid grid-cols-5 gap-1">
-          {settingsSections.map(({ id, label, icon: Icon }) => {
-            const isActive = activeSettingsSection === id;
+        <div className="rounded-2xl bg-slate-100 p-1 shadow-sm ring-1 ring-slate-200/70 backdrop-blur dark:bg-slate-950/90 dark:ring-slate-800/80">
+          <div className="grid grid-cols-5 gap-1">
+            {settingsSections.map(({ id, label, icon: Icon }) => {
+              const isActive = activeSettingsSection === id;
 
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveSettingsSection(id)}
-                className={cn(
-                  "relative flex min-h-12 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold transition-colors",
-                  isActive
-                    ? "text-slate-950 dark:text-white"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
-                )}
-                aria-pressed={isActive}
-              >
-                {isActive && (
-                  <MotionDiv
-                    layoutId="settingsSectionTab"
-                    className="absolute inset-0 rounded-xl bg-slate-100 dark:bg-slate-800 shadow-sm"
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                  />
-                )}
-                {createElement(Icon, {
-                  weight: "duotone",
-                  className: "relative z-10 h-4 w-4",
-                })}
-                <span className="relative z-10 hidden sm:inline">{label}</span>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveSettingsSection(id)}
+                  className={cn(
+                    "relative flex min-h-12 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold transition-colors",
+                    isActive
+                      ? "text-slate-950 dark:text-white"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
+                  )}
+                  aria-pressed={isActive}
+                >
+                  {isActive && (
+                    <MotionDiv
+                      layoutId="settingsSectionTab"
+                      className="absolute inset-0 rounded-xl bg-white shadow-sm dark:bg-slate-800"
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 32,
+                      }}
+                    />
+                  )}
+                  {createElement(Icon, {
+                    weight: "duotone",
+                    className: "relative z-10 h-4 w-4",
+                  })}
+                  <span className="relative z-10 hidden sm:inline">
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <MotionDiv
-        key={activeSettingsSection}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18 }}
-        className="space-y-4"
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto pb-8 pt-4 no-scrollbar">
+        <MotionDiv
+          key={activeSettingsSection}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+          className="space-y-4"
+        >
       {activeSettingsSection === "vehicles" && (
         <>
       <section>
@@ -999,6 +1118,37 @@ export default function Settings() {
               {notificationError}
             </p>
           )}
+        </Card>
+      </section>
+
+      <section className="pt-4">
+        <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
+          <ArrowClockwise weight="duotone" className="w-4 h-4" />{" "}
+          {t("app_updates")}
+        </h3>
+        <Card className="px-5 py-6 space-y-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900 dark:text-white">
+              {t("check_for_app_updates")}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {t("check_for_app_updates_description")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleManualAppUpdateCheck}
+            disabled={isCheckingAppUpdate}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-950"
+          >
+            <ArrowClockwise
+              weight="duotone"
+              className={cn("h-4 w-4", isCheckingAppUpdate && "animate-spin")}
+            />
+            {isCheckingAppUpdate
+              ? t("checking_updates")
+              : t("check_for_app_updates")}
+          </button>
         </Card>
       </section>
         </>
@@ -1389,7 +1539,8 @@ export default function Settings() {
       </section>
         </>
       )}
-      </MotionDiv>
+        </MotionDiv>
+      </div>
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}
@@ -1482,6 +1633,65 @@ export default function Settings() {
             <Database weight="duotone" className="text-emerald-500" />
             <span className="text-xs font-bold">{t("excel")}</span>
           </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={appUpdateCheckModal.isOpen}
+        onClose={() =>
+          setAppUpdateCheckModal({ isOpen: false, status: null })
+        }
+        title={
+          appUpdateCheckModal.status === "checking"
+            ? t("checking_updates")
+            : appUpdateCheckModal.status === "error"
+            ? t("app_update_check_failed_title")
+            : t("app_update_none_title")
+        }
+        size="sm"
+      >
+        <div className="space-y-5 p-1">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+            {appUpdateCheckModal.status === "checking" ? (
+              <div className="flex items-center gap-3">
+                <ArrowClockwise
+                  weight="duotone"
+                  className="h-5 w-5 animate-spin text-emerald-500"
+                />
+                <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
+                  {t("app_update_checking_description")}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
+                {appUpdateCheckModal.status === "error"
+                  ? t("app_update_check_failed_description")
+                  : t("app_update_none_description")}
+              </p>
+            )}
+          </div>
+
+          {appUpdateCheckModal.status !== "checking" && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setAppUpdateCheckModal({ isOpen: false, status: null })
+                }
+                className="rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-600 transition-colors dark:bg-slate-800 dark:text-slate-300"
+              >
+                {t("close")}
+              </button>
+              <button
+                type="button"
+                onClick={handleManualAppUpdateCheck}
+                disabled={isCheckingAppUpdate}
+                className="rounded-xl bg-emerald-500 py-3 text-xs font-bold text-white transition-colors disabled:opacity-60"
+              >
+                {isCheckingAppUpdate ? t("checking_updates") : t("try_again")}
+              </button>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -1830,6 +2040,6 @@ export default function Settings() {
           </MotionDiv>
         )}
       </AnimatePresence>
-    </PageWrapper>
+    </div>
   );
 }
