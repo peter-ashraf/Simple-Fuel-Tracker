@@ -477,7 +477,6 @@ export default function Maintenance() {
   const handleAddCustomCategory = async () => {
     if (!newCategoryName.trim() || !editingSystemId) return;
     const category = await addMaintenanceCategory({
-      id: `custom_${Date.now()}`,
       name: newCategoryName.trim(),
       color: "#64748b",
       defaultInterval: { value: 10000, unit: "km" },

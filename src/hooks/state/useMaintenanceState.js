@@ -2,6 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { MAINTENANCE_CATEGORIES } from '../../data/maintenanceCategories';
 import { syncLocalChangesInBackground } from './syncAfterMutation';
+import { makeMaintenanceTypeKey } from '../../utils/maintenanceTypeKey';
 
 const dateOnly = (value) => {
   if (!value) return new Date().toISOString().substring(0, 10);
@@ -259,7 +260,26 @@ export function useMaintenanceState(selectedVehicleId) {
   };
 
   const addMaintenanceCategory = async (category) => {
-    const newCategory = { ...category, id: category.id || `cat_${Date.now()}`, color: category.color || '#64748b' };
+    const sourceKey = category.id && !/^custom_\d+$/.test(category.id)
+      ? category.id
+      : category.name;
+    const baseId = makeMaintenanceTypeKey(sourceKey) || 'maintenance_item';
+    const existingIds = new Set(categories.map((cat) => cat.id));
+    let id = baseId;
+    let suffix = 2;
+
+    while (existingIds.has(id)) {
+      id = `${baseId}_${suffix}`;
+      suffix += 1;
+    }
+
+    const newCategory = {
+      ...category,
+      id,
+      typeKey: id,
+      type_key: id,
+      color: category.color || '#64748b'
+    };
     setCategories((prev) => [...prev, newCategory]);
     syncLocalChangesInBackground();
     return newCategory;

@@ -43,9 +43,31 @@ import { refreshLocalStorageState } from "../hooks/useLocalStorage";
 
 const MotionDiv = motion.div;
 const MIN_APP_UPDATE_CHECK_MS = 900;
+const todayISO = () => new Date().toISOString().substring(0, 10);
+const cloudRestoreTypes = [
+  { id: "fillups", label: "Fill-ups" },
+  { id: "maintenance", label: "Maintenance entries" },
+];
 
 const wait = (duration) =>
   new Promise((resolve) => setTimeout(resolve, duration));
+
+const getCloudRestoreItemKey = (type, record) => `${type}:${record.id}`;
+
+const parseMaintenanceDescription = (description) => {
+  if (!description) return { notes: "", interval: null, safety: null };
+
+  try {
+    const parsed = JSON.parse(description);
+    return {
+      notes: parsed.notes || "",
+      interval: parsed.distance ?? null,
+      safety: parsed.safety ?? null,
+    };
+  } catch {
+    return { notes: description, interval: null, safety: null };
+  }
+};
 
 export default function Settings() {
   const {
@@ -148,17 +170,29 @@ export default function Settings() {
     isOpen: false,
     action: null,
   });
-  const [recoveryDate, setRecoveryDate] = useState(
-    new Date().toISOString().substring(0, 10),
-  );
-  const [deletedFillups, setDeletedFillups] = useState([]);
-  const [deletedMaintenance, setDeletedMaintenance] = useState([]);
-  const [isLoadingDeletedFillups, setIsLoadingDeletedFillups] = useState(false);
-  const [hasSearchedDeletedFillups, setHasSearchedDeletedFillups] =
+  const [cloudRestoreOpen, setCloudRestoreOpen] = useState(false);
+  const [cloudRestoreFilters, setCloudRestoreFilters] = useState({
+    fillups: true,
+    maintenance: true,
+  });
+  const [cloudRestoreDateMode, setCloudRestoreDateMode] = useState("single");
+  const [cloudRestoreDates, setCloudRestoreDates] = useState({
+    single: todayISO(),
+    start: todayISO(),
+    end: todayISO(),
+  });
+  const [cloudRestoreIncludeDeleted, setCloudRestoreIncludeDeleted] =
     useState(false);
-  const [recoveryError, setRecoveryError] = useState("");
-  const [restoringFillupId, setRestoringFillupId] = useState(null);
-  const [restoringMaintenanceId, setRestoringMaintenanceId] = useState(null);
+  const [cloudRestoreResults, setCloudRestoreResults] = useState({
+    fillups: [],
+    maintenance: [],
+  });
+  const [cloudRestoreSelected, setCloudRestoreSelected] = useState([]);
+  const [cloudRestoreLoading, setCloudRestoreLoading] = useState(false);
+  const [cloudRestoreRestoring, setCloudRestoreRestoring] = useState(false);
+  const [cloudRestoreHasSearched, setCloudRestoreHasSearched] = useState(false);
+  const [cloudRestoreError, setCloudRestoreError] = useState("");
+  const [cloudRestoreSummary, setCloudRestoreSummary] = useState("");
   const [accountForm, setAccountForm] = useState({
     username: "",
     oldPassword: "",
@@ -575,73 +609,163 @@ export default function Settings() {
     }
   };
 
-  const handleLoadDeletedFillups = async () => {
-    setRecoveryError("");
-    setIsLoadingDeletedFillups(true);
+  const getCloudRestoreRange = () => {
+    if (cloudRestoreDateMode === "single") {
+      return {
+        startDate: cloudRestoreDates.single,
+        endDate: cloudRestoreDates.single,
+      };
+    }
+
+    return {
+      startDate: cloudRestoreDates.start,
+      endDate: cloudRestoreDates.end,
+    };
+  };
+
+  const getSelectedCloudRestoreTypes = () =>
+    Object.entries(cloudRestoreFilters)
+      .filter(([, selected]) => selected)
+      .map(([type]) => type);
+
+  const getCloudRestoreResultsList = () => [
+    ...cloudRestoreResults.fillups.map((record) => ({
+      type: "fillups",
+      record,
+    })),
+    ...cloudRestoreResults.maintenance.map((record) => ({
+      type: "maintenance",
+      record,
+    })),
+  ];
+
+  const handleCloudRestoreSearch = async () => {
+    const selectedTypes = getSelectedCloudRestoreTypes();
+    const { startDate, endDate } = getCloudRestoreRange();
+
+    setCloudRestoreError("");
+    setCloudRestoreSummary("");
+
+    if (!selectedTypes.length) {
+      setCloudRestoreError("Select at least one data type to search.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setCloudRestoreError("Select a valid date or date interval.");
+      return;
+    }
+
+    if (startDate > endDate) {
+      setCloudRestoreError("Start date must be before or equal to end date.");
+      return;
+    }
+
+    setCloudRestoreLoading(true);
+    setCloudRestoreSelected([]);
 
     try {
       const userId = await cloudSyncService.getUserId();
       if (!userId) {
-        setRecoveryError("You must be logged in to recover cloud data.");
+        setCloudRestoreError("You must be logged in to restore cloud data.");
         return;
       }
 
-      const [fillupRecords, maintenanceRecords] = await Promise.all([
-        cloudSyncService.getDeletedFillupsByDate(userId, recoveryDate),
-        cloudSyncService.getDeletedMaintenanceByDate(userId, recoveryDate),
-      ]);
-      setDeletedFillups(fillupRecords);
-      setDeletedMaintenance(maintenanceRecords);
-      setHasSearchedDeletedFillups(true);
+      const results = await cloudSyncService.searchCloudRestoreRecords(userId, {
+        types: selectedTypes,
+        startDate,
+        endDate,
+        includeDeleted: cloudRestoreIncludeDeleted,
+      });
+
+      setCloudRestoreResults(results);
+      setCloudRestoreHasSearched(true);
     } catch (error) {
-      setRecoveryError(error.message || "Failed to load deleted cloud records.");
+      setCloudRestoreError(error.message || "Failed to search cloud records.");
     } finally {
-      setIsLoadingDeletedFillups(false);
+      setCloudRestoreLoading(false);
     }
   };
 
-  const handleRestoreDeletedFillup = async (fillup) => {
-    setRecoveryError("");
-    setRestoringFillupId(fillup.id);
+  const toggleCloudRestoreSelection = (type, record) => {
+    const key = getCloudRestoreItemKey(type, record);
+    setCloudRestoreSelected((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key],
+    );
+  };
+
+  const selectAllCloudRestoreResults = () => {
+    setCloudRestoreSelected(
+      getCloudRestoreResultsList().map(({ type, record }) =>
+        getCloudRestoreItemKey(type, record),
+      ),
+    );
+  };
+
+  const restoreCloudRecord = async (userId, type, record) => {
+    if (type === "fillups") {
+      if (record.deleted_at) {
+        await cloudSyncService.restoreDeletedFillup(userId, record);
+        return "restored";
+      }
+
+      cloudSyncService.downloadSingleFillup(record);
+      return "downloaded";
+    }
+
+    if (type === "maintenance") {
+      if (record.deleted_at) {
+        await cloudSyncService.restoreDeletedMaintenance(userId, record);
+        return "restored";
+      }
+
+      cloudSyncService.downloadSingleMaintenance(record);
+      return "downloaded";
+    }
+
+    return "skipped";
+  };
+
+  const handleRestoreCloudRecords = async (records) => {
+    if (!records.length) return;
+
+    setCloudRestoreError("");
+    setCloudRestoreSummary("");
+    setCloudRestoreRestoring(true);
 
     try {
       const userId = await cloudSyncService.getUserId();
       if (!userId) {
-        setRecoveryError("You must be logged in to recover cloud data.");
+        setCloudRestoreError("You must be logged in to restore cloud data.");
         return;
       }
 
-      await cloudSyncService.restoreDeletedFillup(userId, fillup);
-      setDeletedFillups((prev) => prev.filter((item) => item.id !== fillup.id));
+      const counts = { restored: 0, downloaded: 0, skipped: 0 };
+
+      for (const { type, record } of records) {
+        const result = await restoreCloudRecord(userId, type, record);
+        counts[result] = (counts[result] || 0) + 1;
+      }
+
       refreshLocalStorageState();
-      showToast("Fill-up restored");
+      window.dispatchEvent(new Event("fueltracker-local-storage-refresh"));
+      setCloudRestoreSelected([]);
+      setCloudRestoreSummary(
+        `Restore complete: ${counts.restored + counts.downloaded} records restored, ${counts.skipped} skipped.`,
+      );
+      showToast("Cloud restore complete");
     } catch (error) {
-      setRecoveryError(error.message || "Failed to restore fill-up.");
+      setCloudRestoreError(error.message || "Failed to restore cloud records.");
     } finally {
-      setRestoringFillupId(null);
+      setCloudRestoreRestoring(false);
     }
   };
 
-  const handleRestoreDeletedMaintenance = async (maintenance) => {
-    setRecoveryError("");
-    setRestoringMaintenanceId(maintenance.id);
-
-    try {
-      const userId = await cloudSyncService.getUserId();
-      if (!userId) {
-        setRecoveryError("You must be logged in to recover cloud data.");
-        return;
-      }
-
-      await cloudSyncService.restoreDeletedMaintenance(userId, maintenance);
-      setDeletedMaintenance((prev) => prev.filter((item) => item.id !== maintenance.id));
-      refreshLocalStorageState();
-      showToast("Maintenance entry restored");
-    } catch (error) {
-      setRecoveryError(error.message || "Failed to restore maintenance entry.");
-    } finally {
-      setRestoringMaintenanceId(null);
-    }
+  const handleRestoreSelectedCloudRecords = () => {
+    const selected = getCloudRestoreResultsList().filter(({ type, record }) =>
+      cloudRestoreSelected.includes(getCloudRestoreItemKey(type, record)),
+    );
+    handleRestoreCloudRecords(selected);
   };
 
   const handleSaveActiveVehicleDetails = () => {
@@ -686,6 +810,12 @@ export default function Settings() {
   };
 
   const currentLanguage = i18n.language.startsWith("ar") ? "ar" : "en";
+  const cloudRestoreResultsList = getCloudRestoreResultsList();
+  const cloudRestoreResultCount = cloudRestoreResultsList.length;
+  const cloudRestoreSelectedCount = cloudRestoreSelected.length;
+  const getCloudVehicleName = (vehicleId) =>
+    vehicles.find((vehicle) => vehicle.id === vehicleId)?.name ||
+    "Unknown vehicle";
 
   return (
     <div className="fixed inset-x-0 bottom-24 top-20 mx-auto flex w-full max-w-lg flex-col overflow-hidden px-5">
@@ -1259,155 +1389,24 @@ export default function Settings() {
 
           <section className="pt-4">
             <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
-              <Database weight="duotone" className="w-4 h-4" /> Cloud Recovery
+              <Database weight="duotone" className="w-4 h-4" /> Cloud Restore
             </h3>
             <Card className="px-5 py-6 space-y-4">
-              <div className="space-y-2">
-                <Label>Deleted cloud records date</Label>
-                <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <Input
-                    type="date"
-                    value={recoveryDate}
-                    onChange={(e) => setRecoveryDate(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleLoadDeletedFillups}
-                    disabled={isLoadingDeletedFillups || !recoveryDate}
-                    className="px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs disabled:opacity-50"
-                  >
-                    {isLoadingDeletedFillups ? "Searching..." : "Search"}
-                  </button>
-                </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  Restore records from cloud
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">
+                  Search cloud fill-ups and maintenance entries by date, then restore only the records you choose.
+                </p>
               </div>
-
-              {recoveryError && (
-                <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold">
-                  {recoveryError}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {deletedFillups.length === 0 && deletedMaintenance.length === 0 && !isLoadingDeletedFillups && (
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    {hasSearchedDeletedFillups
-                      ? "No deleted cloud fill-ups or maintenance entries were found for this date. Only entries that were already synced to cloud can appear here."
-                      : "Search a date to find deleted cloud fill-ups and maintenance entries that can be restored to this device."}
-                  </p>
-                )}
-
-                {deletedFillups.length > 0 && (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Fill-ups
-                  </p>
-                )}
-
-                {deletedFillups.map((fillup) => {
-                  const isRestoring = restoringFillupId === fillup.id;
-                  return (
-                    <div
-                      key={fillup.id}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-900 dark:text-white">
-                            {Number(fillup.odometer || 0).toLocaleString()} km
-                          </p>
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            {fillup.liters} L
-                            {fillup.total_cost != null
-                              ? ` - ${Number(fillup.total_cost).toFixed(2)} ${t("currency")}`
-                              : ""}
-                          </p>
-                          {fillup.station && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {fillup.station}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRestoreDeletedFillup(fillup)}
-                          disabled={isRestoring}
-                          className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
-                        >
-                          {isRestoring ? "Restoring..." : "Restore"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {deletedMaintenance.length > 0 && (
-                  <p className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Maintenance
-                  </p>
-                )}
-
-                {deletedMaintenance.map((entry) => {
-                  const isRestoring = restoringMaintenanceId === entry.id;
-                  let notes = "";
-                  let interval = null;
-                  let safety = null;
-                  if (entry.description) {
-                    try {
-                      const parsed = JSON.parse(entry.description);
-                      notes = parsed.notes || "";
-                      interval = parsed.distance ?? null;
-                      safety = parsed.safety ?? null;
-                    } catch {
-                      notes = entry.description;
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={entry.id}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-900 dark:text-white">
-                            {t(entry.type) || entry.type || "Maintenance"}
-                          </p>
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            {Number(entry.odometer || 0).toLocaleString()} km
-                            {entry.cost != null
-                              ? ` - ${Number(entry.cost).toFixed(2)} ${t("currency")}`
-                              : ""}
-                          </p>
-                          {(interval || safety) && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {interval ? `${Number(interval).toLocaleString()} km` : ""}
-                              {interval && safety ? " / " : ""}
-                              {safety ? `${Number(safety).toLocaleString()} km safety` : ""}
-                            </p>
-                          )}
-                          {notes && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {notes}
-                            </p>
-                          )}
-                          {entry.deleted_at && (
-                            <p className="text-[10px] font-semibold text-red-400">
-                              Deleted {new Date(entry.deleted_at).toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRestoreDeletedMaintenance(entry)}
-                          disabled={isRestoring}
-                          className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
-                        >
-                          {isRestoring ? "Restoring..." : "Restore"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                onClick={() => setCloudRestoreOpen(true)}
+                className="w-full rounded-2xl bg-amber-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
+              >
+                Cloud Restore
+              </button>
             </Card>
           </section>
 
@@ -1692,6 +1691,380 @@ export default function Settings() {
               </button>
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={cloudRestoreOpen}
+        onClose={() => setCloudRestoreOpen(false)}
+        title="Cloud Restore"
+        size="lg"
+      >
+        <div className="flex max-h-[75vh] min-h-[65vh] flex-col overflow-hidden">
+          <div className="shrink-0 space-y-4 border-b border-slate-200 pb-4 dark:border-slate-800">
+            <p className="text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">
+              Choose what to search in cloud, pick a date or interval, then restore selected records to this device.
+            </p>
+
+            <div className="space-y-2">
+              <Label>Data types</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {cloudRestoreTypes.map((type) => (
+                  <label
+                    key={type.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-2xl border px-3 py-3 text-xs font-bold transition",
+                      cloudRestoreFilters[type.id]
+                        ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        : "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={cloudRestoreFilters[type.id]}
+                      onChange={(event) =>
+                        setCloudRestoreFilters((prev) => ({
+                          ...prev,
+                          [type.id]: event.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 accent-emerald-500"
+                    />
+                    {type.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+              {[
+                { id: "single", label: "Single day" },
+                { id: "range", label: "Date interval" },
+              ].map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setCloudRestoreDateMode(mode.id)}
+                  className={cn(
+                    "rounded-xl px-3 py-2 text-xs font-black transition",
+                    cloudRestoreDateMode === mode.id
+                      ? "bg-white text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white"
+                      : "text-slate-500 dark:text-slate-400",
+                  )}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            {cloudRestoreDateMode === "single" ? (
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={cloudRestoreDates.single}
+                  onChange={(event) =>
+                    setCloudRestoreDates((prev) => ({
+                      ...prev,
+                      single: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Start date</Label>
+                  <Input
+                    type="date"
+                    value={cloudRestoreDates.start}
+                    onChange={(event) =>
+                      setCloudRestoreDates((prev) => ({
+                        ...prev,
+                        start: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>End date</Label>
+                  <Input
+                    type="date"
+                    value={cloudRestoreDates.end}
+                    onChange={(event) =>
+                      setCloudRestoreDates((prev) => ({
+                        ...prev,
+                        end: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={cloudRestoreIncludeDeleted}
+                  onChange={(event) =>
+                    setCloudRestoreIncludeDeleted(event.target.checked)
+                  }
+                  className="h-4 w-4 accent-amber-500"
+                />
+                Include deleted records
+              </label>
+              <button
+                type="button"
+                onClick={handleCloudRestoreSearch}
+                disabled={cloudRestoreLoading || cloudRestoreRestoring}
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+              >
+                {cloudRestoreLoading ? "Searching..." : "Search"}
+              </button>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto py-4">
+            {cloudRestoreError && (
+              <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                {cloudRestoreError}
+              </div>
+            )}
+
+            {cloudRestoreSummary && (
+              <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                {cloudRestoreSummary}
+              </div>
+            )}
+
+            {cloudRestoreLoading ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                  Searching cloud records...
+                </p>
+              </div>
+            ) : cloudRestoreHasSearched && cloudRestoreResultCount === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+                <p className="text-sm font-black text-slate-900 dark:text-white">
+                  No cloud records found
+                </p>
+                <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Try a different date range, data type, or include deleted records.
+                </p>
+              </div>
+            ) : !cloudRestoreHasSearched ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+                <p className="text-sm font-black text-slate-900 dark:text-white">
+                  Search cloud data
+                </p>
+                <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Results will appear here grouped by data type.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    {cloudRestoreResultCount} result{cloudRestoreResultCount === 1 ? "" : "s"} / {cloudRestoreSelectedCount} selected
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllCloudRestoreResults}
+                      className="text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCloudRestoreSelected([])}
+                      className="text-xs font-bold text-slate-500"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {cloudRestoreResults.fillups.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Fill-ups
+                    </p>
+                    {cloudRestoreResults.fillups.map((fillup) => {
+                      const itemKey = getCloudRestoreItemKey("fillups", fillup);
+                      const selected = cloudRestoreSelected.includes(itemKey);
+
+                      return (
+                        <label
+                          key={itemKey}
+                          className={cn(
+                            "block rounded-2xl border p-4 transition",
+                            selected
+                              ? "border-emerald-400 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-500/10"
+                              : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70",
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() =>
+                                toggleCloudRestoreSelection("fillups", fillup)
+                              }
+                              className="mt-1 h-4 w-4 accent-emerald-500"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-sm font-black text-slate-900 dark:text-white">
+                                  {getCloudVehicleName(fillup.vehicle_id)}
+                                </p>
+                                {fillup.deleted_at && (
+                                  <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-black text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                                    Deleted
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                {fillup.date} - {Number(fillup.odometer || 0).toLocaleString()} km
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {fillup.liters} L
+                                {fillup.total_cost != null
+                                  ? ` - ${Number(fillup.total_cost).toFixed(2)} ${t("currency")}`
+                                  : ""}
+                                {fillup.full_tank ? " - Full tank" : ""}
+                              </p>
+                              {fillup.station && (
+                                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                                  {fillup.station}
+                                </p>
+                              )}
+                              {fillup.deleted_at && (
+                                <p className="text-[10px] font-semibold text-red-400">
+                                  Deleted {new Date(fillup.deleted_at).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {cloudRestoreResults.maintenance.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Maintenance
+                    </p>
+                    {cloudRestoreResults.maintenance.map((entry) => {
+                      const itemKey = getCloudRestoreItemKey("maintenance", entry);
+                      const selected = cloudRestoreSelected.includes(itemKey);
+                      const description = parseMaintenanceDescription(entry.description);
+
+                      return (
+                        <label
+                          key={itemKey}
+                          className={cn(
+                            "block rounded-2xl border p-4 transition",
+                            selected
+                              ? "border-emerald-400 bg-emerald-50 dark:border-emerald-500/50 dark:bg-emerald-500/10"
+                              : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70",
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() =>
+                                toggleCloudRestoreSelection("maintenance", entry)
+                              }
+                              className="mt-1 h-4 w-4 accent-emerald-500"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-sm font-black text-slate-900 dark:text-white">
+                                  {t(entry.type) || entry.type || "Maintenance"}
+                                </p>
+                                {entry.deleted_at && (
+                                  <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-black text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                                    Deleted
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                {entry.date} - {Number(entry.odometer || 0).toLocaleString()} km
+                                {entry.cost != null
+                                  ? ` - ${Number(entry.cost).toFixed(2)} ${t("currency")}`
+                                  : ""}
+                              </p>
+                              {(description.interval || description.safety) && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                  {description.interval
+                                    ? `${Number(description.interval).toLocaleString()} km`
+                                    : ""}
+                                  {description.interval && description.safety ? " / " : ""}
+                                  {description.safety
+                                    ? `${Number(description.safety).toLocaleString()} km safety`
+                                    : ""}
+                                </p>
+                              )}
+                              {description.notes && (
+                                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                                  {description.notes}
+                                </p>
+                              )}
+                              {entry.deleted_at && (
+                                <p className="text-[10px] font-semibold text-red-400">
+                                  Deleted {new Date(entry.deleted_at).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid shrink-0 grid-cols-3 gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setCloudRestoreOpen(false)}
+              className="rounded-xl bg-slate-100 py-3 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleRestoreSelectedCloudRecords}
+              disabled={
+                cloudRestoreRestoring ||
+                cloudRestoreLoading ||
+                cloudRestoreSelectedCount === 0
+              }
+              className="rounded-xl bg-emerald-500 py-3 text-xs font-black text-white disabled:opacity-50"
+            >
+              {cloudRestoreRestoring ? "Restoring..." : "Restore Selected"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRestoreCloudRecords(cloudRestoreResultsList)}
+              disabled={
+                cloudRestoreRestoring ||
+                cloudRestoreLoading ||
+                cloudRestoreResultCount === 0
+              }
+              className="rounded-xl bg-amber-500 py-3 text-xs font-black text-white disabled:opacity-50"
+            >
+              Restore All
+            </button>
+          </div>
         </div>
       </Modal>
 

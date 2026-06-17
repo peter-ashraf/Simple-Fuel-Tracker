@@ -52,88 +52,6 @@ function isValidUuid(value) {
 }
 
 /**
- * DEBUG: Test single fill-up upload with detailed logging
- * @param {string} userId - User ID
- * @param {Object} fillup - Fillup record to test
- * @param {Map} vehicleIdMap - Vehicle ID mapping
- * @returns {Promise<Object>} Test result with full error details
- */
-async function debugSingleFillupUpload(userId, fillup, vehicleIdMap) {
-  
-  const { normalized, skipped, reason } = normalizeFillupForCloud(fillup, vehicleIdMap);
-  
-  if (skipped) {
-    return { success: false, skipped: true, reason };
-  }
-  
-  
-  const payload = {
-    ...normalized,
-    stable_key: fillup.stableKey,
-    user_id: userId
-  };
-  
-  
-  const { error, data } = await supabase.from('fillups').upsert(payload);
-  
-  if (error) {
-    return { success: false, error, payload };
-  }
-  
-  return { success: true, data, payload };
-}
-
-/**
- * DEBUG: Test single maintenance upload with detailed logging
- * @param {string} userId - User ID
- * @param {Object} maintenance - Maintenance record to test
- * @returns {Promise<Object>} Test result with full error details
- */
-async function debugSingleMaintenanceUpload(userId, maintenance, vehicleIdMap) {
-  
-  // Apply same date normalization as main upload
-  let normalizedDate = null;
-  if (maintenance.date) {
-    normalizedDate = maintenance.date;
-  } else if (maintenance.timestamp) {
-    normalizedDate = maintenance.timestamp.split('T')[0];
-  } else if (maintenance.createdAt) {
-    normalizedDate = maintenance.createdAt.split('T')[0];
-  } else {
-    return { success: false, skipped: true, reason: 'missing date' };
-  }
-  
-  const mappedMaintenanceVehicleId =
-    (vehicleIdMap && vehicleIdMap.get(maintenance.vehicleId)) ||
-    maintenance.vehicleId;
-
-  const payload = {
-    id: maintenance.id,
-    user_id: userId,
-    vehicle_id: mappedMaintenanceVehicleId,
-    date: normalizedDate,
-    type: maintenance.type || null,
-    description: maintenance.description || null,
-    cost: maintenance.cost || null,
-    odometer: maintenance.odometer || null,
-    next_due_date: maintenance.nextDueDate || null,
-    stable_key: maintenance.stableKey,
-    next_due_odometer: maintenance.nextDueOdometer || null,
-    created_at: maintenance.createdAt || new Date().toISOString()
-  };
-  
-  const { error, data } = await supabase.from('maintenance').upsert(payload, {
-    onConflict: 'stable_key,user_id'
-  });
-  
-  if (error) {
-    return { success: false, error, payload };
-  }
-  
-  return { success: true, data, payload };
-}
-
-/**
  * Generate a stable key for a vehicle
  * Uses UUID v4 for new vehicles, or deterministic hash for legacy vehicles
  * @param {Object} vehicle - Vehicle object
@@ -264,26 +182,6 @@ function generateVehicleFingerprint(vehicle) {
     vehicle.make,
     vehicle.model,
     vehicle.year
-  ];
-
-  return parts
-    .map(v => (v ?? '').toString().toLowerCase().trim())
-    .join('|');
-}
-
-/**
- * Generate a fingerprint for fillup matching (fallback for legacy data)
- * @param {Object} fillup - Normalized fillup object
- * @returns {string} Fingerprint string
- */
-function generateFillupFingerprint(fillup) {
-  const parts = [
-    fillup.vehicleId,
-    fillup.date,
-    fillup.odometer?.toString() || '',
-    fillup.liters?.toString() || '',
-    fillup.pricePerLiter?.toString() || '',
-    fillup.totalCost?.toString() || ''
   ];
 
   return parts
@@ -556,8 +454,6 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
   // 3. fillup.createdAt (record creation time - extract date portion as fallback)
   // 4. Only as absolute last resort: reject the record if no date can be determined
   let normalizedDate = null;
-  const originalDateSource = fillup.date || fillup.timestamp || fillup.createdAt;
-  
   if (fillup.date) {
     // Use explicit date field if present
     normalizedDate = fillup.date;
@@ -805,7 +701,7 @@ export const cloudSyncService = {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       return user?.id || null;
-    } catch (error) {
+    } catch {
       return null;
     }
   },
@@ -881,7 +777,7 @@ export const cloudSyncService = {
           tripEstimates: tripEstimates.length
         }
       };
-    } catch (error) {
+    } catch {
       return {
         hasCloudData: false,
         cloudCounts: {
@@ -915,8 +811,7 @@ export const cloudSyncService = {
    * @param {Object} options - Options object
    * @param {boolean} options.silent - If true, no modal or success messages (for background sync)
    */
-  async uploadLocalDataToCloud(userId, options = {}) {
-    const { silent = false } = options;
+  async uploadLocalDataToCloud(userId) {
     const result = {
       success: false,
       action: 'upload',
@@ -967,18 +862,18 @@ export const cloudSyncService = {
 
 
       // Fetch existing cloud vehicles for deduplication (filter out deleted records)
-      const { data: existingCloudVehicles, error: cloudVehiclesError } = await supabase.from('vehicles').select('*').eq('user_id', userId).is('deleted_at', null);
-      const { data: existingFillups, error: cloudFillupsError } = await supabase.from('fillups').select('*').eq('user_id', userId);
+      const { data: existingCloudVehicles } = await supabase.from('vehicles').select('*').eq('user_id', userId).is('deleted_at', null);
+      const { data: existingFillups } = await supabase.from('fillups').select('*').eq('user_id', userId);
       // Fetch ALL maintenance records (including deleted) to check for stable_key conflicts
-      const { data: existingMaintenance, error: cloudMaintenanceError } = await supabase.from('maintenance').select('*').eq('user_id', userId);
-      const { data: existingTripEstimates, error: cloudTripsError } = await supabase.from('trip_estimates').select('*').eq('user_id', userId).is('deleted_at', null);
+      const { data: existingMaintenance } = await supabase.from('maintenance').select('*').eq('user_id', userId);
+      const { data: existingTripEstimates } = await supabase.from('trip_estimates').select('*').eq('user_id', userId).is('deleted_at', null);
       
 
       result.details.push(`Cloud records found: ${existingCloudVehicles?.length || 0} vehicles, ${existingFillups?.length || 0} fillups, ${existingMaintenance?.length || 0} maintenance, ${existingTripEstimates?.length || 0} trips`);
 
 
       // Match local vehicles to cloud vehicles BEFORE remapping (using original IDs)
-      const { matches, unmatchedLocal, unmatchedCloud } = matchVehicles(vehiclesWithStableKeys, existingCloudVehicles || []);
+      const { matches } = matchVehicles(vehiclesWithStableKeys, existingCloudVehicles || []);
       
 
       if (matches.size === 0 && vehiclesWithStableKeys.length > 0 && existingCloudVehicles?.length > 0) {
@@ -1230,7 +1125,7 @@ export const cloudSyncService = {
           }
           
 
-          const { error, data: fillupData } = await supabase.from('fillups').upsert({
+          const { error } = await supabase.from('fillups').upsert({
             ...normalized,
             stable_key: fillup.stableKey,
             user_id: userId
@@ -1258,12 +1153,9 @@ export const cloudSyncService = {
 
         for (const entry of remappedMaintenance) {
           let cloudIdToUse = entry.id;
-          let matchedByStableKey = false;
-
           if (entry.stableKey && existingMaintenanceStableKeys.has(entry.stableKey)) {
             const existingMaintenanceRec = existingMaintenanceStableKeys.get(entry.stableKey);
             cloudIdToUse = existingMaintenanceRec.id;
-            matchedByStableKey = true;
           } else if (existingMaintenanceIds.has(entry.id)) {
             continue;
           }
@@ -1315,7 +1207,7 @@ export const cloudSyncService = {
             created_at: entry.createdAt || new Date().toISOString()
           };
 
-          const { error, data: maintenanceData } = await supabase.from('maintenance').upsert(payload, {
+          const { error } = await supabase.from('maintenance').upsert(payload, {
             onConflict: 'user_id,stable_key'
           });
 
@@ -1365,13 +1257,6 @@ export const cloudSyncService = {
       const totalErrors = vehicleErrors + fillupErrors + maintenanceErrors + tripErrors;
       const totalRecords = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates;
       const totalSkipped = fillupSkipped;
-
-      // Fetch cloud counts after upload for verification
-      const { data: cloudVehiclesAfter, error: vehiclesAfterError } = await supabase.from('vehicles').select('id').eq('user_id', userId).is('deleted_at', null);
-      const { data: cloudFillupsAfter, error: fillupsAfterError } = await supabase.from('fillups').select('id').eq('user_id', userId).is('deleted_at', null);
-      const { data: cloudMaintenanceAfter, error: maintenanceAfterError } = await supabase.from('maintenance').select('id').eq('user_id', userId).is('deleted_at', null);
-      const { data: cloudTripsAfter, error: tripsAfterError } = await supabase.from('trip_estimates').select('id').eq('user_id', userId).is('deleted_at', null);
-
 
       if (totalErrors === 0 && totalRecords > 0) {
         result.success = true;
@@ -1707,7 +1592,7 @@ export const cloudSyncService = {
       const vehiclesWithStableKeys = backfillStableKeys(remappedVehicles);
 
       // Match local vehicles to cloud vehicles using stable_key or fingerprint
-      const { matches, unmatchedLocal, unmatchedCloud } = matchVehicles(vehiclesWithStableKeys, existingVehicles || []);
+      const { matches } = matchVehicles(vehiclesWithStableKeys, existingVehicles || []);
 
       let vehicleErrors = 0;
       let fillupErrors = 0;
@@ -1716,7 +1601,6 @@ export const cloudSyncService = {
       let maintenanceErrors = 0;
       let tripErrors = 0;
       let skipped = 0;
-      let vehicleUpdates = 0;
       let vehicleInserts = 0;
 
       // Build vehicle ID map for fillup normalization (use matched cloud IDs)
@@ -2094,6 +1978,7 @@ export const cloudSyncService = {
         .eq('user_id', userId);
       
       if (vehiclesError) {
+        console.warn('[Sync][syncFromCloud] Vehicles fetch failed:', vehiclesError.message);
       } else {
         const mappedVehicles = (vehicles || []).map(v => ({
           id: v.id,
@@ -2122,6 +2007,7 @@ export const cloudSyncService = {
         .order('date', { ascending: true });
       
       if (fillupsError) {
+        console.warn('[Sync][syncFromCloud] Fillups fetch failed:', fillupsError.message);
       } else {
         const mappedFillups = (fillups || []).map(f => ({
           id: f.id,
@@ -2147,6 +2033,7 @@ export const cloudSyncService = {
         .order('date', { ascending: true });
       
       if (maintenanceError) {
+        console.warn('[Sync][syncFromCloud] Maintenance fetch failed:', maintenanceError.message);
       } else {
         const mappedMaintenance = (maintenance || []).map(m => ({
           id: m.id,
@@ -2171,15 +2058,18 @@ export const cloudSyncService = {
         .maybeSingle();
       
       if (settingsError) {
+        console.warn('[Sync][syncFromCloud] Settings fetch failed:', settingsError.message);
       } else if (settings?.settings_json) {
         Object.entries(settings.settings_json).forEach(([key, value]) => {
           try {
             localStorage.setItem(key, JSON.stringify(value));
-          } catch (e) {
+          } catch (error) {
+            console.warn('[Sync][syncFromCloud] Failed to persist setting:', key, error);
           }
         });
       }
     } catch (error) {
+      console.warn('[Sync][syncFromCloud] Failed:', error);
     }
   },
 
@@ -2198,6 +2088,7 @@ export const cloudSyncService = {
       });
       localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
     } catch (error) {
+      console.warn('[Sync][queueChange] Failed to queue change:', error);
     }
   },
 
@@ -2264,7 +2155,7 @@ export const cloudSyncService = {
             });
           }
           processed.push(item.id);
-        } catch (error) {
+        } catch {
           failed.push(item);
         }
       }
@@ -2273,6 +2164,7 @@ export const cloudSyncService = {
       const remainingQueue = queue.filter(item => !processed.includes(item.id));
       localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(remainingQueue));
     } catch (error) {
+      console.warn('[Sync][processQueue] Failed:', error);
     }
   },
 
@@ -2302,6 +2194,7 @@ export const cloudSyncService = {
           await this.processQueue(userId);
         }
       } catch (error) {
+        console.warn('[Sync][online] Background sync failed:', error);
       }
     };
 
@@ -2501,7 +2394,7 @@ export const cloudSyncService = {
         return null;
       }
 
-      if (!hasConflicts && countsMatch) {
+      if (!hasConflicts && (countsMatch || noActionableDifference)) {
         console.log('[Sync][initialize] Already in sync - no conflicts, counts match, skipping modal');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
         localStorage.setItem(MIGRATION_DECISION_KEY, 'merge');
@@ -4200,6 +4093,71 @@ export const cloudSyncService = {
       deletedAt: fillup.deleted_at,
       syncStatus: 'synced',
     };
+  },
+
+  async searchCloudRestoreRecords(userId, options = {}) {
+    if (!userId) throw new Error('User ID is required.');
+
+    const {
+      types = [],
+      startDate,
+      endDate,
+      includeDeleted = false,
+    } = options;
+
+    if (!types.length) throw new Error('Select at least one data type to search.');
+    if (!startDate || !endDate) throw new Error('A valid date range is required.');
+
+    const searches = {};
+
+    if (types.includes('fillups')) {
+      let query = supabase
+        .from('fillups')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
+
+      if (!includeDeleted) {
+        query = query.is('deleted_at', null);
+      }
+
+      searches.fillups = query;
+    }
+
+    if (types.includes('maintenance')) {
+      let query = supabase
+        .from('maintenance')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
+
+      if (!includeDeleted) {
+        query = query.is('deleted_at', null);
+      }
+
+      searches.maintenance = query;
+    }
+
+    const entries = Object.entries(searches);
+    const settled = await Promise.all(
+      entries.map(async ([key, query]) => {
+        const { data, error } = await query;
+        if (error) throw new Error(`Failed to search ${key}: ${error.message}`);
+        return [key, data || []];
+      }),
+    );
+
+    return settled.reduce(
+      (acc, [key, records]) => ({
+        ...acc,
+        [key]: records,
+      }),
+      { fillups: [], maintenance: [] },
+    );
   },
 
   async getDeletedFillupsByDate(userId, date) {
