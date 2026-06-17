@@ -1436,22 +1436,9 @@ export const cloudSyncService = {
       if (maintenanceError) {
         result.details.push(`Maintenance fetch failed: ${maintenanceError.message} (code: ${maintenanceError.code})`);
       } else if (maintenance) {
-        const mappedMaintenance = maintenance.map(m => ({
-          id: m.id,
-          vehicleId: m.vehicle_id,
-          date: m.date,
-          type: m.type,
-          description: m.description,
-          cost: m.cost,
-          odometer: m.odometer,
-          nextDueDate: m.next_due_date,
-          nextDueOdometer: m.next_due_odometer,
-          createdAt: m.created_at,
-          updatedAt: m.updated_at,
-          stableKey: m.stable_key,
-          deletedAt: m.deleted_at,
-          timestamp: m.date
-        }));
+        const mappedMaintenance = maintenance.map((m) =>
+          this.mapCloudMaintenanceToLocal(m),
+        );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
         result.counts.maintenance = mappedMaintenance.length;
       }
@@ -2035,18 +2022,9 @@ export const cloudSyncService = {
       if (maintenanceError) {
         console.warn('[Sync][syncFromCloud] Maintenance fetch failed:', maintenanceError.message);
       } else {
-        const mappedMaintenance = (maintenance || []).map(m => ({
-          id: m.id,
-          vehicleId: m.vehicle_id,
-          date: m.date,
-          type: m.type,
-          description: m.description,
-          cost: m.cost,
-          odometer: m.odometer,
-          nextDueDate: m.next_due_date,
-          nextDueOdometer: m.next_due_odometer,
-          createdAt: m.created_at
-        }));
+        const mappedMaintenance = (maintenance || []).map((m) =>
+          this.mapCloudMaintenanceToLocal(m),
+        );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
       }
 
@@ -4095,6 +4073,87 @@ export const cloudSyncService = {
     };
   },
 
+  mapCloudMaintenanceToLocal(cloudMaintenance, existing = {}) {
+    let extractedDistance = null;
+    let extractedSafety = null;
+    let extractedNotes = cloudMaintenance.description || '';
+
+    if (cloudMaintenance.description) {
+      try {
+        const trimmedDesc = String(cloudMaintenance.description).trim();
+        if (trimmedDesc.startsWith('{') && trimmedDesc.endsWith('}')) {
+          const parsedConfig = JSON.parse(trimmedDesc);
+          extractedDistance = parsedConfig.distance !== undefined ? parsedConfig.distance : null;
+          extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
+          extractedNotes = parsedConfig.notes || '';
+        }
+      } catch {
+        console.log('[Sync] Description is regular text string.');
+      }
+    }
+
+    if (
+      extractedDistance === null &&
+      cloudMaintenance.next_due_odometer &&
+      cloudMaintenance.odometer
+    ) {
+      extractedDistance =
+        Number(cloudMaintenance.next_due_odometer) - Number(cloudMaintenance.odometer);
+    }
+
+    const parsedOdometer =
+      cloudMaintenance.odometer !== null && cloudMaintenance.odometer !== undefined
+        ? Number(cloudMaintenance.odometer)
+        : 0;
+
+    const parsedNextDueOdometer =
+      cloudMaintenance.next_due_odometer !== null && cloudMaintenance.next_due_odometer !== undefined
+        ? Number(cloudMaintenance.next_due_odometer)
+        : 0;
+
+    const safetyMargin =
+      extractedSafety ?? existing.safetyMarginKm ?? existing.safety ?? null;
+    const alertODO =
+      parsedNextDueOdometer > 0 && safetyMargin !== null
+        ? parsedNextDueOdometer - Number(safetyMargin)
+        : (existing.alertODO ?? null);
+    const stableKey = cloudMaintenance.stable_key || cloudMaintenance.stableKey || existing.stableKey;
+
+    return {
+      id: existing.id || cloudMaintenance.id,
+      user_id: cloudMaintenance.user_id,
+      vehicle_id: cloudMaintenance.vehicle_id,
+      vehicleId: cloudMaintenance.vehicle_id,
+      date: cloudMaintenance.date,
+      type: cloudMaintenance.type,
+      cost: cloudMaintenance.cost,
+      odometer: parsedOdometer,
+      next_due_date: cloudMaintenance.next_due_date,
+      nextDueDate: cloudMaintenance.next_due_date,
+      next_due_odometer: parsedNextDueOdometer,
+      stable_key: stableKey,
+      stableKey,
+      version: cloudMaintenance.version,
+      created_at: cloudMaintenance.created_at,
+      updated_at: cloudMaintenance.updated_at,
+      deleted_at: cloudMaintenance.deleted_at,
+      deletedAt: cloudMaintenance.deleted_at,
+      description: cloudMaintenance.description,
+      notes: extractedNotes,
+      distance: extractedDistance,
+      intervalKm: extractedDistance,
+      safety: safetyMargin,
+      safetyMarginKm: safetyMargin,
+      performedAtODO: parsedOdometer,
+      nextDueOdometer: parsedNextDueOdometer,
+      nextDueODO: parsedNextDueOdometer,
+      alertODO,
+      createdAt: cloudMaintenance.created_at,
+      updatedAt: cloudMaintenance.updated_at,
+      timestamp: cloudMaintenance.date || cloudMaintenance.created_at || new Date().toISOString()
+    };
+  },
+
   async searchCloudRestoreRecords(userId, options = {}) {
     if (!userId) throw new Error('User ID is required.');
 
@@ -4395,44 +4454,6 @@ export const cloudSyncService = {
 
   const localKey = 'fueltracker-maintenance-entries-v3';
   const maintenance = JSON.parse(localStorage.getItem(localKey) || '[]');
-
-  let extractedDistance = null;
-  let extractedSafety = null;
-  let extractedNotes = cloudMaintenance.description || '';
-
-  if (cloudMaintenance.description) {
-    try {
-      const trimmedDesc = String(cloudMaintenance.description).trim();
-      if (trimmedDesc.startsWith('{') && trimmedDesc.endsWith('}')) {
-        const parsedConfig = JSON.parse(trimmedDesc);
-        extractedDistance = parsedConfig.distance !== undefined ? parsedConfig.distance : null;
-        extractedSafety = parsedConfig.safety !== undefined ? parsedConfig.safety : null;
-        extractedNotes = parsedConfig.notes || '';
-      }
-    } catch {
-      console.log('[Sync] Description is regular text string.');
-    }
-  }
-
-  if (
-    extractedDistance === null &&
-    cloudMaintenance.next_due_odometer &&
-    cloudMaintenance.odometer
-  ) {
-    extractedDistance =
-      Number(cloudMaintenance.next_due_odometer) - Number(cloudMaintenance.odometer);
-  }
-
-  const parsedOdometer =
-    cloudMaintenance.odometer !== null && cloudMaintenance.odometer !== undefined
-      ? Number(cloudMaintenance.odometer)
-      : 0;
-
-  const parsedNextDueOdometer =
-    cloudMaintenance.next_due_odometer !== null && cloudMaintenance.next_due_odometer !== undefined
-      ? Number(cloudMaintenance.next_due_odometer)
-      : 0;
-
   const stableKey = cloudMaintenance.stable_key || cloudMaintenance.stableKey;
 
   const index = maintenance.findIndex(m =>
@@ -4441,37 +4462,10 @@ export const cloudSyncService = {
   );
 
   const existing = index >= 0 ? maintenance[index] : null;
-
-  const mappedMaintenance = {
-    id: existing?.id || cloudMaintenance.id,
-    user_id: cloudMaintenance.user_id,
-    vehicle_id: cloudMaintenance.vehicle_id,
-    vehicleId: cloudMaintenance.vehicle_id,
-    date: cloudMaintenance.date,
-    type: cloudMaintenance.type,
-    cost: cloudMaintenance.cost,
-    odometer: parsedOdometer,
-    next_due_date: cloudMaintenance.next_due_date,
-    next_due_odometer: parsedNextDueOdometer,
-    stable_key: stableKey,
-    stableKey: stableKey,
-    version: cloudMaintenance.version,
-    created_at: cloudMaintenance.created_at,
-    updated_at: cloudMaintenance.updated_at,
-    deleted_at: cloudMaintenance.deleted_at,
-    description: cloudMaintenance.description,
-    notes: extractedNotes,
-    distance: extractedDistance,
-    intervalKm: extractedDistance,
-    safety: extractedSafety,
-    safetyMarginKm: extractedSafety,
-    performedAtODO: parsedOdometer,
-    nextDueOdometer: parsedNextDueOdometer,
-    nextDueODO: parsedNextDueOdometer,
-    createdAt: cloudMaintenance.created_at,
-    updatedAt: cloudMaintenance.updated_at,
-    timestamp: cloudMaintenance.date || cloudMaintenance.created_at || new Date().toISOString()
-  };
+  const mappedMaintenance = this.mapCloudMaintenanceToLocal(
+    cloudMaintenance,
+    existing || {},
+  );
 
   if (index >= 0) {
     maintenance[index] = mappedMaintenance;

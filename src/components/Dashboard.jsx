@@ -54,6 +54,38 @@ export default function Dashboard() {
       ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer
       : 0;
 
+  const normalizeMaintenancePredictionEntry = (entry) => {
+    const category = getMaintenanceCategory(entry.type);
+    const categorySettings = maintenanceSettings?.categorySettings?.[entry.type];
+    const nextDueODO = Number(
+      entry.nextDueODO ??
+        entry.nextDueOdometer ??
+        entry.next_due_odometer ??
+        0,
+    );
+    const safetyMargin = Number(
+      entry.safetyMarginKm ??
+        entry.safety ??
+        categorySettings?.safetyMarginKm ??
+        category.defaultSafetyMarginKm ??
+        maintenanceSettings?.defaultSafetyMarginKm ??
+        0,
+    );
+    const alertODO = Number(
+      entry.alertODO ??
+        entry.alertOdometer ??
+        (nextDueODO > 0 && safetyMargin > 0 ? nextDueODO - safetyMargin : 0),
+    );
+
+    return {
+      ...entry,
+      nextDueODO,
+      alertODO,
+      categoryId: category.id,
+      categoryColor: category.color,
+    };
+  };
+
   const getMaintenanceAlerts = () => {
     if (!maintenanceEntries?.length || currentOdometer === 0) return [];
     return maintenanceEntries
@@ -61,19 +93,18 @@ export default function Dashboard() {
         const categorySettings =
           maintenanceSettings?.categorySettings?.[entry.type];
         if (categorySettings?.enabled === false) return false;
-        return entry.nextDueODO && entry.alertODO;
+        const normalized = normalizeMaintenancePredictionEntry(entry);
+        return normalized.nextDueODO > 0 && normalized.alertODO > 0;
       })
       .map((entry) => {
+        const normalized = normalizeMaintenancePredictionEntry(entry);
         let status = "ok";
-        if (currentOdometer >= entry.nextDueODO) status = "critical";
-        else if (currentOdometer >= entry.alertODO) status = "warning";
-        const category = getMaintenanceCategory(entry.type);
+        if (currentOdometer >= normalized.nextDueODO) status = "critical";
+        else if (currentOdometer >= normalized.alertODO) status = "warning";
         return {
-          ...entry,
+          ...normalized,
           status,
-          categoryId: category.id,
-          categoryColor: category.color,
-          remainingKm: Math.max(0, entry.nextDueODO - currentOdometer),
+          remainingKm: Math.max(0, normalized.nextDueODO - currentOdometer),
         };
       })
       .filter((item) => item.status === "critical")
@@ -99,20 +130,20 @@ export default function Dashboard() {
         
         // Only show if it's within the user-defined alert threshold
         // (odometer is between alertODO and nextDueODO)
-        return entry.nextDueODO && entry.alertODO && 
-               currentOdometer >= entry.alertODO && 
-               currentOdometer < entry.nextDueODO;
+        const normalized = normalizeMaintenancePredictionEntry(entry);
+        return normalized.nextDueODO > 0 &&
+               normalized.alertODO > 0 &&
+               currentOdometer >= normalized.alertODO &&
+               currentOdometer < normalized.nextDueODO;
       })
       .map((entry) => {
-        const kmRemaining = entry.nextDueODO - currentOdometer;
+        const normalized = normalizeMaintenancePredictionEntry(entry);
+        const kmRemaining = normalized.nextDueODO - currentOdometer;
         const daysRemaining = Math.ceil(kmRemaining / avgDailyDistance);
         const projectedDate = new Date();
         projectedDate.setDate(projectedDate.getDate() + daysRemaining);
-        const category = getMaintenanceCategory(entry.type);
         return {
-          ...entry,
-          categoryId: category.id,
-          categoryColor: category.color,
+          ...normalized,
           kmRemaining,
           daysRemaining,
           projectedDate,
