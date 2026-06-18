@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CloudArrowUp,
@@ -18,6 +19,42 @@ import {
 } from "../utils/syncResultHelpers.js";
 import ConflictReviewModal from "./ConflictReviewModal.jsx";
 
+const ENTITY_LABELS = {
+  vehicles: "vehicles",
+  fillups: "fill-ups",
+  maintenance: "maintenance entries",
+  maintenanceTaxonomy: "maintenance systems, categories, or rules",
+  tripEstimates: "trip estimates",
+  tyreComparisons: "tire comparisons",
+  appSettings: "app settings",
+};
+
+const CHANGE_LABELS = {
+  localOnly: "new on this device",
+  cloudOnly: "new in cloud",
+  bothChanged: "changed in both places",
+  localDeleted: "deleted on this device",
+  cloudDeleted: "deleted in cloud",
+};
+
+const getEntityLabel = (entityKey) => ENTITY_LABELS[entityKey] || entityKey;
+
+const getDetailedChangeRows = (detailedDiff) => {
+  if (!detailedDiff?.entities) return [];
+
+  return Object.entries(detailedDiff.entities)
+    .flatMap(([entityKey, diff]) =>
+      Object.entries(CHANGE_LABELS)
+        .map(([changeKey, label]) => ({
+          entity: getEntityLabel(entityKey),
+          label,
+          count: diff?.[changeKey]?.length || 0,
+        }))
+        .filter((row) => row.count > 0),
+    )
+    .slice(0, 6);
+};
+
 export default function DataMigrationModal({
   syncStatus,
   onDecision,
@@ -30,8 +67,6 @@ export default function DataMigrationModal({
   disableClose,
   userId,
   setSyncStatus,
-  refreshLocalAppState,
-  fetchSummary,
 }) {
   const safeSyncStatus = syncStatus ?? {};
 
@@ -49,6 +84,7 @@ export default function DataMigrationModal({
 
   // For imported data, disable closing the modal until user makes a decision
   const isNonDismissible = isImportedData && !result && !loading;
+  const detailedChangeRows = getDetailedChangeRows(detailedDiff);
 
   // Slow loading message state
   const [showSlowMessage, setShowSlowMessage] = useState(false);
@@ -64,8 +100,6 @@ export default function DataMigrationModal({
       timeoutId = setTimeout(() => {
         setShowSlowMessage(true);
       }, 7000);
-    } else {
-      setShowSlowMessage(false);
     }
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -597,6 +631,31 @@ export default function DataMigrationModal({
                             </div>
                           )}
                         </div>
+                        {detailedChangeRows.length > 0 && (
+                          <div className="pt-3 mt-3 border-t border-slate-200 dark:border-white/10">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                              What changed
+                            </p>
+                            <div className="space-y-1.5">
+                              {detailedChangeRows.map((row) => (
+                                <div
+                                  key={`${row.entity}-${row.label}`}
+                                  className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300"
+                                >
+                                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                  <span>
+                                    {row.count} {row.entity} {row.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            {detailedChangeRows.length >= 6 && (
+                              <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                                Showing the most important change groups.
+                              </p>
+                            )}
+                          </div>
+                        )}
 
                         {detailedDiff.conflicts?.length > 0 && (
                           <button

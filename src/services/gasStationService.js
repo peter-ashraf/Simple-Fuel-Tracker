@@ -33,7 +33,7 @@ class GasStationService {
     try {
       const stored = localStorage.getItem(this.userStationsKey);
       return stored ? JSON.parse(stored) : [];
-    } catch (error) {
+    } catch {
       return [];
     }
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Calculator, 
@@ -15,12 +15,12 @@ import {
   Gauge, 
   CaretLeft 
 } from '@phosphor-icons/react';
+// eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, Input, Label, PageWrapper, cn } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { compareTyreSizes, validateTyreDimensions, commonTyreSizes, formatTyreSize } from '../utils/tyreCalculator';
-import { formatTo2Decimals } from '../utils/formatting';
 import TyreComparisonHistory from './TyreComparisonHistory';
 import { useTranslation } from 'react-i18next';
 
@@ -33,7 +33,6 @@ export default function TyreCalculator() {
   const originalTyre = activeVehicle?.tyreSize || { width: 205, aspectRatio: 55, rimSize: 16 };
   const [newTyre, setNewTyre] = useState({ width: 215, aspectRatio: 55, rimSize: 16 });
   const [result, setResult] = useState(null);
-  const [errors, setErrors] = useState([]);
   const [saved, setSaved] = useState(false);
   const [sizesOpen, setSizesOpen] = useState(false);
   const [impactSpeedKmh, setImpactSpeedKmh] = useState(100);
@@ -47,11 +46,9 @@ export default function TyreCalculator() {
       ...newValidation.errors.map(e => `${t('tires')}: ${e}`)
     ];
     if (allErrors.length > 0) {
-      setErrors(allErrors);
       setResult(null);
       return;
     }
-    setErrors([]);
     setResult(compareTyreSizes(originalTyre, newTyre, {
       speedKmh: impactSpeedKmh,
       gearRatio: 1.0,
@@ -60,24 +57,21 @@ export default function TyreCalculator() {
     }));
   };
 
-  useEffect(() => {
+  const toggleImpactSpeed = () => {
+    const nextSpeed = impactSpeedKmh === 100 ? 60 : 100;
+    setImpactSpeedKmh(nextSpeed);
     if (!result) return;
     setResult(compareTyreSizes(originalTyre, newTyre, {
-      speedKmh: impactSpeedKmh,
+      speedKmh: nextSpeed,
       gearRatio: 1.0,
       finalDriveRatio: 3.5,
       baselineKmPerLiter: stats.avgKmPerLiter,
     }));
-  }, [impactSpeedKmh]);
-
-  const toggleImpactSpeed = () => {
-    setImpactSpeedKmh((current) => (current === 100 ? 60 : 100));
   };
 
   const handleReset = () => {
     setNewTyre({ width: 215, aspectRatio: 55, rimSize: 16 });
     setResult(null);
-    setErrors([]);
     setSaved(false);
     setSizesOpen(false);
   };

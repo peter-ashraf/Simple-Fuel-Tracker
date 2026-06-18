@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { Plus, MapPin, Wrench, CaretLeft, WarningCircle } from '@phosphor-icons/react';
 import { useFuel } from '../hooks/useFuelContext';
@@ -17,7 +18,7 @@ export default function FillUpForm() {
   const { fuelPrices, addFillUp, activeVehicleFillUps, addMaintenanceEntry, maintenanceEntries, activeVehicle, getCategoryById } = useFuel();
   const navigate = useNavigate();
   const buttonContainerRef = useRef(null);
-  const { checkOdometerThresholds } = useNotifications();
+  useNotifications();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
 

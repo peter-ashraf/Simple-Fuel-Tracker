@@ -26,6 +26,8 @@ const APP_KEYS = [
   'i18nextLng'
 ];
 
+const BACKUP_SCHEMA_VERSION = '2.0';
+
 const dateOnly = (value) => {
   if (!value) return new Date().toISOString().substring(0, 10);
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -137,9 +139,19 @@ export const backupService = {
 
     const exportObj = {
       metadata: {
-        version: "1.0",
+        version: BACKUP_SCHEMA_VERSION,
+        schemaVersion: BACKUP_SCHEMA_VERSION,
         exportDate: new Date().toISOString(),
-        app: "Simple Fuel Tracker"
+        app: "Simple Fuel Tracker",
+        includedKeys: Object.keys(payload),
+        includes: {
+          vehicles: Array.isArray(payload['fueltracker-vehicles-v2']) ? payload['fueltracker-vehicles-v2'].length : 0,
+          fillups: Array.isArray(payload['fueltracker-fillups-v2']) ? payload['fueltracker-fillups-v2'].length : 0,
+          maintenanceEntries: Array.isArray(payload['fueltracker-maintenance-entries-v3']) ? payload['fueltracker-maintenance-entries-v3'].length : 0,
+          maintenanceSystems: Array.isArray(payload['fueltracker-maintenance-systems-v1']) ? payload['fueltracker-maintenance-systems-v1'].length : 0,
+          maintenanceCategories: Array.isArray(payload['fueltracker-maintenance-categories-v1']) ? payload['fueltracker-maintenance-categories-v1'].length : 0,
+          appSettings: APP_KEYS.filter((key) => payload[key] !== undefined && !Array.isArray(payload[key]) && typeof payload[key] !== 'object').length
+        }
       },
       payload
     };

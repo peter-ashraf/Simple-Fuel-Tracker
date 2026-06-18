@@ -107,6 +107,33 @@ export default function Analytics() {
   const worstTrip = sortedByEfficiency[sortedByEfficiency.length - 1];
   const efficiencyThresholds = calculateEfficiencyThresholds(activeVehicleFillUps);
   const predictiveDailyDistance = calculateAverageDailyDistance(activeVehicleFillUps);
+  const dataHealth = (() => {
+    const sortedByDate = [...activeVehicleFillUps].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const issues = [];
+    const dateCounts = sortedByDate.reduce((counts, fill) => {
+      const dateKey = format(new Date(fill.timestamp), 'yyyy-MM-dd');
+      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      return counts;
+    }, {});
+    const duplicateDateCount = Object.values(dateCounts).filter((count) => count > 1).length;
+    const missingPriceCount = sortedByDate.filter((fill) => !Number(fill.pricePerLiter)).length;
+    const invalidVolumeCount = sortedByDate.filter((fill) => Number(fill.liters) <= 0).length;
+    const odometerReversalCount = sortedByDate.filter((fill, index) => index > 0 && Number(fill.odometer) < Number(sortedByDate[index - 1].odometer)).length;
+    const suspiciousEfficiencyCount = tripData.filter((trip) => trip.kmPerLiter > 0 && (trip.kmPerLiter < 4 || trip.kmPerLiter > 30)).length;
+    const partialFillCount = sortedByDate.filter((fill) => fill.isPartial || fill.partialFill).length;
+
+    if (duplicateDateCount > 0) issues.push(`${duplicateDateCount} date${duplicateDateCount === 1 ? '' : 's'} have multiple fill-ups`);
+    if (missingPriceCount > 0) issues.push(`${missingPriceCount} fill-up${missingPriceCount === 1 ? '' : 's'} missing price`);
+    if (invalidVolumeCount > 0) issues.push(`${invalidVolumeCount} fill-up${invalidVolumeCount === 1 ? '' : 's'} with invalid liters`);
+    if (odometerReversalCount > 0) issues.push(`${odometerReversalCount} odometer reversal${odometerReversalCount === 1 ? '' : 's'} by date order`);
+    if (suspiciousEfficiencyCount > 0) issues.push(`${suspiciousEfficiencyCount} unusual efficiency result${suspiciousEfficiencyCount === 1 ? '' : 's'}`);
+    if (partialFillCount > 0) issues.push(`${partialFillCount} partial fill-up${partialFillCount === 1 ? '' : 's'} may affect averages`);
+
+    return {
+      status: issues.length === 0 ? 'good' : issues.length <= 2 ? 'review' : 'attention',
+      issues,
+    };
+  })();
 
   const graphs = [
     { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
@@ -305,6 +332,49 @@ export default function Analytics() {
               </p>
             </div>
           </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Data Health
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Quick checks for entries that can distort stats, forecasts, or sync review.
+              </p>
+            </div>
+            <span
+              className={cn(
+                "rounded-full px-3 py-1 text-[10px] font-black uppercase",
+                dataHealth.status === 'good'
+                  ? "bg-emerald-500/10 text-emerald-500"
+                  : dataHealth.status === 'review'
+                    ? "bg-amber-500/10 text-amber-500"
+                    : "bg-red-500/10 text-red-500",
+              )}
+            >
+              {dataHealth.status === 'good' ? 'Good' : dataHealth.status === 'review' ? 'Review' : 'Attention'}
+            </span>
+          </div>
+          {dataHealth.issues.length === 0 ? (
+            <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-600 dark:text-emerald-300">
+              <Circle weight="fill" className="h-2 w-2" />
+              No obvious data issues found for this vehicle.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {dataHealth.issues.map((issue) => (
+                <div
+                  key={issue}
+                  className="flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600 dark:bg-white/[0.04] dark:text-slate-300"
+                >
+                  <Warning weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <span>{issue}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </section>
 

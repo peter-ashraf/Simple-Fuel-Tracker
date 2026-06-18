@@ -1360,7 +1360,7 @@ export default function Maintenance() {
             </p>
             <p>
               Systems: {pdfSystemIds.length === 0
-                ? (t("all") || "All")
+                ? `${t("all") || "All"} systems`
                 : pdfSystemIds.map((id) => translateSystemName(maintenanceSystems.find((system) => system.id === id)?.name || id)).join(", ")}
             </p>
             <p>
@@ -1401,7 +1401,14 @@ export default function Maintenance() {
           </div>
 
           <div>
-            <Label>{t("maintenance") || "Maintenance"} Systems</Label>
+            <div className="mb-2 flex items-center justify-between">
+              <Label className="mb-0">{t("maintenance") || "Maintenance"} Systems</Label>
+              <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-black text-blue-500">
+                {pdfSystemIds.length === 0
+                  ? `${t("all") || "All"}`
+                  : `${pdfSystemIds.length}/${maintenanceSystems.length}`}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {maintenanceSystems.map((system) => {
                 const selected = pdfSystemIds.includes(system.id);
@@ -1429,14 +1436,19 @@ export default function Maintenance() {
             <button
               type="button"
               onClick={() => setPdfSystemIds([])}
-              className="mt-2 text-xs font-bold text-slate-500"
+              className="mt-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800"
             >
-              {t("all") || "All"}
+              {t("all") || "All"} systems
             </button>
           </div>
 
           <div>
-            <Label>{t("columns") || "Columns"}</Label>
+            <div className="mb-2 flex items-center justify-between">
+              <Label className="mb-0">{t("columns") || "Columns"}</Label>
+              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-black text-white dark:bg-white dark:text-slate-950">
+                {pdfColumns.length}/7
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {[
                 ["date", t("date") || "Date"],
@@ -1468,6 +1480,22 @@ export default function Maintenance() {
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPdfColumns(["date", "odometer", "type", "interval", "nextDue", "cost", "notes"])}
+                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => setPdfColumns(["odometer", "type", "nextDue"])}
+                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800"
+              >
+                Essential
+              </button>
             </div>
           </div>
 

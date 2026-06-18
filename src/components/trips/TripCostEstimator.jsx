@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
-  Path,
   Calculator,
   TrendUp,
   WarningCircle,
@@ -13,26 +12,20 @@ import {
   Clock,
   MapPin,
   ClockCounterClockwise,
-  CheckSquare,
-  Square,
-  X,
 } from "@phosphor-icons/react";
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, Input, Label, PageWrapper, cn, Modal } from "../ui";
 import { useFuel } from "../../hooks/useFuelContext";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import {
   calculateTripEstimate,
-  convertConsumptionUnits,
   convertDistance,
 } from "../../utils/tripEstimator";
 import {
-  formatCurrency2Dec,
-  formatVolume2Dec,
   formatEfficiency2Dec,
 } from "../../utils/formatting";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 
 const getConfidenceColor = (confidence) => {
@@ -176,11 +169,9 @@ const EstimateDetails = ({ data, isModal = false, t, cn }) => (
 export default function TripCostEstimator() {
   const {
     activeVehicleFillUpsByOdometer,
-    fuelPrices,
     addTripEstimate,
     tripEstimates,
     deleteTripEstimate,
-    deleteMultipleTripEstimates,
   } = useFuel();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -193,20 +184,16 @@ export default function TripCostEstimator() {
   const [useManualConsumption, setUseManualConsumption] = useState(false);
   const [useManualPrice, setUseManualPrice] = useState(false);
   const [isRoundTrip, setIsRoundTrip] = useState(false);
-  const [estimate, setEstimate] = useState(null);
-  const [isCalculating, setIsCalculating] = useState(false);
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [sampleSize, setSampleSize] = useLocalStorage("fueltracker-trip-sample-size", 5);
   const [isSampleSizeDropdownOpen, setIsSampleSizeDropdownOpen] = useState(false);
   const sampleSizeDropdownRef = useRef(null);
 
-  const [selectedEstimateIds, setSelectedEstimateIds] = useState(new Set());
-  const [isEstimateSelectionMode, setIsEstimateSelectionMode] = useState(false);
   const [selectedEstimate, setSelectedEstimate] = useState(null);
 
-  const calculateEstimate = useCallback(async () => {
-    setIsCalculating(true);
+  const estimate = useMemo(() => {
+    if (!tripDistance || parseFloat(tripDistance) <= 0) return null;
     const distanceInKm = convertDistance(
       parseFloat(tripDistance),
       distanceUnit,
@@ -223,14 +210,12 @@ export default function TripCostEstimator() {
       sampleSize: sampleSize === 'total' ? null : sampleSize,
       excludeOutliers: true,
     };
-    await new Promise((resolve) => setTimeout(resolve, 300));
     const result = calculateTripEstimate(
       activeVehicleFillUpsByOdometer,
       finalDistance,
       options,
     );
-    setEstimate({ ...result, distance: finalDistance });
-    setIsCalculating(false);
+    return { ...result, distance: finalDistance };
   }, [
     activeVehicleFillUpsByOdometer,
     distanceUnit,
@@ -255,21 +240,6 @@ export default function TripCostEstimator() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (tripDistance && parseFloat(tripDistance) > 0) calculateEstimate();
-    else setEstimate(null);
-  }, [
-    tripDistance,
-    distanceUnit,
-    manualConsumption,
-    manualFuelPrice,
-    useManualConsumption,
-    useManualPrice,
-    isRoundTrip,
-    activeVehicleFillUpsByOdometer,
-    calculateEstimate,
-  ]);
 
   return (
     <>

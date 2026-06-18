@@ -13,7 +13,6 @@ export function FuelProvider({ children }) {
     selectedVehicleId,
     setSelectedVehicleId,
     vehicles,
-    setVehicles,
     activeVehicle,
   } = vehicleState;
 
@@ -22,7 +21,6 @@ export function FuelProvider({ children }) {
   const {
     fuelPrices,
     setFuelPrices,
-    fillUps,
     setFillUps,
     activeVehicleFillUps,
     activeVehicleFillUpsByOdometer,
@@ -38,18 +36,13 @@ export function FuelProvider({ children }) {
   // 3. Maintenance State
   const maintenanceState = useMaintenanceState(selectedVehicleId);
   const {
-    maintenanceLogs,
     setMaintenanceLogs,
-    maintenanceReminders,
     setMaintenanceReminders,
-    maintenanceEntries,
     setMaintenanceEntries,
     categories,
-    setCategories,
     maintenanceSystems,
     setMaintenanceSystems,
     maintenanceSettings,
-    setMaintenanceSettings,
     getCategoryById,
     addMaintenanceLog,
     updateMaintenanceLog,
@@ -178,6 +171,7 @@ export function FuelProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFuel() {
   const context = useContext(FuelContext);
   if (!context) throw new Error("useFuel must be used within FuelProvider");

@@ -1,8 +1,10 @@
 import { createElement, forwardRef } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }

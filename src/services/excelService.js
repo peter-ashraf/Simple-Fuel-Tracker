@@ -131,8 +131,10 @@ export const excelService = {
     // Add a metadata sheet
     const metaSheet = XLSX.utils.json_to_sheet([
       { Key: "App", Value: "Simple Fuel Tracker" },
-      { Key: "Version", Value: "1.0" },
-      { Key: "ExportDate", Value: new Date().toISOString() }
+      { Key: "Version", Value: "2.0" },
+      { Key: "SchemaVersion", Value: "2.0" },
+      { Key: "ExportDate", Value: new Date().toISOString() },
+      { Key: "Includes", Value: "vehicles, fill-ups, maintenance entries, maintenance systems, maintenance categories, maintenance settings, app preferences, trips, tire comparisons, stations" }
     ]);
     XLSX.utils.book_append_sheet(workbook, metaSheet, "Metadata");
  

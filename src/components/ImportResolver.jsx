@@ -12,6 +12,11 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
 
   const conflicts = analysis.conflicts;
   const newRecords = analysis.newRecords;
+  const typeCounts = [...conflicts, ...newRecords].reduce((counts, record) => {
+    const key = record.type || 'record';
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
 
   const handleResolve = (action) => {
     const conflict = conflicts[conflictIndex];
@@ -87,15 +92,34 @@ export default function ImportResolver({ analysis, onCancel, onApply }) {
         </p>
       </div>
 
+      {Object.keys(typeCounts).length > 0 && (
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+            Backup contents needing review
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(typeCounts).map(([type, count]) => (
+              <span
+                key={type}
+                className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-300"
+              >
+                {count} {type.replaceAll('-', ' ')}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3 pt-4">
         <button onClick={onCancel} className="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-sm">
           Cancel
         </button>
         <button 
           onClick={() => conflicts.length > 0 ? setCurrentStep(1) : setCurrentStep(2)}
+          disabled={conflicts.length === 0 && newRecords.length === 0}
           className="flex-1 py-3 px-4 rounded-xl bg-blue-500 text-slate-950 font-bold text-sm shadow-lg shadow-blue-500/20"
         >
-          Start Import
+          {conflicts.length === 0 && newRecords.length === 0 ? "Nothing to Import" : "Start Import"}
         </button>
       </div>
     </div>

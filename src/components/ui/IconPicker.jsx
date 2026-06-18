@@ -111,6 +111,7 @@ const ICON_LIST = [
   { name: 'Camera', component: Camera, tags: ['parking', 'safety', 'camera'] }
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ICON_MAP_DATA = {
   Engine, Tire, Drop, Shield, BatteryCharging, BatteryFull, Car, Wrench, Pulse, GearSix,
   Lightning, Disc, Bell, GasPump, Gauge, Thermometer, Fan, Lightbulb, MapPin,

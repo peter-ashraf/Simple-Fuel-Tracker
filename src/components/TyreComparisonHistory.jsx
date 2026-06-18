@@ -3,8 +3,108 @@ import { Tire, Clock, CaretRight, Trash, Gauge, TrendUp, ArrowCounterClockwise, 
 import { Card, PageWrapper, ConfirmModal, Modal, cn } from './ui';
 import { useFuel } from '../hooks/useFuelContext';
 import { formatTyreSize } from '../utils/tyreCalculator';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+
+const FuelImpactSummary = ({ fuelImpact, t }) => {
+  if (!fuelImpact) return null;
+
+  return (
+    <div className="rounded-2xl bg-violet-50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 p-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500 mb-1">
+            {t('fuel_consumption_impact')}
+          </p>
+          <p className={cn(
+            "text-2xl font-black",
+            fuelImpact.consumptionChangePercent > 0 ? "text-red-500" : "text-emerald-500"
+          )}>
+            {fuelImpact.consumptionChangePercent > 0 ? '+' : ''}{fuelImpact.consumptionChangeFormatted}
+          </p>
+        </div>
+        <div className="text-end">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            {t('expected_efficiency')}
+          </p>
+          <p className="text-sm font-black text-slate-900 dark:text-white">
+            {fuelImpact.expectedKmPerLiter > 0 ? `${fuelImpact.expectedKmPerLiter.toFixed(2)} km/L` : '-'}
+          </p>
+          <p className="text-[10px] font-bold text-slate-500">
+            {fuelImpact.expectedKmPer20Liter > 0 ? `${fuelImpact.expectedKmPer20Liter.toFixed(2)} km/20L` : t('limited_data')}
+          </p>
+        </div>
+      </div>
+      <p className="text-[10px] leading-relaxed text-violet-700 dark:text-violet-300">
+        {fuelImpact.baselineKmPerLiter > 0
+          ? t('fuel_impact_based_on_actual', { value: fuelImpact.baselineKmPerLiter.toFixed(2) })
+          : t('fuel_impact_needs_history')}
+      </p>
+    </div>
+  );
+};
+
+const ComparisonDetails = ({ result, isModal = false, t }) => (
+  <div className={cn("space-y-6", isModal && "p-6")}>
+    <Card className="space-y-6 border-0 shadow-none bg-transparent p-0">
+      <h2 className="text-lg font-bold flex items-center gap-2"><TrendUp weight="duotone" className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-blue-500 mb-1">{t('active_vehicle')}</p><p className="text-lg font-black">{formatTyreSize(result.original)}</p></div>
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-emerald-500 mb-1">{t('tires')}</p><p className="text-lg font-black">{formatTyreSize(result.new)}</p></div>
+      </div>
+    </Card>
+    
+    <Card className="p-0 border-0 shadow-none bg-transparent">
+       <div className="flex items-center gap-2 mb-6"><Gauge weight="duotone" className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
+       
+       <div className="grid grid-cols-2 gap-4 mb-6">
+         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 space-y-3">
+           <h3 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">{t('original')}</h3>
+           <div className="space-y-2">
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('diameter')}:</span><span className="font-bold">{result.original.diameter}"</span></div>
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('circumference')}:</span><span className="font-bold">{result.original.circumference}"</span></div>
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('sidewall')}:</span><span className="font-bold">{result.original.sidewallMm} mm</span></div>
+           </div>
+         </div>
+
+         <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 space-y-3">
+           <h3 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">{t('new')}</h3>
+           <div className="space-y-2">
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('diameter')}:</span><span className="font-bold">{result.new.diameter}"</span></div>
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('circumference')}:</span><span className="font-bold">{result.new.circumference}"</span></div>
+             <div className="flex justify-between text-[11px]"><span className="text-slate-500">{t('sidewall')}:</span><span className="font-bold">{result.new.sidewallMm} mm</span></div>
+           </div>
+         </div>
+       </div>
+
+       <div className="grid grid-cols-3 gap-4 text-center pb-6 border-b border-slate-100 dark:border-white/5 mb-6">
+          <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('diameter')}</p><p className={cn("text-xl font-black", result.differences.diameterDifference > 0 ? "text-red-500" : "text-emerald-500")}>{result.differences.diameterDifference > 0 ? '+' : ''}{result.differences.diameterDifference}"</p></div>
+          <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('speed_impact')}</p><p className="text-xl font-black text-amber-500">{result.speedImpact.speedPercentageChange}</p></div>
+          <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('actual_at_speed', { speed: result.speedImpact.speedometerSpeed || 100 })}</p><p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">{t('unit_km_h')}</span></p></div>
+       </div>
+
+       <FuelImpactSummary fuelImpact={result.fuelImpact} t={t} />
+
+       <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rpm_change')} {t('rpm_at_speed', { speed: result.speedImpact.speedometerSpeed || 100 })}</h3>
+            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", result.rpmImpact.newRPM > result.rpmImpact.originalRPM ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-500")}>
+              {result.rpmImpact.rpmPercentageChange}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl"><p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('original')} RPM</p><p className="text-lg font-black">{result.rpmImpact.originalRPM}</p></div>
+            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl"><p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('new')} RPM</p><p className="text-lg font-black">{result.rpmImpact.newRPM}</p></div>
+          </div>
+       </div>
+
+       <div className="mt-6 flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
+          <Clock weight="duotone" size={12} /> {t('calculated_at')} {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+       </div>
+    </Card>
+  </div>
+);
 
 export default function TyreComparisonHistory() {
   const { tyreComparisons, deleteTyreComparison, deleteMultipleTyreComparisons } = useFuel();
@@ -14,131 +114,6 @@ export default function TyreComparisonHistory() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const [selectedComparison, setSelectedComparison] = useState(null);
-
-  const FuelImpactSummary = ({ fuelImpact }) => {
-    if (!fuelImpact) return null;
-
-    return (
-      <div className="rounded-2xl bg-violet-50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 p-4 mb-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500 mb-1">
-              {t('fuel_consumption_impact')}
-            </p>
-            <p className={cn(
-              "text-2xl font-black",
-              fuelImpact.consumptionChangePercent > 0 ? "text-red-500" : "text-emerald-500"
-            )}>
-              {fuelImpact.consumptionChangePercent > 0 ? '+' : ''}{fuelImpact.consumptionChangeFormatted}
-            </p>
-          </div>
-          <div className="text-end">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              {t('expected_efficiency')}
-            </p>
-            <p className="text-sm font-black text-slate-900 dark:text-white">
-              {fuelImpact.expectedKmPerLiter > 0 ? `${fuelImpact.expectedKmPerLiter.toFixed(2)} km/L` : '-'}
-            </p>
-            <p className="text-[10px] font-bold text-slate-500">
-              {fuelImpact.expectedKmPer20Liter > 0 ? `${fuelImpact.expectedKmPer20Liter.toFixed(2)} km/20L` : t('limited_data')}
-            </p>
-          </div>
-        </div>
-        <p className="text-[10px] leading-relaxed text-violet-700 dark:text-violet-300">
-          {fuelImpact.baselineKmPerLiter > 0
-            ? t('fuel_impact_based_on_actual', { value: fuelImpact.baselineKmPerLiter.toFixed(2) })
-            : t('fuel_impact_needs_history')}
-        </p>
-      </div>
-    );
-  };
-
-  const ComparisonDetails = ({ result, isModal = false }) => (
-    <div className={cn("space-y-6", isModal && "p-6")}>
-      <Card className="space-y-6 border-0 shadow-none bg-transparent p-0">
-        <h2 className="text-lg font-bold flex items-center gap-2"><TrendUp weight="duotone" className="w-5 h-5 text-emerald-500" /> {t('overview')}</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-blue-500 mb-1">{t('active_vehicle')}</p><p className="text-lg font-black">{formatTyreSize(result.original)}</p></div>
-          <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl"><p className="text-[10px] font-bold uppercase text-emerald-500 mb-1">{t('tires')}</p><p className="text-lg font-black">{formatTyreSize(result.new)}</p></div>
-        </div>
-      </Card>
-      
-      <Card className="p-0 border-0 shadow-none bg-transparent">
-         <div className="flex items-center gap-2 mb-6"><Gauge weight="duotone" className="w-5 h-5 text-amber-500"/><h2 className="text-lg font-bold">{t('trends_visualization')}</h2></div>
-         
-         {/* Tyre Specs Comparison */}
-         <div className="grid grid-cols-2 gap-4 mb-6">
-           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 space-y-3">
-             <h3 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">{t('original')}</h3>
-             <div className="space-y-2">
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('diameter')}:</span>
-                 <span className="font-bold">{result.original.diameter}"</span>
-               </div>
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('circumference')}:</span>
-                 <span className="font-bold">{result.original.circumference}"</span>
-               </div>
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('sidewall')}:</span>
-                 <span className="font-bold">{result.original.sidewallMm} mm</span>
-               </div>
-             </div>
-           </div>
-
-           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 space-y-3">
-             <h3 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">{t('new')}</h3>
-             <div className="space-y-2">
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('diameter')}:</span>
-                 <span className="font-bold">{result.new.diameter}"</span>
-               </div>
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('circumference')}:</span>
-                 <span className="font-bold">{result.new.circumference}"</span>
-               </div>
-               <div className="flex justify-between text-[11px]">
-                 <span className="text-slate-500">{t('sidewall')}:</span>
-                 <span className="font-bold">{result.new.sidewallMm} mm</span>
-               </div>
-             </div>
-           </div>
-         </div>
-
-         <div className="grid grid-cols-3 gap-4 text-center pb-6 border-b border-slate-100 dark:border-white/5 mb-6">
-            <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('diameter')}</p><p className={cn("text-xl font-black", result.differences.diameterDifference > 0 ? "text-red-500" : "text-emerald-500")}>{result.differences.diameterDifference > 0 ? '+' : ''}{result.differences.diameterDifference}"</p></div>
-            <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('speed_impact')}</p><p className="text-xl font-black text-amber-500">{result.speedImpact.speedPercentageChange}</p></div>
-            <div><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{t('actual_at_speed', { speed: result.speedImpact.speedometerSpeed || 100 })}</p><p className="text-xl font-black">{result.speedImpact.actualSpeed} <span className="text-[10px]">{t('unit_km_h')}</span></p></div>
-         </div>
-
-         <FuelImpactSummary fuelImpact={result.fuelImpact} />
-
-         {/* RPM Impact */}
-         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rpm_change')} {t('rpm_at_speed', { speed: result.speedImpact.speedometerSpeed || 100 })}</h3>
-              <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", result.rpmImpact.newRPM > result.rpmImpact.originalRPM ? "bg-red-500/10 text-red-500" : "bg-emerald-500/10 text-emerald-500")}>
-                {result.rpmImpact.rpmPercentageChange}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-                <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('original')} RPM</p>
-                <p className="text-lg font-black">{result.rpmImpact.originalRPM}</p>
-              </div>
-              <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-                <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t('new')} RPM</p>
-                <p className="text-lg font-black">{result.rpmImpact.newRPM}</p>
-              </div>
-            </div>
-         </div>
-
-         <div className="mt-6 flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
-            <Clock weight="duotone" size={12} /> {t('calculated_at')} {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-         </div>
-      </Card>
-    </div>
-  );
 
   const toggleSelection = (id) => {
     const newSelected = new Set(selectedIds);

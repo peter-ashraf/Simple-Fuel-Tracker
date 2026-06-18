@@ -1669,29 +1669,36 @@ export default function Settings() {
         }
         size="sm"
       >
-        <div className="grid grid-cols-2 gap-3 p-2">
-          <button
-            onClick={() => {
-              setFormatModal({ isOpen: false });
-              if (formatModal.type === "export") handleExport("json");
-              else handleImportClick("json");
-            }}
-            className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-          >
-            <Database weight="duotone" className="text-blue-500" />
-            <span className="text-xs font-bold">JSON</span>
-          </button>
-          <button
-            onClick={() => {
-              setFormatModal({ isOpen: false });
-              if (formatModal.type === "export") handleExport("excel");
-              else handleImportClick("excel");
-            }}
-            className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-          >
-            <Database weight="duotone" className="text-emerald-500" />
-            <span className="text-xs font-bold">{t("excel")}</span>
-          </button>
+        <div className="space-y-4 p-2">
+          <div className="rounded-2xl bg-slate-50 p-4 text-xs font-semibold leading-relaxed text-slate-500 dark:bg-white/[0.04] dark:text-slate-400">
+            Both formats include vehicles, fill-ups, maintenance entries, maintenance systems, subcategories, maintenance settings, app preferences, trips, tire comparisons, stations, and prices.
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                setFormatModal({ isOpen: false });
+                if (formatModal.type === "export") handleExport("json");
+                else handleImportClick("json");
+              }}
+              className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+            >
+              <Database weight="duotone" className="text-blue-500" />
+              <span className="text-xs font-bold">JSON</span>
+              <span className="text-[10px] font-semibold text-slate-400">Best for restore</span>
+            </button>
+            <button
+              onClick={() => {
+                setFormatModal({ isOpen: false });
+                if (formatModal.type === "export") handleExport("excel");
+                else handleImportClick("excel");
+              }}
+              className="p-4 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+            >
+              <Database weight="duotone" className="text-emerald-500" />
+              <span className="text-xs font-bold">{t("excel")}</span>
+              <span className="text-[10px] font-semibold text-slate-400">Best for review</span>
+            </button>
+          </div>
         </div>
       </Modal>
 
