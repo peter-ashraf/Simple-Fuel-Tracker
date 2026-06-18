@@ -31,6 +31,12 @@ export default function MaintenanceForm() {
   const [notes, setNotes] = useState('');
 
   const [selectedSystemId, setSelectedSystemId] = useState(null);
+  const getSystemLabel = (system) => system?.name || system?.id || '';
+  const getCategoryLabel = (category) => {
+    if (!category) return '';
+    if (category.isDefault === false || category.is_default === false) return category.name || category.id;
+    return i18n.exists(category.id) ? t(category.id) : category.name || category.id;
+  };
 
   const handleSelectType = (categoryId) => {
     setType(categoryId);
@@ -70,7 +76,7 @@ export default function MaintenanceForm() {
               <Card key={system.id} className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setSelectedSystemId(system.id)}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: system.color }}><Wrench weight="duotone" className="w-6 h-6" /></div>
-                  <span className="font-bold text-slate-900 dark:text-white">{t(system.name.toLowerCase()) || system.name}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{getSystemLabel(system)}</span>
                 </div>
                 <CaretRight weight="duotone" className={cn("w-5 h-5 text-slate-300", isRtl && "rotate-180")} />
               </Card>
@@ -87,7 +93,7 @@ export default function MaintenanceForm() {
                 <Card key={catId} className="p-5 flex items-center justify-between cursor-pointer" onClick={() => handleSelectType(catId)}>
                   <div className="flex items-center gap-4">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                    <span className="font-bold text-slate-900 dark:text-white">{t(cat.id)}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{getCategoryLabel(cat)}</span>
                   </div>
                   <Plus weight="duotone" className="w-5 h-5 text-emerald-500" />
                 </Card>
@@ -110,7 +116,7 @@ export default function MaintenanceForm() {
               <CaretLeft weight="duotone" className={cn("w-5 h-5", isRtl && "rotate-180")} /> <span>{t('cancel')}</span>
             </button>
             <button type="button" onClick={handleSubmit} disabled={!performedAtODO || !intervalKm} className="flex-[2] px-6 bg-emerald-500 text-white dark:text-slate-950 font-bold h-[64px] rounded-[1.5rem] flex items-center justify-center gap-2 transition-all">
-              <Plus weight="duotone" className="w-5 h-5" /> <span>{t('save')} {t(selectedCategory?.id)}</span>
+              <Plus weight="duotone" className="w-5 h-5" /> <span>{t('save')} {getCategoryLabel(selectedCategory)}</span>
             </button>
           </div>
         </div>,
@@ -122,7 +128,7 @@ export default function MaintenanceForm() {
           <div className="flex items-center gap-3 mb-2">
              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: selectedCategory?.color }}><Wrench weight="duotone" className="w-5 h-5" /></div>
              <div>
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white">{t(selectedCategory?.id)}</h2>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white">{getCategoryLabel(selectedCategory)}</h2>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('add_maintenance')}</p>
              </div>
           </div>

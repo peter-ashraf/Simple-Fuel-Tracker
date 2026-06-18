@@ -123,21 +123,32 @@ export const authService = {
   },
 
   async updatePassword(oldPassword, newPassword) {
-    // Verify old password by attempting to sign in
-    const user = await this.getUser();
-    if (!user?.email) throw new Error('You must be logged in.');
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: oldPassword,
-    });
-
-    if (signInError) {
-      throw new Error('Current password is incorrect.');
-    }
+    await this.verifyCurrentPassword(oldPassword);
 
     // Old password verified, now update to new password
     const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    return data;
+  },
+
+  async verifyCurrentPassword(password) {
+    const user = await this.getUser();
+    if (!user?.email) throw new Error('You must be logged in.');
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password,
+    });
+
+    if (error) throw new Error('Current password is incorrect.');
+    return true;
+  },
+
+  async sendPasswordReset(identifier) {
+    const email = await this.resolveLoginIdentifier(identifier);
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
     if (error) throw error;
     return data;
   },

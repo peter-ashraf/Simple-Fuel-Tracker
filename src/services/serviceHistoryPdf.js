@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 
 export const serviceHistoryPdf = {
-  async generatePdf(vehicle, maintenanceEntries, t) {
+  async generatePdf(vehicle, maintenanceEntries, t, options = {}) {
     if (!vehicle || !maintenanceEntries || maintenanceEntries.length === 0) {
       return false;
     }
@@ -13,6 +13,43 @@ export const serviceHistoryPdf = {
 
     const doc = new jsPDF();
     const currentDate = format(new Date(), 'MMM d, yyyy');
+    const {
+      categories = [],
+      systems = [],
+      sortBy = 'odometer',
+      systemIds = [],
+      columns = ['date', 'odometer', 'type', 'interval', 'nextDue', 'cost', 'notes']
+    } = options;
+
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    const systemByCategoryId = new Map();
+    systems.forEach((system) => {
+      (system.categories || []).forEach((categoryId) => {
+        if (!systemByCategoryId.has(categoryId)) systemByCategoryId.set(categoryId, system.id);
+      });
+    });
+    const getCategoryName = (type) => {
+      const category = categoryById.get(type);
+      if (!category) return t(type) || type;
+      if (category.isDefault === false || category.is_default === false) return category.name || type;
+      const translated = t(category.id);
+      return translated === category.id ? category.name || category.id : translated;
+    };
+
+    const preparedEntries = [...maintenanceEntries]
+      .filter((entry) => {
+        if (!systemIds.length) return true;
+        const entrySystem = entry.systemStableKey || entry.system_stable_key || systemByCategoryId.get(entry.type);
+        return systemIds.includes(entrySystem);
+      })
+      .sort((a, b) => {
+        if (sortBy === 'date') {
+          return new Date(a.date || a.timestamp || a.createdAt || 0) - new Date(b.date || b.timestamp || b.createdAt || 0);
+        }
+        const aOdo = Number(a.performedAtODO ?? a.odometer ?? 0);
+        const bOdo = Number(b.performedAtODO ?? b.odometer ?? 0);
+        return aOdo - bOdo;
+      });
 
     // Title
     doc.setFontSize(20);
@@ -24,17 +61,18 @@ export const serviceHistoryPdf = {
     doc.text(`${t('date') || 'Date'}: ${currentDate}`, 14, 40);
 
     // Table Data
-    const tableColumn = [
-      t('date') || "Date",
-      t('odometer') || "Odometer",
-      t('service_type') || "Service Type",
-      t('distance') || "Interval",
-      t('next_due') || "Next Due",
-      t('price') || "Cost",
-      t('notes') || "Notes"
-    ];
+    const columnDefs = {
+      date: t('date') || "Date",
+      odometer: t('odometer') || "Odometer",
+      type: t('service_type') || "Service Type",
+      interval: t('distance') || "Interval",
+      nextDue: t('next_due') || "Next Due",
+      cost: t('price') || "Cost",
+      notes: t('notes') || "Notes"
+    };
+    const tableColumn = columns.map((column) => columnDefs[column]).filter(Boolean);
     
-    const tableRows = maintenanceEntries.map(entry => {
+    const tableRows = preparedEntries.map(entry => {
       let metadata = {};
       if (entry.description && typeof entry.description === 'string') {
         try {
@@ -50,18 +88,19 @@ export const serviceHistoryPdf = {
       const nextDue = Number(entry.nextDueODO ?? entry.nextDueOdometer ?? entry.next_due_odometer ?? 0);
       const cost = entry.cost !== undefined && entry.cost !== null ? Number(entry.cost) : null;
       const odo = odometer ? `${odometer.toLocaleString()} km` : '-';
-      const type = t(entry.type) || entry.type;
+      const type = getCategoryName(entry.type);
       const notes = entry.notes || metadata.notes || '-';
-      
-      return [
-        entryDate,
-        odo,
+      const values = {
+        date: entryDate,
+        odometer: odo,
         type,
-        interval ? `${interval.toLocaleString()} km` : '-',
-        nextDue ? `${nextDue.toLocaleString()} km` : '-',
-        cost !== null && !Number.isNaN(cost) ? `${cost.toFixed(2)}` : '-',
+        interval: interval ? `${interval.toLocaleString()} km` : '-',
+        nextDue: nextDue ? `${nextDue.toLocaleString()} km` : '-',
+        cost: cost !== null && !Number.isNaN(cost) ? `${cost.toFixed(2)}` : '-',
         notes
-      ];
+      };
+
+      return columns.map((column) => values[column]);
     });
 
     // Generate Table

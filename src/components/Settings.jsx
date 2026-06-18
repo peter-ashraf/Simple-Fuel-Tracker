@@ -100,6 +100,9 @@ export default function Settings() {
     vehicleName: "",
   });
   const [factoryResetModal, setFactoryResetModal] = useState(false);
+  const [factoryResetPassword, setFactoryResetPassword] = useState("");
+  const [factoryResetError, setFactoryResetError] = useState("");
+  const [factoryResetLoading, setFactoryResetLoading] = useState(false);
   const [validationModal, setValidationModal] = useState({ isOpen: false });
   const [formatModal, setFormatModal] = useState({
     isOpen: false,
@@ -270,9 +273,23 @@ export default function Settings() {
     setEditingTankCapacity(vehicle.tankCapacity || "");
   };
 
-  const confirmFactoryReset = () => {
-    window.localStorage.clear();
-    window.location.reload();
+  const confirmFactoryReset = async () => {
+    setFactoryResetError("");
+    if (!factoryResetPassword) {
+      setFactoryResetError("Enter your password to reset the app.");
+      return;
+    }
+
+    setFactoryResetLoading(true);
+    try {
+      await authService.verifyCurrentPassword(factoryResetPassword);
+      window.localStorage.clear();
+      window.location.reload();
+    } catch (error) {
+      setFactoryResetError(error.message || "Password verification failed.");
+    } finally {
+      setFactoryResetLoading(false);
+    }
   };
 
   const handleClearLocationCache = () => {
@@ -1550,15 +1567,58 @@ export default function Settings() {
         confirmText={t("delete")}
         variant="danger"
       />
-      <ConfirmModal
+      <Modal
         isOpen={factoryResetModal}
-        onClose={() => setFactoryResetModal(false)}
-        onConfirm={confirmFactoryReset}
+        onClose={() => {
+          if (factoryResetLoading) return;
+          setFactoryResetModal(false);
+          setFactoryResetPassword("");
+          setFactoryResetError("");
+        }}
         title={t("reset_app")}
-        message={t("sure_question")}
-        confirmText={t("delete")}
-        variant="danger"
-      />
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            This will clear all local app data on this device. Enter your password to continue.
+          </div>
+          {factoryResetError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+              {factoryResetError}
+            </div>
+          )}
+          <Input
+            type="password"
+            value={factoryResetPassword}
+            onChange={(event) => setFactoryResetPassword(event.target.value)}
+            placeholder="Current password"
+            disabled={factoryResetLoading}
+            autoComplete="current-password"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setFactoryResetModal(false);
+                setFactoryResetPassword("");
+                setFactoryResetError("");
+              }}
+              disabled={factoryResetLoading}
+              className="rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-700 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={confirmFactoryReset}
+              disabled={factoryResetLoading}
+              className="rounded-2xl bg-red-500 py-3 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {factoryResetLoading ? "Verifying..." : t("delete")}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Validation Modal for Active Vehicle Details */}
       <Modal

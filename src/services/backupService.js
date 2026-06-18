@@ -15,7 +15,15 @@ const APP_KEYS = [
   'fueltracker-trip-estimates-v2',
   'fueltracker-tyre-comparisons-v2',
   'fueltracker-maintenance-entries-v3',
-  'fueltracker-maintenance-reminders-v2'
+  'fueltracker-maintenance-logs-v2',
+  'fueltracker-maintenance-categories-v1',
+  'fueltracker-maintenance-systems-v1',
+  'fueltracker-maintenance-settings-v2',
+  'fueltracker-notifications-enabled',
+  'fueltracker-trip-sample-size',
+  'fueltracker-maintenance-reminders-v2',
+  'fueltracker-remember-me',
+  'i18nextLng'
 ];
 
 const dateOnly = (value) => {
@@ -303,9 +311,25 @@ export const backupService = {
     const localStations = JSON.parse(localStorage.getItem('fueltracker-user-stations') || '[]');
     const localPrices = JSON.parse(localStorage.getItem('fueltracker-prices-v2') || '{}');
     const localMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+    const localLegacyMaint = JSON.parse(localStorage.getItem('fueltracker-maintenance-logs-v2') || '[]');
     const localReminders = JSON.parse(localStorage.getItem('fueltracker-maintenance-reminders-v2') || '[]');
     const localTrips = JSON.parse(localStorage.getItem('fueltracker-trip-estimates-v2') || '[]');
     const localTyres = JSON.parse(localStorage.getItem('fueltracker-tyre-comparisons-v2') || '[]');
+    const localCategories = JSON.parse(localStorage.getItem('fueltracker-maintenance-categories-v1') || '[]');
+    const localSystems = JSON.parse(localStorage.getItem('fueltracker-maintenance-systems-v1') || '[]');
+    const mergeByIdentity = (localRecords, backupRecords = []) => {
+      const merged = [...localRecords];
+      backupRecords.forEach((record) => {
+        const key = record.stableKey || record.stable_key || record.id;
+        const index = merged.findIndex((item) =>
+          item.id === record.id ||
+          (key && (item.stableKey === key || item.stable_key === key))
+        );
+        if (index >= 0) merged[index] = { ...merged[index], ...record };
+        else merged.push(record);
+      });
+      return merged;
+    };
 
     // 2. Process Conflicts
     resolvedConflicts.forEach(resolution => {
@@ -388,6 +412,9 @@ export const backupService = {
         localTyres.push(bt);
       }
     });
+    const mergedCategories = mergeByIdentity(localCategories, payload['fueltracker-maintenance-categories-v1'] || []);
+    const mergedSystems = mergeByIdentity(localSystems, payload['fueltracker-maintenance-systems-v1'] || []);
+    const mergedLegacyMaint = mergeByIdentity(localLegacyMaint, payload['fueltracker-maintenance-logs-v2'] || []);
 
     // 8. Save back to localStorage
     localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(localFillups));
@@ -395,9 +422,25 @@ export const backupService = {
     localStorage.setItem('fueltracker-user-stations', JSON.stringify(localStations));
     localStorage.setItem('fueltracker-prices-v2', JSON.stringify(localPrices));
     localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(localMaint));
+    localStorage.setItem('fueltracker-maintenance-logs-v2', JSON.stringify(mergedLegacyMaint));
     localStorage.setItem('fueltracker-maintenance-reminders-v2', JSON.stringify(localReminders));
     localStorage.setItem('fueltracker-trip-estimates-v2', JSON.stringify(localTrips));
     localStorage.setItem('fueltracker-tyre-comparisons-v2', JSON.stringify(localTyres));
+    localStorage.setItem('fueltracker-maintenance-categories-v1', JSON.stringify(mergedCategories));
+    localStorage.setItem('fueltracker-maintenance-systems-v1', JSON.stringify(mergedSystems));
+    [
+      'fueltracker-maintenance-settings-v2',
+      'fueltracker-theme',
+      'fueltracker-notifications-enabled',
+      'fueltracker-trip-sample-size',
+      'fueltracker-active-vehicle-v2',
+      'fueltracker-remember-me',
+      'i18nextLng'
+    ].forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(payload, key)) {
+        localStorage.setItem(key, JSON.stringify(payload[key]));
+      }
+    });
 
     // 7. Clear migration flags to force re-evaluation on next app load
     console.log('[Import][localStorage] Clearing migration flags before reload');

@@ -67,6 +67,11 @@ export default function MaintenanceLogEdit() {
   }
 
   const category = getCategoryById(log.type);
+  const categoryLabel = category
+    ? (category.isDefault === false || category.is_default === false
+      ? category.name || category.id
+      : i18n.exists(category.id) ? t(category.id) : category.name || category.id)
+    : t('unknown');
 
   return (
     <>
@@ -92,7 +97,7 @@ export default function MaintenanceLogEdit() {
           <div className="flex items-center gap-3 mb-2">
              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: category?.color }}><Wrench weight="duotone" className="w-5 h-5" /></div>
              <div>
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white">{t(category?.id)}</h2>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white">{categoryLabel}</h2>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('edit')}</p>
              </div>
           </div>

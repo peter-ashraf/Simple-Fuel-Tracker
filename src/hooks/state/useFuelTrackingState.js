@@ -124,9 +124,9 @@ export function useFuelTrackingState(selectedVehicleId) {
 
     activeVehicleFillUpsByOdometer.forEach((fill, index) => {
       const metrics = calculateTripMetrics(activeVehicleFillUpsByOdometer, index);
-      totalCost += metrics.tripCost;
       
       if (index > 0) {
+        totalCost += metrics.tripCost;
         validTripDistanceSum += metrics.distance;
         validTripLitersSum += metrics.fuelConsumed;
       }

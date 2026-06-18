@@ -30,6 +30,21 @@ const MAINTENANCE_CATEGORIES_KEY = 'fueltracker-maintenance-categories-v1';
 const MAINTENANCE_SYSTEMS_KEY = 'fueltracker-maintenance-systems-v1';
 const MAINTENANCE_SETTINGS_KEY = 'fueltracker-maintenance-settings-v2';
 const MAINTENANCE_TAXONOMY_DIRTY_KEY = 'fueltracker-maintenance-taxonomy-dirty';
+const APP_SETTINGS_KEYS = [
+  'fueltracker-active-vehicle-v2',
+  'fueltracker-prices-v2',
+  'fueltracker-theme',
+  'fueltracker-user-stations',
+  'fueltracker-maintenance-categories-v1',
+  'fueltracker-maintenance-systems-v1',
+  'fueltracker-maintenance-settings-v2',
+  'fueltracker-maintenance-reminders-v2',
+  'fueltracker-notifications-enabled',
+  'fueltracker-trip-sample-size',
+  'fueltracker-tyre-comparisons-v2',
+  'fueltracker-remember-me',
+  'i18nextLng'
+];
 
 const DEFAULT_MAINTENANCE_SYSTEMS = [
   { id: 'engine', name: 'Engine', icon: 'Engine', categories: ['oil_change', 'air_filter', 'spark_plugs', 'transmission_service'], color: '#ef4444' },
@@ -195,6 +210,21 @@ function hasDirtyMaintenanceTaxonomy() {
 
 function clearDirtyMaintenanceTaxonomy() {
   localStorage.removeItem(MAINTENANCE_TAXONOMY_DIRTY_KEY);
+}
+
+function collectAppSettingsForCloud() {
+  const settings = {};
+  APP_SETTINGS_KEYS.forEach(key => {
+    const value = localStorage.getItem(key);
+    if (value !== null) {
+      try {
+        settings[key] = JSON.parse(value);
+      } catch {
+        settings[key] = value;
+      }
+    }
+  });
+  return settings;
 }
 
 function getSelectedVehicleLocalId() {
@@ -1265,6 +1295,29 @@ function remapLegacyIds(vehicles, fillups, maintenance, tripEstimates) {
 }
 
 export const cloudSyncService = {
+  async uploadAppSettings(userId) {
+    const settings = collectAppSettingsForCloud();
+    if (Object.keys(settings).length === 0) return { success: true, count: 0 };
+
+    const { data: existing, error: fetchError } = await supabase
+      .from('app_settings')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    const { error } = await supabase.from('app_settings').upsert({
+      id: existing?.id || uuidv4(),
+      user_id: userId,
+      settings_json: settings,
+      updated_at: new Date().toISOString()
+    });
+
+    if (error) throw error;
+    return { success: true, count: Object.keys(settings).length };
+  },
+
   /**
    * Validate if a string is a valid UUID (any version)
    * Service method wrapper for the standalone isValidUuid function
@@ -2127,6 +2180,16 @@ export const cloudSyncService = {
       result.details.push(...taxonomyUpload.details);
       taxonomyErrors = taxonomyUpload.success === false ? 1 : 0;
       result.counts.maintenanceTaxonomy = (taxonomyUpload.systems || 0) + (taxonomyUpload.categories || 0);
+
+      try {
+        const appSettingsUpload = await this.uploadAppSettings(userId);
+        if (appSettingsUpload.count > 0) {
+          result.details.push(`App settings backed up: ${appSettingsUpload.count} setting groups`);
+        }
+      } catch (error) {
+        taxonomyErrors += 1;
+        result.details.push(`App settings backup failed: ${error.message}`);
+      }
 
       // Upload fillups with normalization and deduplication
       if (remappedFillups.length > 0) {
@@ -3002,29 +3065,7 @@ export const cloudSyncService = {
         }
       }
 
-      // Migrate app settings (theme, etc.)
-      const settings = {};
-      LOCALSTORAGE_KEYS.forEach(key => {
-        if (key.includes('theme') || key.includes('stations')) {
-          const value = localStorage.getItem(key);
-          if (value) {
-            try {
-              settings[key] = JSON.parse(value);
-            } catch {
-              settings[key] = value;
-            }
-          }
-        }
-      });
-
-      if (Object.keys(settings).length > 0) {
-        await supabase.from('app_settings').upsert({
-          id: uuidv4(),
-          user_id: userId,
-          settings_json: settings,
-          updated_at: new Date().toISOString()
-        });
-      }
+      await this.uploadAppSettings(userId);
 
       // Always set migration flag, even if no data was migrated
       localStorage.setItem(MIGRATION_FLAG_KEY, 'true');

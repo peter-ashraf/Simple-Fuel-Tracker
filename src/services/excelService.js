@@ -3,10 +3,34 @@ const SHEET_MAPPING = {
   'fueltracker-vehicles-v2': 'Vehicles',
   'fueltracker-prices-v2': 'Prices',
   'fueltracker-active-vehicle-v2': 'Active Vehicle',
+  'fueltracker-fillups-v2': 'Fill-ups',
   'fueltracker-maintenance-entries-v3': 'Maintenance Logs',
+  'fueltracker-maintenance-logs-v2': 'Legacy Maintenance',
   'fueltracker-user-stations': 'Stations',
   'fueltracker-maintenance-reminders-v2': 'Reminders',
-  'fueltracker-maintenance-categories-v1': 'Categories'
+  'fueltracker-maintenance-categories-v1': 'Categories',
+  'fueltracker-maintenance-systems-v1': 'Maintenance Systems',
+  'fueltracker-maintenance-settings-v2': 'Maintenance Settings',
+  'fueltracker-trip-estimates-v2': 'Trip Estimates',
+  'fueltracker-theme': 'Theme',
+  'fueltracker-notifications-enabled': 'Notifications',
+  'fueltracker-trip-sample-size': 'Trip Settings',
+  'fueltracker-tyre-comparisons-v2': 'Tyre Comparisons',
+  'fueltracker-remember-me': 'Remember Me',
+  'i18nextLng': 'Language'
+};
+
+const mergeUniqueRecords = (...groups) => {
+  const merged = [];
+  const seen = new Set();
+  groups.flat().forEach((record) => {
+    if (!record) return;
+    const key = record.stableKey || record.stable_key || record.id || JSON.stringify(record);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(record);
+  });
+  return merged;
 };
 
 export const excelService = {
@@ -30,7 +54,10 @@ export const excelService = {
           }
         } else if (typeof data === 'object' && data !== null) {
           // It's an object (like prices: { 92: 22, 95: 25 })
-          sheetData = Object.entries(data).map(([key, value]) => ({ Item: key, Value: value }));
+          sheetData = Object.entries(data).map(([key, value]) => ({
+            Item: key,
+            Value: value && typeof value === 'object' ? JSON.stringify(value) : value
+          }));
         } else if (data !== null) {
           // It's a single value (like active vehicle ID)
           sheetData = [{ Item: "Value", Value: data }];
@@ -190,11 +217,29 @@ export const excelService = {
                  // Handle standard sheets
                  const storageKey = Object.keys(SHEET_MAPPING).find(key => SHEET_MAPPING[key] === sheetName);
                  if (storageKey) {
-                    if (storageKey === 'fueltracker-prices-v2') {
-                       const priceObj = {};
-                       rawData.forEach(row => { priceObj[row.Item] = row.Value; });
-                       payload[storageKey] = priceObj;
-                    } else if (storageKey === 'fueltracker-active-vehicle-v2') {
+                    if (storageKey === 'fueltracker-prices-v2' || storageKey === 'fueltracker-maintenance-settings-v2') {
+                       const objectValue = {};
+                       rawData.forEach(row => {
+                          const rawValue = row.Value;
+                          if (typeof rawValue === 'string' && /^[[{]/.test(rawValue.trim())) {
+                             try {
+                                objectValue[row.Item] = JSON.parse(rawValue);
+                                return;
+                             } catch {
+                                // Keep the original value below.
+                             }
+                          }
+                          objectValue[row.Item] = rawValue;
+                       });
+                       payload[storageKey] = objectValue;
+                    } else if (
+                       storageKey === 'fueltracker-active-vehicle-v2' ||
+                       storageKey === 'fueltracker-theme' ||
+                       storageKey === 'fueltracker-notifications-enabled' ||
+                       storageKey === 'fueltracker-trip-sample-size' ||
+                       storageKey === 'fueltracker-remember-me' ||
+                       storageKey === 'i18nextLng'
+                    ) {
                        payload[storageKey] = rawData[0]?.Value || 'default';
                     } else {
                        // Reconstruct array and unflatten tyre size if needed
@@ -218,7 +263,14 @@ export const excelService = {
               });
 
               if (fillupsFromSheets.length > 0) {
-                 payload['fueltracker-fillups-v2'] = fillupsFromSheets;
+                 payload['fueltracker-fillups-v2'] = mergeUniqueRecords(
+                    payload['fueltracker-fillups-v2'] || [],
+                    fillupsFromSheets
+                 );
+              }
+
+              if (payload['fueltracker-maintenance-entries-v3']) {
+                 payload['fueltracker-maintenance-entries-v3'] = mergeUniqueRecords(payload['fueltracker-maintenance-entries-v3']);
               }
 
               if (Object.keys(payload).length === 0) {

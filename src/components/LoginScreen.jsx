@@ -16,6 +16,26 @@ export default function LoginScreen() {
   const [syncing, setSyncing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [resetMessage, setResetMessage] = useState('');
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setResetMessage('');
+    if (!identifier.trim()) {
+      setError('Enter your username or email first.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.sendPasswordReset(identifier);
+      setResetMessage('Password reset instructions were sent to your email.');
+    } catch (err) {
+      setError(err.message || 'Could not send password reset instructions.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -157,22 +177,42 @@ export default function LoginScreen() {
 
           {/* Remember me checkbox - only show for login */}
           {isLogin && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="remember-me"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="remember-me"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={loading || syncing}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500/50 bg-white dark:bg-slate-900"
+                />
+                <label
+                  htmlFor="remember-me"
+                  className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
+                >
+                  Remember me
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
                 disabled={loading || syncing}
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500/50 bg-white dark:bg-slate-900"
-              />
-              <label
-                htmlFor="remember-me"
-                className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
+                className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
               >
-                Remember me
-              </label>
+                Forgot password?
+              </button>
             </div>
+          )}
+
+          {resetMessage && (
+            <MotionDiv
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-200 dark:border-emerald-500/20"
+            >
+              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{resetMessage}</p>
+            </MotionDiv>
           )}
 
           {error && (

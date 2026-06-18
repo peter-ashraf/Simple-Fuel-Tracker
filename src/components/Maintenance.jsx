@@ -148,6 +148,10 @@ export default function Maintenance() {
   const [selectedMaintenanceItemId, setSelectedMaintenanceItemId] = useState(null);
   const [deleteToast, setDeleteToast] = useState(null);
   const [confirmDeleteEntry, setConfirmDeleteEntry] = useState(null);
+  const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
+  const [pdfSortBy, setPdfSortBy] = useState("odometer");
+  const [pdfSystemIds, setPdfSystemIds] = useState([]);
+  const [pdfColumns, setPdfColumns] = useState(["date", "odometer", "type", "interval", "nextDue", "cost", "notes"]);
 
   // Modals & Editing State
   const [editingSystemId, setEditingSystemId] = useState(null);
@@ -636,7 +640,14 @@ export default function Maintenance() {
   };
 
   const handleExportPDF = async () => {
-    await serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t);
+    await serviceHistoryPdf.generatePdf(activeVehicle, filteredEntries, t, {
+      categories,
+      systems: maintenanceSystems,
+      sortBy: pdfSortBy,
+      systemIds: pdfSystemIds,
+      columns: pdfColumns,
+    });
+    setPdfOptionsOpen(false);
   };
 
   return (
@@ -767,7 +778,7 @@ export default function Maintenance() {
                     <span>
                       {selectedCategory === "all"
                         ? t("all_categories")
-                        : t(getCategoryById(selectedCategory).id)}
+                        : translateCategoryName(getCategoryById(selectedCategory))}
                     </span>
                     <Motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }}>
                       <CaretDown
@@ -798,7 +809,7 @@ export default function Maintenance() {
                               }}
                               className="w-full text-start px-3 py-2 text-sm rounded-lg hover:bg-slate-50"
                             >
-                              {t(cat.id)}
+                              {translateCategoryName(cat)}
                             </button>
                           ))}
                         </div>
@@ -811,7 +822,7 @@ export default function Maintenance() {
               {filteredEntries.length > 0 && (
                 <div className="mt-3 flex justify-end">
                   <button
-                    onClick={handleExportPDF}
+                    onClick={() => setPdfOptionsOpen(true)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-500/30"
                   >
                     <FilePdf weight="duotone" className="w-4 h-4" />
@@ -863,7 +874,7 @@ export default function Maintenance() {
                         <div className="flex justify-between items-start">
                           <div>
                             <h3 className="font-bold text-slate-900 dark:text-white">
-                              {category ? t(category.id) : t("unknown")}
+                              {translateCategoryName(category)}
                             </h3>
                             <p className="text-xs text-slate-500">
                               {displayDate} • {displayOdometer} km
@@ -1335,6 +1346,141 @@ export default function Maintenance() {
         cancelText={t("cancel")}
         variant="danger"
       />
+
+      <Modal
+        isOpen={pdfOptionsOpen}
+        onClose={() => setPdfOptionsOpen(false)}
+        title={t("export") || "Export PDF"}
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+            <p>
+              Sort: {pdfSortBy === "odometer" ? (t("odometer") || "Odometer") : (t("date") || "Date")}
+            </p>
+            <p>
+              Systems: {pdfSystemIds.length === 0
+                ? (t("all") || "All")
+                : pdfSystemIds.map((id) => translateSystemName(maintenanceSystems.find((system) => system.id === id)?.name || id)).join(", ")}
+            </p>
+            <p>
+              Columns: {pdfColumns.length} selected - {pdfColumns.map((id) => ({
+                date: t("date") || "Date",
+                odometer: t("odometer") || "Odometer",
+                type: t("service_type") || "Service Type",
+                interval: t("distance") || "Interval",
+                nextDue: t("next_due") || "Next Due",
+                cost: t("price") || "Cost",
+                notes: t("notes") || "Notes",
+              })[id]).join(", ")}
+            </p>
+          </div>
+
+          <div>
+            <Label>{t("sort") || "Sort"}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "odometer", label: t("odometer") || "Odometer" },
+                { id: "date", label: t("date") || "Date" },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setPdfSortBy(option.id)}
+                  className={cn(
+                    "rounded-2xl px-3 py-3 text-sm font-bold",
+                    pdfSortBy === option.id
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label>{t("maintenance") || "Maintenance"} Systems</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {maintenanceSystems.map((system) => {
+                const selected = pdfSystemIds.includes(system.id);
+                return (
+                  <button
+                    key={system.id}
+                    type="button"
+                    onClick={() =>
+                      setPdfSystemIds((prev) =>
+                        selected ? prev.filter((id) => id !== system.id) : [...prev, system.id],
+                      )
+                    }
+                    className={cn(
+                      "rounded-2xl px-3 py-2 text-xs font-bold",
+                      selected
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                    )}
+                  >
+                    {translateSystemName(system.name)}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPdfSystemIds([])}
+              className="mt-2 text-xs font-bold text-slate-500"
+            >
+              {t("all") || "All"}
+            </button>
+          </div>
+
+          <div>
+            <Label>{t("columns") || "Columns"}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["date", t("date") || "Date"],
+                ["odometer", t("odometer") || "Odometer"],
+                ["type", t("service_type") || "Service Type"],
+                ["interval", t("distance") || "Interval"],
+                ["nextDue", t("next_due") || "Next Due"],
+                ["cost", t("price") || "Cost"],
+                ["notes", t("notes") || "Notes"],
+              ].map(([id, label]) => {
+                const selected = pdfColumns.includes(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() =>
+                      setPdfColumns((prev) =>
+                        selected ? prev.filter((column) => column !== id) : [...prev, id],
+                      )
+                    }
+                    className={cn(
+                      "rounded-2xl px-3 py-2 text-xs font-bold",
+                      selected
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={pdfColumns.length === 0}
+            className="w-full rounded-2xl bg-emerald-500 py-4 text-sm font-black text-white disabled:opacity-50"
+          >
+            {t("export") || "Export PDF"}
+          </button>
+        </div>
+      </Modal>
 
       <IconPicker
         isOpen={isPickingIcon}
