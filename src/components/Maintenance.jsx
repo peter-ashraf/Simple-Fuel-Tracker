@@ -49,6 +49,17 @@ import {
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { makeMaintenanceTypeKey } from "../utils/maintenanceTypeKey";
+
+const MAINTENANCE_TAXONOMY_DIRTY_KEY = "fueltracker-maintenance-taxonomy-dirty";
+
+const markMaintenanceTaxonomyDirty = () => {
+  try {
+    localStorage.setItem(MAINTENANCE_TAXONOMY_DIRTY_KEY, new Date().toISOString());
+  } catch {
+    // Ignore storage failures; the taxonomy data itself still updates locally.
+  }
+};
 
 const ICON_MAP = {
   ...ICON_MAP_DATA,
@@ -336,7 +347,7 @@ export default function Maintenance() {
   }, [categories, maintenanceEntries, currentOdometer, maintenanceSettings]);
 
   const systemStatus = useMemo(() => {
-    return maintenanceSystems.map((system) => {
+    return maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at).map((system) => {
       const systemCategories = categoryProgress.filter((cp) =>
         system.categories.includes(cp.id),
       );
@@ -419,10 +430,18 @@ export default function Maintenance() {
       return;
     }
 
+    markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
         s.id === editingSystemId
-          ? { ...s, name: editSystemName, icon: editSystemIcon }
+          ? {
+              ...s,
+              name: editSystemName.trim(),
+              icon: editSystemIcon,
+              updatedAt: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              version: Number(s.version || 1) + 1,
+            }
           : s,
       ),
     );
@@ -452,8 +471,21 @@ export default function Maintenance() {
   };
 
   const handleDeleteSystem = () => {
+    const deletedAt = new Date().toISOString();
+    markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
-      prev.filter((s) => s.id !== confirmDeleteSystem),
+      prev.map((s) =>
+        s.id === confirmDeleteSystem
+          ? {
+              ...s,
+              deletedAt,
+              deleted_at: deletedAt,
+              updatedAt: deletedAt,
+              updated_at: deletedAt,
+              version: Number(s.version || 1) + 1,
+            }
+          : s,
+      ),
     );
     setConfirmDeleteSystem(null);
     setEditingSystemId(null);
@@ -461,13 +493,32 @@ export default function Maintenance() {
 
   const handleAddSystem = () => {
     const newId = `system_${Date.now()}`;
+    const typeKey = makeMaintenanceTypeKey(t("new_system")) || "new_system";
+    const stableKey = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : newId;
+    const now = new Date().toISOString();
     const newSystem = {
       id: newId,
+      stableKey,
+      stable_key: stableKey,
+      typeKey,
+      type_key: typeKey,
       name: t("new_system"),
       icon: "Wrench",
       categories: [],
       color: "#3b82f6",
+      isDefault: false,
+      is_default: false,
+      createdAt: now,
+      created_at: now,
+      updatedAt: now,
+      updated_at: now,
+      deletedAt: null,
+      deleted_at: null,
+      version: 1,
     };
+    markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) => [...prev, newSystem]);
     setEditingSystemId(newId);
     setEditSystemName(newSystem.name);
@@ -482,21 +533,32 @@ export default function Maintenance() {
       defaultInterval: { value: 10000, unit: "km" },
       defaultSafetyMarginKm: maintenanceSettings.defaultSafetyMarginKm || 2000
     });
+    markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) => prev.map((system) =>
       system.id === editingSystemId
-        ? { ...system, categories: Array.from(new Set([...(system.categories || []), category.id])) }
+        ? {
+            ...system,
+            categories: Array.from(new Set([...(system.categories || []), category.id])),
+            updatedAt: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            version: Number(system.version || 1) + 1,
+          }
         : system
     ));
     setNewCategoryName("");
   };
 
   const handleDeleteSubCategory = () => {
+    markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
         s.id === editingSystemId
           ? {
               ...s,
               categories: s.categories.filter((id) => id !== confirmDeleteCat),
+              updatedAt: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              version: Number(s.version || 1) + 1,
             }
           : s,
       ),
@@ -857,7 +919,7 @@ export default function Maintenance() {
               {t("systems")}
             </h3>
 
-            {maintenanceSystems.map((system) => {
+            {maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at).map((system) => {
               const Icon = ICON_MAP[system.icon] || Wrench;
               return (
                 <Card

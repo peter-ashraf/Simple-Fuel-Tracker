@@ -8,9 +8,10 @@
 --   This draft does NOT recreate public.maintenance.
 --
 -- Intended taxonomy scope:
---   user + vehicle scoped maintenance systems and subcategories.
---   Use vehicle_id NULL only if a future product decision introduces
---   user-level shared taxonomy across all vehicles.
+--   Vehicle-scoped maintenance systems and subcategories.
+--   The app now uploads taxonomy with the active vehicle UUID in vehicle_id.
+--   Legacy/user-level rows with vehicle_id NULL can be converted by the app
+--   when their stable_key is uploaded for the active vehicle.
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -32,8 +33,8 @@ CREATE TABLE IF NOT EXISTS public.maintenance_systems (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at TIMESTAMPTZ NULL,
 
-  CONSTRAINT maintenance_systems_identity_unique UNIQUE (user_id, vehicle_id, stable_key),
-  CONSTRAINT maintenance_systems_type_unique UNIQUE (user_id, vehicle_id, type_key)
+  CONSTRAINT maintenance_systems_stable_key_not_blank CHECK (length(trim(stable_key)) > 0),
+  CONSTRAINT maintenance_systems_type_key_not_blank CHECK (length(trim(type_key)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS public.maintenance_subcategories (
@@ -60,9 +61,35 @@ CREATE TABLE IF NOT EXISTS public.maintenance_subcategories (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at TIMESTAMPTZ NULL,
 
-  CONSTRAINT maintenance_subcategories_identity_unique UNIQUE (user_id, vehicle_id, stable_key),
-  CONSTRAINT maintenance_subcategories_type_unique UNIQUE (user_id, vehicle_id, system_stable_key, type_key)
+  CONSTRAINT maintenance_subcategories_stable_key_not_blank CHECK (length(trim(stable_key)) > 0),
+  CONSTRAINT maintenance_subcategories_type_key_not_blank CHECK (length(trim(type_key)) > 0)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_systems_user_global_stable_unique
+  ON public.maintenance_systems(user_id, stable_key)
+  WHERE vehicle_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_systems_user_vehicle_stable_unique
+  ON public.maintenance_systems(user_id, vehicle_id, stable_key)
+  WHERE vehicle_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_systems_user_global_type_unique
+  ON public.maintenance_systems(user_id, type_key)
+  WHERE vehicle_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_systems_user_vehicle_type_unique
+  ON public.maintenance_systems(user_id, vehicle_id, type_key)
+  WHERE vehicle_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_subcategories_user_global_stable_unique
+  ON public.maintenance_subcategories(user_id, stable_key)
+  WHERE vehicle_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_subcategories_user_vehicle_stable_unique
+  ON public.maintenance_subcategories(user_id, vehicle_id, stable_key)
+  WHERE vehicle_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_subcategories_user_global_type_unique
+  ON public.maintenance_subcategories(user_id, COALESCE(system_stable_key, ''), type_key)
+  WHERE vehicle_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS maintenance_subcategories_user_vehicle_type_unique
+  ON public.maintenance_subcategories(user_id, vehicle_id, COALESCE(system_stable_key, ''), type_key)
+  WHERE vehicle_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_systems_user_vehicle
   ON public.maintenance_systems(user_id, vehicle_id);

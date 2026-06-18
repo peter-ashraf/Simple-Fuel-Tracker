@@ -373,6 +373,7 @@ export default function App() {
 
         if (event === "SIGNED_IN" && currentSession) {
           setLocalMode(false);
+          navigate("/", { replace: true });
 
           // Only run if startup is already complete; otherwise checkSession
           // handles it. This guards against near-simultaneous events.

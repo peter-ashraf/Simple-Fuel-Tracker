@@ -2197,9 +2197,31 @@ export default function Settings() {
                 vehiclesMatch &&
                 fillupsMatch &&
                 maintenanceMatch &&
-                tripsMatch;
+                tripsMatch &&
+                !syncSummary?.taxonomyDirty;
 
               const showActionsAnyway = refreshCount >= 4;
+              const pendingChangeLines = [];
+
+              if (syncSummary?.taxonomyDirty) {
+                pendingChangeLines.push("Maintenance systems, categories, or rules changed locally.");
+              }
+
+              if ((diff?.localOnly || 0) > 0) {
+                pendingChangeLines.push(`${diff.localOnly} local record${diff.localOnly !== 1 ? "s" : ""} not in cloud.`);
+              }
+              if ((diff?.cloudOnly || 0) > 0) {
+                pendingChangeLines.push(`${diff.cloudOnly} cloud record${diff.cloudOnly !== 1 ? "s" : ""} not on this device.`);
+              }
+              if ((diff?.bothChanged || 0) > 0) {
+                pendingChangeLines.push(`${diff.bothChanged} record${diff.bothChanged !== 1 ? "s" : ""} changed in both places.`);
+              }
+              if ((diff?.localDeleted || 0) > 0) {
+                pendingChangeLines.push(`${diff.localDeleted} local deletion${diff.localDeleted !== 1 ? "s" : ""} pending upload.`);
+              }
+              if ((diff?.cloudDeleted || 0) > 0) {
+                pendingChangeLines.push(`${diff.cloudDeleted} cloud deletion${diff.cloudDeleted !== 1 ? "s" : ""} pending download.`);
+              }
 
               if (isInSync && !showActionsAnyway) {
                 return (
@@ -2250,6 +2272,21 @@ export default function Settings() {
                       <p className="text-xs text-amber-700 dark:text-amber-300 font-medium text-center">
                         Force Sync Mode enabled via repeated refresh.
                       </p>
+                    </div>
+                  )}
+
+                  {!showActionsAnyway && pendingChangeLines.length > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 p-4 rounded-2xl">
+                      <p className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-300 mb-2">
+                        Pending Changes
+                      </p>
+                      <div className="space-y-1">
+                        {pendingChangeLines.map((line) => (
+                          <p key={line} className="text-sm text-blue-900 dark:text-blue-100">
+                            - {line}
+                          </p>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -2339,7 +2376,8 @@ export default function Settings() {
                     (syncResult.counts.vehicles > 0 ||
                       syncResult.counts.fillups > 0 ||
                       syncResult.counts.maintenance > 0 ||
-                      syncResult.counts.tripEstimates > 0) && (
+                      syncResult.counts.tripEstimates > 0 ||
+                      syncResult.counts.maintenanceTaxonomy > 0) && (
                       <div className="mt-3 text-sm text-slate-600 dark:text-slate-400">
                         <div className="space-y-1">
                           {syncResult.counts.vehicles > 0 && (
@@ -2367,16 +2405,20 @@ export default function Settings() {
                               {syncResult.counts.tripEstimates !== 1 ? "s" : ""}
                             </div>
                           )}
+                          {syncResult.counts.maintenanceTaxonomy > 0 && (
+                            <div>
+                              - {syncResult.counts.maintenanceTaxonomy} maintenance
+                              taxonomy record
+                              {syncResult.counts.maintenanceTaxonomy !== 1 ? "s" : ""}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setManualSyncModalOpen(false);
-                  setSyncResult(null);
-                }}
+                onClick={handleCloseManualSync}
                 className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
               >
                 Close

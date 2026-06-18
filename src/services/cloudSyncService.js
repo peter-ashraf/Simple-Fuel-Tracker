@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
+import { makeMaintenanceTypeKey } from '../utils/maintenanceTypeKey';
+import { MAINTENANCE_CATEGORIES } from '../data/maintenanceCategories';
 
 const LOCALSTORAGE_KEYS = [
   'fueltracker-vehicles-v2',
@@ -11,6 +13,9 @@ const LOCALSTORAGE_KEYS = [
   'fueltracker-trip-estimates-v2',
   'fueltracker-tyre-comparisons-v2',
   'fueltracker-maintenance-entries-v3',
+  'fueltracker-maintenance-categories-v1',
+  'fueltracker-maintenance-systems-v1',
+  'fueltracker-maintenance-settings-v2',
   'fueltracker-maintenance-reminders-v2'
 ];
 
@@ -21,6 +26,26 @@ const CLOUD_SYNCED_FLAG_KEY = 'fueltracker-cloud-synced-timestamp';
 const BACKGROUND_SYNC_LOCK_KEY = 'fueltracker-background-sync-lock';
 const COUNTS_MATCHED_NO_CONFLICT_KEY = 'fueltracker-counts-matched-no-conflict';
 const PENDING_SYNC_STATUS_KEY = 'fueltracker-pending-sync-status';
+const MAINTENANCE_CATEGORIES_KEY = 'fueltracker-maintenance-categories-v1';
+const MAINTENANCE_SYSTEMS_KEY = 'fueltracker-maintenance-systems-v1';
+const MAINTENANCE_SETTINGS_KEY = 'fueltracker-maintenance-settings-v2';
+const MAINTENANCE_TAXONOMY_DIRTY_KEY = 'fueltracker-maintenance-taxonomy-dirty';
+
+const DEFAULT_MAINTENANCE_SYSTEMS = [
+  { id: 'engine', name: 'Engine', icon: 'Engine', categories: ['oil_change', 'air_filter', 'spark_plugs', 'transmission_service'], color: '#ef4444' },
+  { id: 'tires', name: 'Tires', icon: 'Disc', categories: ['tire_rotation', 'tire_replacement'], color: '#3b82f6' },
+  { id: 'fluids', name: 'Fluids', icon: 'Drop', categories: ['coolant_flush', 'ac_filter', 'fuel_filter', 'brake_service', 'brake_pads'], color: '#06b6d4' },
+  { id: 'safety', name: 'Safety', icon: 'Shield', categories: ['general_inspection'], color: '#f59e0b' },
+  { id: 'electrical', name: 'Electrical', icon: 'BatteryCharging', categories: ['battery'], color: '#8b5cf6' },
+  { id: 'body', name: 'Body', icon: 'Car', categories: ['custom'], color: '#64748b' }
+];
+
+const DEFAULT_SYSTEM_BY_ID = new Map(DEFAULT_MAINTENANCE_SYSTEMS.map((system) => [system.id, system]));
+const DEFAULT_CATEGORY_BY_ID = new Map(Object.values(MAINTENANCE_CATEGORIES).map((category) => [category.id, category]));
+const DEFAULT_SYSTEM_BY_CATEGORY_ID = new Map();
+DEFAULT_MAINTENANCE_SYSTEMS.forEach((system) => {
+  system.categories.forEach((categoryId) => DEFAULT_SYSTEM_BY_CATEGORY_ID.set(categoryId, system.id));
+});
 
 // Store online listener reference to prevent duplicates
 let onlineListener = null;
@@ -126,6 +151,569 @@ function backfillStableKeysForMaintenance(maintenance) {
   localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(updatedMaintenance));
   
   return updatedMaintenance;
+}
+
+function isMissingTaxonomyTableError(error) {
+  if (!error) return false;
+  const message = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+  return error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    error.code === 'PGRST204' ||
+    message.includes('maintenance_systems') && message.includes('not found') ||
+    message.includes('maintenance_subcategories') && message.includes('not found') ||
+    message.includes('does not exist');
+}
+
+function getIsoNow() {
+  return new Date().toISOString();
+}
+
+function getTaxonomyStableKey(record, fallbackPrefix) {
+  return record.stableKey ||
+    record.stable_key ||
+    record.id ||
+    `${fallbackPrefix}_${uuidv4()}`;
+}
+
+function getTaxonomyTypeKey(record, fallback) {
+  return record.typeKey ||
+    record.type_key ||
+    makeMaintenanceTypeKey(record.id || record.name || fallback) ||
+    fallback;
+}
+
+function loadLocalMaintenanceTaxonomy() {
+  const systems = JSON.parse(localStorage.getItem(MAINTENANCE_SYSTEMS_KEY) || '[]');
+  const categories = JSON.parse(localStorage.getItem(MAINTENANCE_CATEGORIES_KEY) || '[]');
+  const settings = JSON.parse(localStorage.getItem(MAINTENANCE_SETTINGS_KEY) || '{"categorySettings":{}}');
+  return { systems, categories, settings };
+}
+
+function hasDirtyMaintenanceTaxonomy() {
+  return Boolean(localStorage.getItem(MAINTENANCE_TAXONOMY_DIRTY_KEY));
+}
+
+function clearDirtyMaintenanceTaxonomy() {
+  localStorage.removeItem(MAINTENANCE_TAXONOMY_DIRTY_KEY);
+}
+
+function getSelectedVehicleLocalId() {
+  const selectedVehicleId = JSON.parse(localStorage.getItem('fueltracker-active-vehicle-v2') || 'null');
+  const vehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
+  if (selectedVehicleId && vehicles.some((vehicle) => vehicle.id === selectedVehicleId && !vehicle.deletedAt && !vehicle.deleted_at)) {
+    return selectedVehicleId;
+  }
+  return vehicles.find((vehicle) => !vehicle.deletedAt && !vehicle.deleted_at)?.id || null;
+}
+
+function isHollowMaintenanceRecord(record) {
+  if (!record || record.deletedAt || record.deleted_at || record.lastAction === 'DELETE') return false;
+  const hasTypeAndDate = Boolean(record.type) && Boolean(record.date || record.timestamp || record.createdAt || record.created_at);
+  const hasOdometer = record.odometer !== null && record.odometer !== undefined && record.odometer !== '';
+  const hasInterval = record.distance !== null && record.distance !== undefined && record.distance !== '' ||
+    record.intervalKm !== null && record.intervalKm !== undefined && record.intervalKm !== '';
+  const hasNextDue = record.nextDueOdometer !== null && record.nextDueOdometer !== undefined && record.nextDueOdometer !== '' ||
+    record.nextDueODO !== null && record.nextDueODO !== undefined && record.nextDueODO !== '' ||
+    record.next_due_odometer !== null && record.next_due_odometer !== undefined && record.next_due_odometer !== '';
+  const hasDescription = Boolean(record.description && String(record.description).trim());
+  const hasNotes = Boolean(record.notes && String(record.notes).trim());
+  const hasCost = record.cost !== null && record.cost !== undefined && record.cost !== '';
+
+  return hasTypeAndDate && !hasOdometer && !hasInterval && !hasNextDue && !hasDescription && !hasNotes && !hasCost;
+}
+
+function filterUsableMaintenanceRecords(records) {
+  return (records || []).filter((record) => !isHollowMaintenanceRecord(record));
+}
+
+function normalizeNullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numberValue = Number(value);
+  return Number.isNaN(numberValue) ? null : numberValue;
+}
+
+function normalizeNullableText(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
+}
+
+function normalizeMaintenanceDescription(value) {
+  if (value === null || value === undefined || value === '') {
+    return JSON.stringify({ distance: null, safety: null, notes: '' });
+  }
+
+  if (typeof value !== 'string') {
+    return JSON.stringify(value);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return JSON.stringify({ distance: null, safety: null, notes: '' });
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return JSON.stringify({
+        distance: normalizeNullableNumber(parsed.distance),
+        safety: normalizeNullableNumber(parsed.safety),
+        notes: parsed.notes || ''
+      });
+    }
+  } catch {
+    // Plain-text legacy descriptions are compared as text below.
+  }
+
+  return trimmed;
+}
+
+function maintenancePayloadMatchesCloud(payload, cloudRecord) {
+  if (!cloudRecord) return false;
+  return payload.vehicle_id === cloudRecord.vehicle_id &&
+    payload.date === cloudRecord.date &&
+    normalizeNullableText(payload.type) === normalizeNullableText(cloudRecord.type) &&
+    normalizeMaintenanceDescription(payload.description) === normalizeMaintenanceDescription(cloudRecord.description) &&
+    normalizeNullableNumber(payload.cost) === normalizeNullableNumber(cloudRecord.cost) &&
+    normalizeNullableNumber(payload.odometer) === normalizeNullableNumber(cloudRecord.odometer) &&
+    normalizeNullableText(payload.next_due_date) === normalizeNullableText(cloudRecord.next_due_date) &&
+    normalizeNullableNumber(payload.next_due_odometer) === normalizeNullableNumber(cloudRecord.next_due_odometer) &&
+    normalizeNullableText(payload.stable_key) === normalizeNullableText(cloudRecord.stable_key) &&
+    normalizeNullableText(payload.deleted_at) === normalizeNullableText(cloudRecord.deleted_at) &&
+    normalizeNullableText(payload.subcategory_stable_key) === normalizeNullableText(cloudRecord.subcategory_stable_key) &&
+    normalizeNullableText(payload.subcategory_type_key) === normalizeNullableText(cloudRecord.subcategory_type_key) &&
+    normalizeNullableText(payload.system_stable_key) === normalizeNullableText(cloudRecord.system_stable_key) &&
+    normalizeNullableText(payload.subcategory_name_snapshot) === normalizeNullableText(cloudRecord.subcategory_name_snapshot);
+}
+
+function taxonomyPayloadMatchesCloud(payload, cloudRecord) {
+  if (!cloudRecord) return false;
+  return payload.user_id === cloudRecord.user_id &&
+    payload.vehicle_id === cloudRecord.vehicle_id &&
+    normalizeNullableText(payload.stable_key) === normalizeNullableText(cloudRecord.stable_key) &&
+    normalizeNullableText(payload.type_key) === normalizeNullableText(cloudRecord.type_key) &&
+    normalizeNullableText(payload.name) === normalizeNullableText(cloudRecord.name) &&
+    normalizeNullableText(payload.icon) === normalizeNullableText(cloudRecord.icon) &&
+    normalizeNullableText(payload.color) === normalizeNullableText(cloudRecord.color) &&
+    normalizeNullableNumber(payload.sort_order) === normalizeNullableNumber(cloudRecord.sort_order) &&
+    Boolean(payload.is_default) === Boolean(cloudRecord.is_default) &&
+    normalizeNullableText(payload.deleted_at) === normalizeNullableText(cloudRecord.deleted_at) &&
+    (payload.system_stable_key === undefined || normalizeNullableText(payload.system_stable_key) === normalizeNullableText(cloudRecord.system_stable_key)) &&
+    (payload.default_distance === undefined || normalizeNullableNumber(payload.default_distance) === normalizeNullableNumber(cloudRecord.default_distance)) &&
+    (payload.default_safety === undefined || normalizeNullableNumber(payload.default_safety) === normalizeNullableNumber(cloudRecord.default_safety)) &&
+    (payload.default_notes === undefined || normalizeNullableText(payload.default_notes) === normalizeNullableText(cloudRecord.default_notes));
+}
+
+function sameStringSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const bSet = new Set(b);
+  return a.every((value) => bSet.has(value));
+}
+
+function isSystemCustomized(system) {
+  const id = system.id || system.typeKey || system.type_key || system.stableKey || system.stable_key;
+  const defaultSystem = DEFAULT_SYSTEM_BY_ID.get(id);
+  if (!defaultSystem) return true;
+  return normalizeNullableText(system.name) !== defaultSystem.name ||
+    normalizeNullableText(system.icon) !== defaultSystem.icon ||
+    normalizeNullableText(system.color) !== defaultSystem.color ||
+    !sameStringSet(system.categories || [], defaultSystem.categories || []) ||
+    Boolean(system.deletedAt || system.deleted_at);
+}
+
+function getCategorySystemId(categoryId, systems) {
+  return systems.find((system) => (system.categories || []).includes(categoryId))?.id || null;
+}
+
+function isCategoryCustomized(category, systems, settings = {}) {
+  const id = category.id || category.typeKey || category.type_key || category.stableKey || category.stable_key;
+  const defaultCategory = DEFAULT_CATEGORY_BY_ID.get(id);
+  const categorySettings = settings?.categorySettings?.[id] || {};
+  if (!defaultCategory) return true;
+
+  const defaultSystemId = DEFAULT_SYSTEM_BY_CATEGORY_ID.get(id) || null;
+  const currentSystemId = getCategorySystemId(id, systems);
+  const interval = categorySettings.intervalKm ??
+    category.defaultInterval?.value ??
+    category.defaultDistance ??
+    category.default_distance ??
+    null;
+  const safety = categorySettings.safetyMarginKm ??
+    category.defaultSafetyMarginKm ??
+    category.default_safety ??
+    null;
+
+  return normalizeNullableText(category.name) !== defaultCategory.name ||
+    normalizeNullableText(category.icon) !== defaultCategory.icon ||
+    normalizeNullableText(category.color) !== defaultCategory.color ||
+    normalizeNullableNumber(interval) !== normalizeNullableNumber(defaultCategory.defaultInterval?.value) ||
+    normalizeNullableNumber(safety) !== normalizeNullableNumber(defaultCategory.defaultSafetyMarginKm) ||
+    categorySettings.enabled === false ||
+    currentSystemId !== defaultSystemId ||
+    Boolean(category.deletedAt || category.deleted_at);
+}
+
+function getCustomizedMaintenanceTaxonomy(systems, categories, settings) {
+  const customizedSystems = systems.filter(isSystemCustomized);
+  const customizedCategories = categories.filter((category) => isCategoryCustomized(category, systems, settings));
+
+  return {
+    systems: customizedSystems,
+    categories: customizedCategories,
+    hasCustomizations: customizedSystems.length > 0 || customizedCategories.length > 0
+  };
+}
+
+function getMaintenanceTaxonomyMetadata(entry, systems, categories) {
+  const category = categories.find((cat) =>
+    cat.id === entry.type ||
+    cat.typeKey === entry.type ||
+    cat.type_key === entry.type ||
+    cat.stableKey === entry.subcategoryStableKey ||
+    cat.stable_key === entry.subcategory_stable_key
+  );
+  const system = category
+    ? systems.find((candidate) => (candidate.categories || []).includes(category.id))
+    : null;
+
+  return {
+    category,
+    system,
+    subcategoryStableKey: category ? getTaxonomyStableKey(category, 'category') : entry.subcategoryStableKey || entry.subcategory_stable_key || null,
+    subcategoryTypeKey: category ? getTaxonomyTypeKey(category, category.id || entry.type) : entry.subcategoryTypeKey || entry.subcategory_type_key || entry.type || null,
+    subcategoryNameSnapshot: category?.name || entry.subcategoryNameSnapshot || entry.subcategory_name_snapshot || entry.type || null,
+    systemStableKey: system ? getTaxonomyStableKey(system, 'system') : entry.systemStableKey || entry.system_stable_key || null
+  };
+}
+
+function getMaintenanceTaxonomyForSync(systems, categories, settings, vehicleId) {
+  const customized = getCustomizedMaintenanceTaxonomy(systems, categories, settings);
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const systemByCategory = new Map();
+  systems.forEach((system) => {
+    (system.categories || []).forEach((categoryId) => {
+      if (!systemByCategory.has(categoryId)) systemByCategory.set(categoryId, system);
+    });
+  });
+
+  const systemMap = new Map(customized.systems.map((system) => [system.id, system]));
+  const categoryMap = new Map(customized.categories.map((category) => [category.id, category]));
+  const maintenanceEntries = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+
+  maintenanceEntries
+    .filter((entry) =>
+      !entry.deletedAt &&
+      !entry.deleted_at &&
+      entry.lastAction !== 'DELETE' &&
+      (!vehicleId || entry.vehicleId === vehicleId || entry.vehicle_id === vehicleId)
+    )
+    .forEach((entry) => {
+      const category = categoryById.get(entry.type);
+      if (!category) return;
+      categoryMap.set(category.id, category);
+      const system = systemByCategory.get(category.id);
+      if (system) systemMap.set(system.id, system);
+    });
+
+  return {
+    systems: Array.from(systemMap.values()),
+    categories: Array.from(categoryMap.values()),
+    hasCustomizations: systemMap.size > 0 || categoryMap.size > 0,
+    systemByCategory
+  };
+}
+
+function splitHollowMaintenanceRecords(records) {
+  const usable = [];
+  const hollow = [];
+
+  records.forEach((record) => {
+    if (isHollowMaintenanceRecord(record)) hollow.push(record);
+    else usable.push(record);
+  });
+
+  return { usable, hollow };
+}
+
+function tombstoneLocalMaintenanceRecords(records) {
+  if (!records.length) return [];
+  const deletedAt = getIsoNow();
+  const hollowKeys = new Set(records.map((record) => record.stableKey || record.stable_key || record.id).filter(Boolean));
+  const allMaintenance = JSON.parse(localStorage.getItem('fueltracker-maintenance-entries-v3') || '[]');
+  const updatedMaintenance = allMaintenance.map((entry) => {
+    const key = entry.stableKey || entry.stable_key || entry.id;
+    if (!hollowKeys.has(key)) return entry;
+    return {
+      ...entry,
+      deletedAt,
+      deleted_at: deletedAt,
+      updatedAt: deletedAt,
+      updated_at: deletedAt,
+      lastAction: 'DELETE',
+      pendingDelete: false,
+      pendingDeleteRequestedAt: null,
+      tombstoneVerifiedAt: null
+    };
+  });
+  localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(updatedMaintenance));
+  return updatedMaintenance;
+}
+
+function mapLocalSystemToCloud(system, userId, vehicleId, sortOrder = 0) {
+  const now = getIsoNow();
+  const stableKey = getTaxonomyStableKey(system, 'system');
+  const typeKey = getTaxonomyTypeKey(system, 'maintenance_system');
+
+  return {
+    user_id: userId,
+    vehicle_id: vehicleId,
+    stable_key: stableKey,
+    type_key: typeKey,
+    name: system.name || typeKey,
+    icon: system.icon || null,
+    color: system.color || null,
+    sort_order: Number(system.sortOrder ?? system.sort_order ?? sortOrder) || 0,
+    is_default: Boolean(system.isDefault ?? system.is_default ?? false),
+    version: Number(system.version || 1),
+    created_at: system.createdAt || system.created_at || now,
+    updated_at: system.updatedAt || system.updated_at || now,
+    deleted_at: system.deletedAt || system.deleted_at || null
+  };
+}
+
+function mapLocalCategoryToCloud(category, system, userId, vehicleId, cloudSystemId = null, sortOrder = 0, categorySettings = {}) {
+  const now = getIsoNow();
+  const stableKey = getTaxonomyStableKey(category, 'category');
+  const typeKey = getTaxonomyTypeKey(category, 'maintenance_item');
+  const defaultDistance = categorySettings.intervalKm ??
+    category.defaultDistance ??
+    category.default_distance ??
+    category.defaultInterval?.value ??
+    null;
+  const defaultSafety = categorySettings.safetyMarginKm ??
+    category.defaultSafetyMarginKm ??
+    category.default_safety ??
+    null;
+
+  return {
+    user_id: userId,
+    vehicle_id: vehicleId,
+    system_id: cloudSystemId,
+    system_stable_key: system ? getTaxonomyStableKey(system, 'system') : null,
+    stable_key: stableKey,
+    type_key: typeKey,
+    name: category.name || typeKey,
+    icon: category.icon || null,
+    color: category.color || null,
+    default_distance: defaultDistance !== null ? Number(defaultDistance) : null,
+    default_safety: defaultSafety !== null ? Number(defaultSafety) : null,
+    default_notes: category.defaultNotes || category.default_notes || null,
+    sort_order: Number(category.sortOrder ?? category.sort_order ?? sortOrder) || 0,
+    is_default: Boolean(category.isDefault ?? category.is_default ?? false),
+    version: Number(category.version || 1),
+    created_at: category.createdAt || category.created_at || now,
+    updated_at: category.updatedAt || category.updated_at || now,
+    deleted_at: category.deletedAt || category.deleted_at || null
+  };
+}
+
+function mapCloudSystemToLocal(system) {
+  return {
+    id: system.type_key || system.stable_key,
+    stableKey: system.stable_key,
+    stable_key: system.stable_key,
+    typeKey: system.type_key,
+    type_key: system.type_key,
+    name: system.name,
+    icon: system.icon || 'Wrench',
+    color: system.color || '#64748b',
+    categories: [],
+    sortOrder: system.sort_order ?? 0,
+    sort_order: system.sort_order ?? 0,
+    isDefault: system.is_default ?? false,
+    is_default: system.is_default ?? false,
+    createdAt: system.created_at,
+    created_at: system.created_at,
+    updatedAt: system.updated_at,
+    updated_at: system.updated_at,
+    deletedAt: system.deleted_at,
+    deleted_at: system.deleted_at,
+    version: system.version ?? 1
+  };
+}
+
+function mapCloudCategoryToLocal(category) {
+  return {
+    id: category.type_key || category.stable_key,
+    stableKey: category.stable_key,
+    stable_key: category.stable_key,
+    typeKey: category.type_key,
+    type_key: category.type_key,
+    name: category.name,
+    icon: category.icon || 'custom',
+    color: category.color || '#64748b',
+    defaultInterval: {
+      type: 'distance',
+      value: Number(category.default_distance || 0)
+    },
+    defaultSafetyMarginKm: Number(category.default_safety || 0),
+    defaultNotes: category.default_notes || '',
+    sortOrder: category.sort_order ?? 0,
+    sort_order: category.sort_order ?? 0,
+    isDefault: category.is_default ?? false,
+    is_default: category.is_default ?? false,
+    createdAt: category.created_at,
+    created_at: category.created_at,
+    updatedAt: category.updated_at,
+    updated_at: category.updated_at,
+    deletedAt: category.deleted_at,
+    deleted_at: category.deleted_at,
+    version: category.version ?? 1
+  };
+}
+
+function getTaxonomyMergeKey(record, fallbackPrefix) {
+  return record.stableKey ||
+    record.stable_key ||
+    record.typeKey ||
+    record.type_key ||
+    record.id ||
+    `${fallbackPrefix}_${uuidv4()}`;
+}
+
+function buildDefaultMaintenanceSystems() {
+  return DEFAULT_MAINTENANCE_SYSTEMS.map((system, index) => ({
+    ...system,
+    stableKey: system.stableKey || system.stable_key || system.id,
+    stable_key: system.stable_key || system.stableKey || system.id,
+    typeKey: system.typeKey || system.type_key || system.id,
+    type_key: system.type_key || system.typeKey || system.id,
+    sortOrder: system.sortOrder ?? system.sort_order ?? index,
+    sort_order: system.sort_order ?? system.sortOrder ?? index,
+    isDefault: system.isDefault ?? system.is_default ?? true,
+    is_default: system.is_default ?? system.isDefault ?? true,
+    categories: [...(system.categories || [])]
+  }));
+}
+
+function buildDefaultMaintenanceCategories() {
+  return Object.values(MAINTENANCE_CATEGORIES).map((category, index) => ({
+    ...category,
+    stableKey: category.stableKey || category.stable_key || category.id,
+    stable_key: category.stable_key || category.stableKey || category.id,
+    typeKey: category.typeKey || category.type_key || category.id,
+    type_key: category.type_key || category.typeKey || category.id,
+    sortOrder: category.sortOrder ?? category.sort_order ?? index,
+    sort_order: category.sort_order ?? category.sortOrder ?? index,
+    isDefault: category.isDefault ?? category.is_default ?? true,
+    is_default: category.is_default ?? category.isDefault ?? true
+  }));
+}
+
+function mergeDownloadedMaintenanceTaxonomy(cloudSystems = [], cloudCategories = []) {
+  const currentSystems = JSON.parse(localStorage.getItem(MAINTENANCE_SYSTEMS_KEY) || '[]');
+  const currentCategories = JSON.parse(localStorage.getItem(MAINTENANCE_CATEGORIES_KEY) || '[]');
+  const settings = JSON.parse(localStorage.getItem(MAINTENANCE_SETTINGS_KEY) || '{"categorySettings":{}}');
+
+  const mergedSystems = (currentSystems.length > 0 ? currentSystems : buildDefaultMaintenanceSystems())
+    .map((system, index) => ({
+      ...system,
+      stableKey: system.stableKey || system.stable_key || system.id,
+      stable_key: system.stable_key || system.stableKey || system.id,
+      typeKey: system.typeKey || system.type_key || system.id,
+      type_key: system.type_key || system.typeKey || system.id,
+      sortOrder: system.sortOrder ?? system.sort_order ?? index,
+      sort_order: system.sort_order ?? system.sortOrder ?? index,
+      categories: [...(system.categories || [])]
+    }));
+  const mergedCategories = (currentCategories.length > 0 ? currentCategories : buildDefaultMaintenanceCategories())
+    .map((category, index) => ({
+      ...category,
+      stableKey: category.stableKey || category.stable_key || category.id,
+      stable_key: category.stable_key || category.stableKey || category.id,
+      typeKey: category.typeKey || category.type_key || category.id,
+      type_key: category.type_key || category.typeKey || category.id,
+      sortOrder: category.sortOrder ?? category.sort_order ?? index,
+      sort_order: category.sort_order ?? category.sortOrder ?? index
+    }));
+
+  const systemIndexByKey = new Map();
+  mergedSystems.forEach((system, index) => {
+    [system.id, system.stableKey, system.stable_key, system.typeKey, system.type_key]
+      .filter(Boolean)
+      .forEach((key) => systemIndexByKey.set(key, index));
+  });
+
+  cloudSystems.forEach((cloudSystem) => {
+    const localSystem = mapCloudSystemToLocal(cloudSystem);
+    const key = getTaxonomyMergeKey(localSystem, 'system');
+    const existingIndex = systemIndexByKey.get(key);
+
+    if (existingIndex !== undefined) {
+      const existing = mergedSystems[existingIndex];
+      mergedSystems[existingIndex] = {
+        ...existing,
+        ...localSystem,
+        categories: [...(existing.categories || [])]
+      };
+    } else {
+      const nextIndex = mergedSystems.length;
+      mergedSystems.push(localSystem);
+      [localSystem.id, localSystem.stableKey, localSystem.stable_key, localSystem.typeKey, localSystem.type_key]
+        .filter(Boolean)
+        .forEach((systemKey) => systemIndexByKey.set(systemKey, nextIndex));
+    }
+  });
+
+  const categoryIndexByKey = new Map();
+  mergedCategories.forEach((category, index) => {
+    [category.id, category.stableKey, category.stable_key, category.typeKey, category.type_key]
+      .filter(Boolean)
+      .forEach((key) => categoryIndexByKey.set(key, index));
+  });
+
+  cloudCategories.forEach((cloudCategory) => {
+    const localCategory = mapCloudCategoryToLocal(cloudCategory);
+    const key = getTaxonomyMergeKey(localCategory, 'category');
+    const existingIndex = categoryIndexByKey.get(key);
+
+    if (existingIndex !== undefined) {
+      mergedCategories[existingIndex] = {
+        ...mergedCategories[existingIndex],
+        ...localCategory
+      };
+    } else {
+      const nextIndex = mergedCategories.length;
+      mergedCategories.push(localCategory);
+      [localCategory.id, localCategory.stableKey, localCategory.stable_key, localCategory.typeKey, localCategory.type_key]
+        .filter(Boolean)
+        .forEach((categoryKey) => categoryIndexByKey.set(categoryKey, nextIndex));
+    }
+
+    const categoryId = localCategory.id;
+    if (Object.prototype.hasOwnProperty.call(cloudCategory, 'system_stable_key')) {
+      mergedSystems.forEach((system) => {
+        system.categories = (system.categories || []).filter((id) => id !== categoryId);
+      });
+      if (cloudCategory.system_stable_key) {
+        const parentSystem = mergedSystems.find((system) =>
+          [system.id, system.stableKey, system.stable_key, system.typeKey, system.type_key].includes(cloudCategory.system_stable_key)
+        );
+        if (parentSystem && !parentSystem.categories.includes(categoryId)) {
+          parentSystem.categories.push(categoryId);
+        }
+      }
+    }
+
+    settings.categorySettings = settings.categorySettings || {};
+    settings.categorySettings[categoryId] = {
+      ...(settings.categorySettings[categoryId] || {}),
+      intervalKm: localCategory.defaultInterval?.value ?? localCategory.defaultDistance ?? localCategory.default_distance ?? null,
+      safetyMarginKm: localCategory.defaultSafetyMarginKm ?? localCategory.default_safety ?? null,
+      enabled: cloudCategory.deleted_at ? false : settings.categorySettings[categoryId]?.enabled ?? true
+    };
+  });
+
+  return { systems: mergedSystems, categories: mergedCategories, settings };
 }
 
 /**
@@ -801,8 +1389,439 @@ export const cloudSyncService = {
     return {
       ...localSummary,
       ...cloudSummary,
-      detailedDiff
+      detailedDiff,
+      taxonomyDirty: hasDirtyMaintenanceTaxonomy()
     };
+  },
+
+  async resolveActiveCloudVehicleId(userId, vehicleIdMap = new Map()) {
+    const selectedVehicleId = getSelectedVehicleLocalId();
+    if (!selectedVehicleId) return null;
+    if (vehicleIdMap.has(selectedVehicleId)) return vehicleIdMap.get(selectedVehicleId);
+    if (this.isValidUuid(selectedVehicleId)) return selectedVehicleId;
+
+    const localVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
+    const activeVehicle = localVehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+    if (!activeVehicle?.stableKey && !activeVehicle?.stable_key) return null;
+
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('stable_key', activeVehicle.stableKey || activeVehicle.stable_key)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.id || null;
+  },
+
+  async resolveAllCloudVehicleIds(userId, vehicleIdMap = new Map()) {
+    const localVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]')
+      .filter((vehicle) => !vehicle.deletedAt && !vehicle.deleted_at);
+    const cloudVehicleIds = new Set();
+
+    localVehicles.forEach((vehicle) => {
+      const mappedId = vehicleIdMap.get(vehicle.id);
+      if (mappedId) cloudVehicleIds.add(mappedId);
+      else if (this.isValidUuid(vehicle.id)) cloudVehicleIds.add(vehicle.id);
+    });
+
+    const stableKeys = localVehicles
+      .map((vehicle) => vehicle.stableKey || vehicle.stable_key)
+      .filter(Boolean);
+
+    if (stableKeys.length > 0) {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id, stable_key')
+        .eq('user_id', userId)
+        .in('stable_key', stableKeys)
+        .is('deleted_at', null);
+
+      if (error) throw error;
+      (data || []).forEach((vehicle) => cloudVehicleIds.add(vehicle.id));
+    }
+
+    if (cloudVehicleIds.size === 0) {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('user_id', userId)
+        .is('deleted_at', null);
+
+      if (error) throw error;
+      (data || []).forEach((vehicle) => cloudVehicleIds.add(vehicle.id));
+    }
+
+    return Array.from(cloudVehicleIds);
+  },
+
+  async upsertMaintenanceTaxonomyRecord(table, payload) {
+    const selectColumns = table === 'maintenance_systems'
+      ? '*'
+      : '*';
+
+    const { data: stableMatch, error: stableFetchError } = await supabase
+      .from(table)
+      .select(selectColumns)
+      .eq('user_id', payload.user_id)
+      .eq('vehicle_id', payload.vehicle_id)
+      .eq('stable_key', payload.stable_key)
+      .maybeSingle();
+
+    if (stableFetchError) throw stableFetchError;
+
+    if (stableMatch) {
+      if (taxonomyPayloadMatchesCloud(payload, stableMatch)) return { action: 'skipped' };
+      const { error: updateError } = await supabase
+        .from(table)
+        .update(payload)
+        .eq('id', stableMatch.id);
+      if (updateError) throw updateError;
+      return { action: 'updated' };
+    }
+
+    let typeQuery = supabase
+      .from(table)
+      .select(selectColumns)
+      .eq('user_id', payload.user_id)
+      .eq('vehicle_id', payload.vehicle_id)
+      .eq('type_key', payload.type_key);
+
+    if (table === 'maintenance_subcategories') {
+      typeQuery = payload.system_stable_key
+        ? typeQuery.eq('system_stable_key', payload.system_stable_key)
+        : typeQuery.is('system_stable_key', null);
+    }
+
+    const { data: typeMatch, error: typeFetchError } = await typeQuery.maybeSingle();
+
+    if (typeFetchError) throw typeFetchError;
+
+    if (typeMatch) {
+      if (taxonomyPayloadMatchesCloud(payload, typeMatch)) return { action: 'skipped' };
+      const { error: updateError } = await supabase
+        .from(table)
+        .update(payload)
+        .eq('id', typeMatch.id);
+      if (updateError) throw updateError;
+      return { action: 'updated_by_type' };
+    }
+
+    const { data: migrated, error: migrateError } = await supabase
+      .from(table)
+      .update(payload)
+      .eq('user_id', payload.user_id)
+      .is('vehicle_id', null)
+      .eq('stable_key', payload.stable_key)
+      .select('stable_key');
+
+    if (migrateError) throw migrateError;
+    if (migrated && migrated.length > 0) return { action: 'migrated' };
+
+    const { error: insertError } = await supabase.from(table).insert(payload);
+    if (insertError) throw insertError;
+    return { action: 'inserted' };
+  },
+
+  async uploadMaintenanceTaxonomy(userId, vehicleIdMap = new Map(), options = {}) {
+    const result = {
+      success: true,
+      skipped: false,
+      systems: 0,
+      categories: 0,
+      details: []
+    };
+
+    try {
+      const { systems, categories, settings } = loadLocalMaintenanceTaxonomy();
+      const activeLocalVehicleId = getSelectedVehicleLocalId();
+      const taxonomyToSync = getMaintenanceTaxonomyForSync(systems, categories, settings, activeLocalVehicleId);
+      if (!taxonomyToSync.hasCustomizations) {
+        result.skipped = true;
+        result.details.push('Maintenance taxonomy upload skipped: only default local taxonomy is present.');
+        if (options.clearDirty !== false) clearDirtyMaintenanceTaxonomy();
+        return result;
+      }
+      const activeCloudVehicleId = await this.resolveActiveCloudVehicleId(userId, vehicleIdMap);
+      const cloudVehicleIds = activeCloudVehicleId ? [activeCloudVehicleId] : [];
+
+      if (cloudVehicleIds.length === 0) {
+        result.success = false;
+        result.details.push('Maintenance taxonomy upload failed: no cloud vehicles could be mapped.');
+        return result;
+      }
+
+      const systemByCategory = taxonomyToSync.systemByCategory;
+
+      for (const cloudVehicleId of cloudVehicleIds) {
+        for (const [index, system] of taxonomyToSync.systems.entries()) {
+          const payload = mapLocalSystemToCloud(system, userId, cloudVehicleId, index);
+          const { action } = await this.upsertMaintenanceTaxonomyRecord('maintenance_systems', payload);
+          if (action !== 'skipped') result.systems += 1;
+        }
+
+        const { data: cloudSystems, error: cloudSystemsError } = await supabase
+          .from('maintenance_systems')
+          .select('id, stable_key')
+          .eq('user_id', userId)
+          .eq('vehicle_id', cloudVehicleId)
+          .is('deleted_at', null);
+
+        if (cloudSystemsError) throw cloudSystemsError;
+        const cloudSystemIdByStableKey = new Map((cloudSystems || []).map((system) => [system.stable_key, system.id]));
+
+        for (const [index, category] of taxonomyToSync.categories.entries()) {
+          const categorySettings = settings?.categorySettings?.[category.id] || {};
+          const parentSystem = systemByCategory.get(category.id);
+          const parentStableKey = parentSystem ? getTaxonomyStableKey(parentSystem, 'system') : null;
+          const payload = mapLocalCategoryToCloud(
+            category,
+            parentSystem,
+            userId,
+            cloudVehicleId,
+            parentStableKey ? cloudSystemIdByStableKey.get(parentStableKey) || null : null,
+            index,
+            categorySettings
+          );
+          const { action } = await this.upsertMaintenanceTaxonomyRecord('maintenance_subcategories', payload);
+          if (action !== 'skipped') result.categories += 1;
+        }
+      }
+
+      if (result.systems > 0 || result.categories > 0) {
+        result.details.push(`Maintenance taxonomy uploaded: ${result.systems} systems, ${result.categories} categories across ${cloudVehicleIds.length} vehicles`);
+      } else {
+        result.skipped = true;
+        result.details.push('Maintenance taxonomy already matches the cloud.');
+      }
+      if (options.clearDirty !== false) clearDirtyMaintenanceTaxonomy();
+      return result;
+    } catch (error) {
+      if (isMissingTaxonomyTableError(error)) {
+        result.success = true;
+        result.skipped = true;
+        result.details.push('Maintenance taxonomy sync skipped: taxonomy tables are not installed yet.');
+        return result;
+      }
+
+      result.success = false;
+      result.details.push(`Maintenance taxonomy upload failed: ${error.message}`);
+      return result;
+    }
+  },
+
+  async downloadMaintenanceTaxonomy(userId, vehicleIdMap = new Map(), options = {}) {
+    const result = {
+      success: true,
+      skipped: false,
+      systems: 0,
+      categories: 0,
+      details: []
+    };
+
+    try {
+      const cloudVehicleId = await this.resolveActiveCloudVehicleId(userId, vehicleIdMap);
+      const cloudVehicleIds = cloudVehicleId ? [cloudVehicleId] : await this.resolveAllCloudVehicleIds(userId, vehicleIdMap);
+      if (cloudVehicleIds.length === 0) return result;
+
+      const { data: systems, error: systemsError } = await supabase
+        .from('maintenance_systems')
+        .select('*')
+        .eq('user_id', userId)
+        .in('vehicle_id', cloudVehicleIds)
+        .order('sort_order', { ascending: true });
+
+      if (systemsError) throw systemsError;
+
+      const { data: categories, error: categoriesError } = await supabase
+        .from('maintenance_subcategories')
+        .select('*')
+        .eq('user_id', userId)
+        .in('vehicle_id', cloudVehicleIds)
+        .order('sort_order', { ascending: true });
+
+      if (categoriesError) throw categoriesError;
+
+      if (!systems?.length && !categories?.length) return result;
+
+      const preferActiveVehicle = (records) => {
+        const byStableKey = new Map();
+        (records || []).forEach((record) => {
+          const key = record.stable_key || record.type_key || record.id;
+          const existing = byStableKey.get(key);
+          if (!existing || record.vehicle_id === cloudVehicleId) {
+            byStableKey.set(key, record);
+          }
+        });
+        return Array.from(byStableKey.values());
+      };
+
+      const preferredSystems = preferActiveVehicle(systems);
+      const preferredCategories = preferActiveVehicle(categories);
+      const {
+        systems: localSystems,
+        categories: localCategories,
+        settings: localSettings
+      } = mergeDownloadedMaintenanceTaxonomy(preferredSystems, preferredCategories);
+
+      if (localSystems.length > 0) {
+        localStorage.setItem(MAINTENANCE_SYSTEMS_KEY, JSON.stringify(localSystems));
+        result.systems = preferredSystems.length;
+      }
+
+      if (localCategories.length > 0) {
+        localStorage.setItem(MAINTENANCE_CATEGORIES_KEY, JSON.stringify(localCategories));
+        localStorage.setItem(MAINTENANCE_SETTINGS_KEY, JSON.stringify(localSettings));
+        result.categories = preferredCategories.length;
+      }
+
+      window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { entityKey: 'maintenance-taxonomy' } }));
+      window.dispatchEvent(new Event('fueltracker-local-storage-refresh'));
+      result.details.push(`Maintenance taxonomy downloaded: ${result.systems} systems, ${result.categories} categories from ${cloudVehicleIds.length} vehicles`);
+      if (options.clearDirty !== false) clearDirtyMaintenanceTaxonomy();
+      return result;
+    } catch (error) {
+      if (isMissingTaxonomyTableError(error)) {
+        result.success = true;
+        result.skipped = true;
+        result.details.push('Maintenance taxonomy download skipped: taxonomy tables are not installed yet.');
+        return result;
+      }
+
+      result.success = false;
+      result.details.push(`Maintenance taxonomy download failed: ${error.message}`);
+      return result;
+    }
+  },
+
+  async buildLocalMaintenanceTaxonomyPayloads(userId, vehicleIdMap = new Map()) {
+    const { systems, categories, settings } = loadLocalMaintenanceTaxonomy();
+    const activeLocalVehicleId = getSelectedVehicleLocalId();
+    const taxonomyToSync = getMaintenanceTaxonomyForSync(systems, categories, settings, activeLocalVehicleId);
+    if (!taxonomyToSync.hasCustomizations) {
+      return { systemPayloads: [], categoryPayloads: [], cloudVehicleIds: [] };
+    }
+    const activeCloudVehicleId = await this.resolveActiveCloudVehicleId(userId, vehicleIdMap);
+    const cloudVehicleIds = activeCloudVehicleId ? [activeCloudVehicleId] : [];
+    const systemByCategory = taxonomyToSync.systemByCategory;
+
+    const systemPayloads = [];
+    const categoryPayloads = [];
+
+    cloudVehicleIds.forEach((cloudVehicleId) => {
+      taxonomyToSync.systems.forEach((system, index) => {
+        systemPayloads.push(mapLocalSystemToCloud(system, userId, cloudVehicleId, index));
+      });
+
+      taxonomyToSync.categories.forEach((category, index) => {
+        const categorySettings = settings?.categorySettings?.[category.id] || {};
+        const parentSystem = systemByCategory.get(category.id);
+        categoryPayloads.push(mapLocalCategoryToCloud(
+          category,
+          parentSystem,
+          userId,
+          cloudVehicleId,
+          null,
+          index,
+          categorySettings
+        ));
+      });
+    });
+
+    return { systemPayloads, categoryPayloads, cloudVehicleIds };
+  },
+
+  async getMaintenanceTaxonomyDiff(userId) {
+    const diff = {
+      localOnly: [],
+      cloudOnly: [],
+      bothChanged: [],
+      localDeleted: [],
+      cloudDeleted: [],
+      identical: []
+    };
+
+    try {
+      const vehicleIdMap = await this.buildVehicleIdMap(userId);
+      const { systemPayloads, categoryPayloads, cloudVehicleIds } =
+        await this.buildLocalMaintenanceTaxonomyPayloads(userId, vehicleIdMap);
+
+      if (cloudVehicleIds.length === 0 || (systemPayloads.length === 0 && categoryPayloads.length === 0)) return diff;
+
+      const { data: cloudSystems, error: systemsError } = await supabase
+        .from('maintenance_systems')
+        .select('*')
+        .eq('user_id', userId)
+        .in('vehicle_id', cloudVehicleIds);
+
+      if (systemsError) throw systemsError;
+
+      const { data: cloudCategories, error: categoriesError } = await supabase
+        .from('maintenance_subcategories')
+        .select('*')
+        .eq('user_id', userId)
+        .in('vehicle_id', cloudVehicleIds);
+
+      if (categoriesError) throw categoriesError;
+
+      const compareTaxonomy = (localPayloads, cloudRecords, tableName) => {
+        const cloudByStableKey = new Map();
+        const cloudByTypeKey = new Map();
+        const matchedCloudIds = new Set();
+
+        (cloudRecords || []).forEach((record) => {
+          const stableKey = `${record.vehicle_id}:${record.stable_key}`;
+          const typeKey = tableName === 'maintenance_subcategories'
+            ? `${record.vehicle_id}:${record.system_stable_key || ''}:${record.type_key}`
+            : `${record.vehicle_id}:${record.type_key}`;
+          cloudByStableKey.set(stableKey, record);
+          cloudByTypeKey.set(typeKey, record);
+        });
+
+        localPayloads.forEach((payload) => {
+          const stableKey = `${payload.vehicle_id}:${payload.stable_key}`;
+          const typeKey = tableName === 'maintenance_subcategories'
+            ? `${payload.vehicle_id}:${payload.system_stable_key || ''}:${payload.type_key}`
+            : `${payload.vehicle_id}:${payload.type_key}`;
+          const cloudRecord = cloudByStableKey.get(stableKey) || cloudByTypeKey.get(typeKey);
+
+          if (!cloudRecord) {
+            const target = payload.deleted_at ? diff.localDeleted : diff.localOnly;
+            target.push({ ...payload, entityType: tableName });
+            return;
+          }
+
+          matchedCloudIds.add(cloudRecord.id);
+          if (taxonomyPayloadMatchesCloud(payload, cloudRecord)) {
+            diff.identical.push({ local: payload, cloud: cloudRecord });
+          } else {
+            diff.bothChanged.push({
+              local: payload,
+              cloud: cloudRecord,
+              winner: 'local',
+              entityType: tableName
+            });
+          }
+        });
+
+        (cloudRecords || []).forEach((record) => {
+          if (!matchedCloudIds.has(record.id)) {
+            const target = record.deleted_at ? diff.cloudDeleted : diff.cloudOnly;
+            target.push({ ...record, entityType: tableName });
+          }
+        });
+      };
+
+      compareTaxonomy(systemPayloads, cloudSystems || [], 'maintenance_systems');
+      compareTaxonomy(categoryPayloads, cloudCategories || [], 'maintenance_subcategories');
+
+      return diff;
+    } catch (error) {
+      if (isMissingTaxonomyTableError(error)) return diff;
+      throw error;
+    }
   },
 
   /**
@@ -811,7 +1830,7 @@ export const cloudSyncService = {
    * @param {Object} options - Options object
    * @param {boolean} options.silent - If true, no modal or success messages (for background sync)
    */
-  async uploadLocalDataToCloud(userId) {
+  async uploadLocalDataToCloud(userId, options = {}) {
     const result = {
       success: false,
       action: 'upload',
@@ -821,7 +1840,8 @@ export const cloudSyncService = {
         vehicles: 0,
         fillups: 0,
         maintenance: 0,
-        tripEstimates: 0
+        tripEstimates: 0,
+        maintenanceTaxonomy: 0
       },
       uuidSummary: null,
       totalUploaded: 0
@@ -847,14 +1867,21 @@ export const cloudSyncService = {
       const allVehiclesWithStableKeys = backfillStableKeys(allVehicles);
       const allFillupsWithStableKeys = backfillStableKeysForFillups(allFillups);
       const allMaintenanceWithStableKeys = backfillStableKeysForMaintenance(allMaintenance);
+      const { usable: validMaintenanceRecords, hollow: hollowMaintenanceRecords } = splitHollowMaintenanceRecords(allMaintenanceWithStableKeys);
+      const allMaintenanceForSync = hollowMaintenanceRecords.length > 0
+        ? tombstoneLocalMaintenanceRecords(hollowMaintenanceRecords)
+        : allMaintenanceWithStableKeys;
 
       // Only upload ACTIVE records (exclude soft-deleted tombstones)
       const vehicles = allVehiclesWithStableKeys.filter(v => !v.deletedAt && !v.deleted_at && v.lastAction !== 'DELETE');
       const fillups = allFillupsWithStableKeys.filter(f => !f.deletedAt && !f.deleted_at && f.lastAction !== 'DELETE');
-      const maintenance = allMaintenanceWithStableKeys.filter(m => !m.deletedAt && !m.deleted_at && m.lastAction !== 'DELETE');
+      const maintenance = validMaintenanceRecords.filter(m => !m.deletedAt && !m.deleted_at && m.lastAction !== 'DELETE');
       const tripEstimates = allTripEstimates.filter(t => !t.deletedAt && !t.deleted_at && t.lastAction !== 'DELETE');
 
       result.details.push(`Local records found: ${vehicles.length} vehicles, ${fillups.length} fillups, ${maintenance.length} maintenance, ${tripEstimates.length} trips (${allVehicles.length - vehicles.length} deleted vehicles excluded)`);
+      if (hollowMaintenanceRecords.length > 0) {
+        result.details.push(`Ignored ${hollowMaintenanceRecords.length} hollow maintenance placeholder record(s) and marked them for cloud deletion.`);
+      }
 
       const vehiclesWithStableKeys = vehicles;
       const fillupsWithStableKeys = fillups;
@@ -941,7 +1968,7 @@ export const cloudSyncService = {
       // deciding that active records are already in sync.
       const vehicleTombstoneSync = await syncTombstonesToCloud(userId, allVehiclesWithStableKeys, 'vehicles');
       const fillupTombstoneSync = await syncTombstonesToCloud(userId, allFillupsWithStableKeys, 'fillups');
-      const maintenanceTombstoneSync = await syncTombstonesToCloud(userId, allMaintenanceWithStableKeys, 'maintenance');
+      const maintenanceTombstoneSync = await syncTombstonesToCloud(userId, allMaintenanceForSync, 'maintenance');
       const tripTombstoneSync = await syncTombstonesToCloud(userId, allTripEstimates, 'trip_estimates');
       const tombstonesSynced =
         vehicleTombstoneSync.synced +
@@ -950,17 +1977,30 @@ export const cloudSyncService = {
         tripTombstoneSync.synced;
 
       result.details.push(`Tombstone sync: ${vehicleTombstoneSync.synced} vehicles, ${fillupTombstoneSync.synced} fillups, ${maintenanceTombstoneSync.synced} maintenance, ${tripTombstoneSync.synced} trips`);
-      
+
       const changeDetection = detectChanges(localDataSummary, cloudDataSummary);
       
       if (!changeDetection.hasChanges) {
-        result.success = true;
-        result.message = tombstonesSynced > 0
+        const taxonomyUpload = options.silent
+          ? { success: true, skipped: true, systems: 0, categories: 0, details: ['Maintenance taxonomy upload skipped during background sync.'] }
+          : await this.uploadMaintenanceTaxonomy(userId, await this.buildVehicleIdMap(userId), { clearDirty: true });
+        result.details.push(...taxonomyUpload.details);
+        const taxonomyRecords = (taxonomyUpload.systems || 0) + (taxonomyUpload.categories || 0);
+        result.counts.maintenanceTaxonomy = taxonomyRecords;
+        result.totalUploaded = taxonomyRecords;
+        result.success = taxonomyUpload.success !== false;
+        result.message = taxonomyUpload.success === false
+          ? 'Upload partially failed. Maintenance taxonomy could not be synced.'
+          : taxonomyRecords > 0
+          ? `Upload complete. ${taxonomyRecords} maintenance taxonomy record${taxonomyRecords !== 1 ? 's' : ''} saved to your cloud account.`
+          : tombstonesSynced > 0
           ? 'Deleted records synced. Cloud is up to date.'
           : 'Nothing to upload. Cloud is already up to date.';
-        result.details.push(tombstonesSynced > 0
-          ? `Synced ${tombstonesSynced} deleted records`
-          : 'No new or changed records detected');
+        if (taxonomyUpload.success !== false) {
+          result.details.push(tombstonesSynced > 0
+            ? `Synced ${tombstonesSynced} deleted records`
+            : 'No new or changed records detected');
+        }
         return result;
       }
 
@@ -972,6 +2012,7 @@ export const cloudSyncService = {
       let fillupSkippedByFallback = 0;
       let fillupComputedTotal = 0;
       let maintenanceErrors = 0;
+      let taxonomyErrors = 0;
       let tripErrors = 0;
       let vehicleUpdates = 0;
       let vehicleInserts = 0;
@@ -1080,6 +2121,13 @@ export const cloudSyncService = {
         }
       }
 
+      const taxonomyUpload = options.silent
+        ? { success: true, skipped: true, systems: 0, categories: 0, details: ['Maintenance taxonomy upload skipped during background sync.'] }
+        : await this.uploadMaintenanceTaxonomy(userId, vehicleIdMap, { clearDirty: true });
+      result.details.push(...taxonomyUpload.details);
+      taxonomyErrors = taxonomyUpload.success === false ? 1 : 0;
+      result.counts.maintenanceTaxonomy = (taxonomyUpload.systems || 0) + (taxonomyUpload.categories || 0);
+
       // Upload fillups with normalization and deduplication
       if (remappedFillups.length > 0) {
         const existingFillupIds = new Set(existingFillups?.map(f => f.id) || []);
@@ -1143,6 +2191,7 @@ export const cloudSyncService = {
 
       // Upload maintenance with deduplication
       if (remappedMaintenance.length > 0) {
+        const { systems: localMaintenanceSystems, categories: localMaintenanceCategories } = loadLocalMaintenanceTaxonomy();
         const existingMaintenanceIds = new Set(existingMaintenance?.map(m => m.id) || []);
         const existingMaintenanceStableKeys = new Map();
         existingMaintenance?.forEach(m => {
@@ -1191,6 +2240,7 @@ export const cloudSyncService = {
             remappedToCloudIdMap.get(entry.vehicleId) ||
             vehicleIdMap.get(entry.vehicleId) ||
             entry.vehicleId;
+          const taxonomyMeta = getMaintenanceTaxonomyMetadata(entry, localMaintenanceSystems, localMaintenanceCategories);
 
           const payload = {
             id: cloudIdToUse,
@@ -1204,8 +2254,20 @@ export const cloudSyncService = {
             next_due_date: entry.nextDueDate || null,
             stable_key: entry.stableKey,
             next_due_odometer: entry.nextDueOdometer || null,
-            created_at: entry.createdAt || new Date().toISOString()
+            created_at: entry.createdAt || new Date().toISOString(),
+            subcategory_stable_key: taxonomyMeta.subcategoryStableKey,
+            subcategory_type_key: taxonomyMeta.subcategoryTypeKey,
+            system_stable_key: taxonomyMeta.systemStableKey,
+            subcategory_name_snapshot: taxonomyMeta.subcategoryNameSnapshot
           };
+
+          const existingMaintenanceRec = entry.stableKey
+            ? existingMaintenanceStableKeys.get(entry.stableKey)
+            : existingMaintenance?.find((m) => m.id === entry.id);
+
+          if (existingMaintenanceRec && maintenancePayloadMatchesCloud(payload, existingMaintenanceRec)) {
+            continue;
+          }
 
           const { error } = await supabase.from('maintenance').upsert(payload, {
             onConflict: 'user_id,stable_key'
@@ -1254,15 +2316,15 @@ export const cloudSyncService = {
         }
       }
 
-      const totalErrors = vehicleErrors + fillupErrors + maintenanceErrors + tripErrors;
-      const totalRecords = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates;
+      const totalErrors = vehicleErrors + fillupErrors + maintenanceErrors + taxonomyErrors + tripErrors;
+      const totalRecords = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates + result.counts.maintenanceTaxonomy;
       const totalSkipped = fillupSkipped;
 
       if (totalErrors === 0 && totalRecords > 0) {
         result.success = true;
         result.totalUploaded = totalRecords;
         result.message = `Upload complete. ${totalRecords} records saved to your cloud account.`;
-        result.details.push(`Successfully uploaded: ${vehicleInserts} new vehicles, ${vehicleUpdates} updated vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance, ${result.counts.tripEstimates} trips`);
+        result.details.push(`Successfully uploaded: ${vehicleInserts} new vehicles, ${vehicleUpdates} updated vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance, ${result.counts.tripEstimates} trips, ${result.counts.maintenanceTaxonomy} maintenance taxonomy records`);
         result.details.push(`Skipped ${totalSkipped} existing records (${vehicleSkipped} unchanged vehicles, ${fillupSkipped} fillups)`);
         if (fillupComputedTotal > 0) {
           result.details.push(`Fillup normalization: ${fillupComputedTotal} totalCost values computed from liters * pricePerLiter`);
@@ -1349,7 +2411,8 @@ export const cloudSyncService = {
         vehicles: 0,
         fillups: 0,
         maintenance: 0,
-        tripEstimates: 0
+        tripEstimates: 0,
+        maintenanceTaxonomy: 0
       }
     };
 
@@ -1436,7 +2499,11 @@ export const cloudSyncService = {
       if (maintenanceError) {
         result.details.push(`Maintenance fetch failed: ${maintenanceError.message} (code: ${maintenanceError.code})`);
       } else if (maintenance) {
-        const mappedMaintenance = maintenance.map((m) =>
+        const usableMaintenance = filterUsableMaintenanceRecords(maintenance);
+        if (usableMaintenance.length !== maintenance.length) {
+          result.details.push(`Skipped ${maintenance.length - usableMaintenance.length} hollow maintenance placeholder record(s) from cloud download.`);
+        }
+        const mappedMaintenance = usableMaintenance.map((m) =>
           this.mapCloudMaintenanceToLocal(m),
         );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
@@ -1476,6 +2543,7 @@ export const cloudSyncService = {
         result.details.push(`Settings fetch failed: ${settingsError.message} (code: ${settingsError.code})`);
       } else if (settings?.settings_json) {
         Object.entries(settings.settings_json).forEach(([key, value]) => {
+          if (key === MAINTENANCE_SYSTEMS_KEY || key === MAINTENANCE_CATEGORIES_KEY) return;
           try {
             localStorage.setItem(key, JSON.stringify(value));
           } catch (e) {
@@ -1484,13 +2552,17 @@ export const cloudSyncService = {
         });
       }
 
-      const totalRecords = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates;
+      const taxonomyDownload = await this.downloadMaintenanceTaxonomy(userId);
+      result.details.push(...taxonomyDownload.details);
+      result.counts.maintenanceTaxonomy = (taxonomyDownload.systems || 0) + (taxonomyDownload.categories || 0);
+
+      const totalRecords = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates + result.counts.maintenanceTaxonomy;
       const hasErrors = result.details.some(d => d.includes('failed'));
 
       if (!hasErrors && totalRecords > 0) {
         result.success = true;
         result.message = `Download complete. ${totalRecords} records loaded from your cloud account.`;
-        result.details.push(`Successfully downloaded: ${result.counts.vehicles} vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance, ${result.counts.tripEstimates} trips`);
+        result.details.push(`Successfully downloaded: ${result.counts.vehicles} vehicles, ${result.counts.fillups} fillups, ${result.counts.maintenance} maintenance, ${result.counts.tripEstimates} trips, ${result.counts.maintenanceTaxonomy} maintenance taxonomy records`);
         localStorage.setItem(MIGRATION_DECISION_KEY, 'download');
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
         // Set cloud synced flag to indicate local data is now in sync with cloud
@@ -1530,7 +2602,8 @@ export const cloudSyncService = {
         vehicles: 0,
         fillups: 0,
         maintenance: 0,
-        tripEstimates: 0
+        tripEstimates: 0,
+        maintenanceTaxonomy: 0
       },
       uuidSummary: null
     };
@@ -1669,6 +2742,7 @@ export const cloudSyncService = {
       }
 
       // Upload maintenance (skip existing)
+      const { systems: mergeMaintenanceSystems, categories: mergeMaintenanceCategories } = loadLocalMaintenanceTaxonomy();
       for (const entry of remappedMaintenance) {
         if (!existingMaintenanceIds.has(entry.id)) {
           // CRITICAL FIX: Preserve original maintenance date (same logic as fill-ups)
@@ -1698,10 +2772,13 @@ export const cloudSyncService = {
             continue;
           }
 
+          const taxonomyMeta = getMaintenanceTaxonomyMetadata(entry, mergeMaintenanceSystems, mergeMaintenanceCategories);
+          const mappedEntryVehicleId = vehicleIdMap.get(entry.vehicleId) || entry.vehicleId;
+
           const { error } = await supabase.from('maintenance').upsert({
             id: entry.id,
             user_id: userId,
-            vehicle_id: entry.vehicleId,
+            vehicle_id: mappedEntryVehicleId,
             date: normalizedMaintenanceDate,
             type: entry.type || null,
             description: entry.description || null,
@@ -1709,7 +2786,11 @@ export const cloudSyncService = {
             odometer: entry.odometer || null,
             next_due_date: entry.nextDueDate || null,
             next_due_odometer: entry.nextDueOdometer || null,
-            created_at: entry.createdAt || new Date().toISOString()
+            created_at: entry.createdAt || new Date().toISOString(),
+            subcategory_stable_key: taxonomyMeta.subcategoryStableKey,
+            subcategory_type_key: taxonomyMeta.subcategoryTypeKey,
+            system_stable_key: taxonomyMeta.systemStableKey,
+            subcategory_name_snapshot: taxonomyMeta.subcategoryNameSnapshot
           });
           if (error) {
             maintenanceErrors++;
@@ -1745,11 +2826,16 @@ export const cloudSyncService = {
         }
       }
 
+      const taxonomyUpload = await this.uploadMaintenanceTaxonomy(userId);
+      result.details.push(...taxonomyUpload.details);
+      const taxonomyErrors = taxonomyUpload.success === false ? 1 : 0;
+      result.counts.maintenanceTaxonomy = (taxonomyUpload.systems || 0) + (taxonomyUpload.categories || 0);
+
       // Sync merged data back to local
       await this.downloadCloudDataToLocal(userId);
 
-      const totalErrors = vehicleErrors + fillupErrors + maintenanceErrors + tripErrors;
-      const totalMerged = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates;
+      const totalErrors = vehicleErrors + fillupErrors + maintenanceErrors + taxonomyErrors + tripErrors;
+      const totalMerged = result.counts.vehicles + result.counts.fillups + result.counts.maintenance + result.counts.tripEstimates + result.counts.maintenanceTaxonomy;
 
       result.details.push(`Merge summary: ${totalMerged} new records merged, ${skipped} duplicates skipped, ${totalErrors} errors`);
 
@@ -2017,12 +3103,14 @@ export const cloudSyncService = {
         .from('maintenance')
         .select('*')
         .eq('user_id', userId)
+        .is('deleted_at', null)
         .order('date', { ascending: true });
       
       if (maintenanceError) {
         console.warn('[Sync][syncFromCloud] Maintenance fetch failed:', maintenanceError.message);
       } else {
-        const mappedMaintenance = (maintenance || []).map((m) =>
+        const usableMaintenance = filterUsableMaintenanceRecords(maintenance || []);
+        const mappedMaintenance = usableMaintenance.map((m) =>
           this.mapCloudMaintenanceToLocal(m),
         );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
@@ -2039,12 +3127,18 @@ export const cloudSyncService = {
         console.warn('[Sync][syncFromCloud] Settings fetch failed:', settingsError.message);
       } else if (settings?.settings_json) {
         Object.entries(settings.settings_json).forEach(([key, value]) => {
+          if (key === MAINTENANCE_SYSTEMS_KEY || key === MAINTENANCE_CATEGORIES_KEY) return;
           try {
             localStorage.setItem(key, JSON.stringify(value));
           } catch (error) {
             console.warn('[Sync][syncFromCloud] Failed to persist setting:', key, error);
           }
         });
+      }
+
+      const taxonomyDownload = await this.downloadMaintenanceTaxonomy(userId, new Map(), { clearDirty: false });
+      if (taxonomyDownload.success === false) {
+        console.warn('[Sync][syncFromCloud] Maintenance taxonomy fetch failed:', taxonomyDownload.details.join(' '));
       }
     } catch (error) {
       console.warn('[Sync][syncFromCloud] Failed:', error);
@@ -2973,7 +4067,11 @@ export const cloudSyncService = {
         next_due_odometer: nextDueOdometer,
         created_at: record.createdAt || record.created_at || now,
         updated_at: record.updatedAt || record.updated_at || now,
-        deleted_at: record.deletedAt || record.deleted_at || null
+        deleted_at: record.deletedAt || record.deleted_at || null,
+        subcategory_stable_key: record.subcategoryStableKey || record.subcategory_stable_key || null,
+        subcategory_type_key: record.subcategoryTypeKey || record.subcategory_type_key || null,
+        system_stable_key: record.systemStableKey || record.system_stable_key || null,
+        subcategory_name_snapshot: record.subcategoryNameSnapshot || record.subcategory_name_snapshot || null
       };
     }
     return record;
@@ -3102,13 +4200,17 @@ export const cloudSyncService = {
         } else {
           const localUpdated = local.updatedAt || local.timestamp;
           const cloudUpdated = cloud.updated_at || cloud.created_at;
-          
+
           let contentChanged = false;
-          // Check fields for content change
-          for (const [cloudField, localField] of Object.entries(fields)) {
-            if (String(local[localField]) !== String(cloud[cloudField])) {
-              contentChanged = true;
-              break;
+          if (type === 'maintenance') {
+            contentChanged = !maintenancePayloadMatchesCloud(this.mapLocalToCloud(local, 'maintenance'), cloud);
+          } else {
+            // Check fields for content change
+            for (const [cloudField, localField] of Object.entries(fields)) {
+              if (String(local[localField]) !== String(cloud[cloudField])) {
+                contentChanged = true;
+                break;
+              }
             }
           }
 
@@ -3163,7 +4265,8 @@ export const cloudSyncService = {
         cloudOnly: 0,
         bothChanged: 0,
         localDeleted: 0,
-        cloudDeleted: 0
+        cloudDeleted: 0,
+        total: 0
       },
       entities: {},
       conflicts: [],
@@ -3187,6 +4290,12 @@ export const cloudSyncService = {
       detailedDiff.summary.bothChanged += diff.bothChanged.length;
       detailedDiff.summary.localDeleted += diff.localDeleted.length;
       detailedDiff.summary.cloudDeleted += diff.cloudDeleted.length;
+      detailedDiff.summary.total =
+        detailedDiff.summary.localOnly +
+        detailedDiff.summary.cloudOnly +
+        detailedDiff.summary.bothChanged +
+        detailedDiff.summary.localDeleted +
+        detailedDiff.summary.cloudDeleted;
 
       detailedDiff.conflicts.push(...diff.bothChanged);
       
@@ -3195,6 +4304,25 @@ export const cloudSyncService = {
       detailedDiff.nonConflicts.localDeleted.push(...diff.localDeleted.map(r => ({ ...r, entityType: cat.key })));
       detailedDiff.nonConflicts.cloudDeleted.push(...diff.cloudDeleted.map(r => ({ ...r, entityType: cat.key })));
     }
+
+    const taxonomyDiff = await this.getMaintenanceTaxonomyDiff(userId);
+    detailedDiff.entities.maintenanceTaxonomy = taxonomyDiff;
+    detailedDiff.summary.localOnly += taxonomyDiff.localOnly.length;
+    detailedDiff.summary.cloudOnly += taxonomyDiff.cloudOnly.length;
+    detailedDiff.summary.bothChanged += taxonomyDiff.bothChanged.length;
+    detailedDiff.summary.localDeleted += taxonomyDiff.localDeleted.length;
+    detailedDiff.summary.cloudDeleted += taxonomyDiff.cloudDeleted.length;
+    detailedDiff.nonConflicts.localOnly.push(...taxonomyDiff.localOnly.map(r => ({ ...r, entityType: 'maintenanceTaxonomy' })));
+    detailedDiff.nonConflicts.cloudOnly.push(...taxonomyDiff.cloudOnly.map(r => ({ ...r, entityType: 'maintenanceTaxonomy' })));
+    detailedDiff.nonConflicts.localDeleted.push(...taxonomyDiff.localDeleted.map(r => ({ ...r, entityType: 'maintenanceTaxonomy' })));
+    detailedDiff.nonConflicts.cloudDeleted.push(...taxonomyDiff.cloudDeleted.map(r => ({ ...r, entityType: 'maintenanceTaxonomy' })));
+
+    detailedDiff.summary.total =
+      detailedDiff.summary.localOnly +
+      detailedDiff.summary.cloudOnly +
+      detailedDiff.summary.bothChanged +
+      detailedDiff.summary.localDeleted +
+      detailedDiff.summary.cloudDeleted;
 
     return detailedDiff;
   },
@@ -3853,6 +4981,8 @@ export const cloudSyncService = {
   };
 
   const now = new Date().toISOString();
+  const { systems: localMaintenanceSystems, categories: localMaintenanceCategories } = loadLocalMaintenanceTaxonomy();
+  const taxonomyMeta = getMaintenanceTaxonomyMetadata(maintenance, localMaintenanceSystems, localMaintenanceCategories);
 
   const normalized = {
     user_id: userId,
@@ -3867,7 +4997,11 @@ export const cloudSyncService = {
     next_due_odometer: calculatedNextDueOdometer,
     created_at: createdAt ?? now,
     updated_at: updatedAt ?? now,
-    deleted_at: deletedAt
+    deleted_at: deletedAt,
+    subcategory_stable_key: taxonomyMeta.subcategoryStableKey,
+    subcategory_type_key: taxonomyMeta.subcategoryTypeKey,
+    system_stable_key: taxonomyMeta.systemStableKey,
+    subcategory_name_snapshot: taxonomyMeta.subcategoryNameSnapshot
   };
 
   console.log(
@@ -4133,6 +5267,14 @@ export const cloudSyncService = {
       next_due_odometer: parsedNextDueOdometer,
       stable_key: stableKey,
       stableKey,
+      subcategory_stable_key: cloudMaintenance.subcategory_stable_key,
+      subcategoryStableKey: cloudMaintenance.subcategory_stable_key,
+      subcategory_type_key: cloudMaintenance.subcategory_type_key,
+      subcategoryTypeKey: cloudMaintenance.subcategory_type_key,
+      system_stable_key: cloudMaintenance.system_stable_key,
+      systemStableKey: cloudMaintenance.system_stable_key,
+      subcategory_name_snapshot: cloudMaintenance.subcategory_name_snapshot,
+      subcategoryNameSnapshot: cloudMaintenance.subcategory_name_snapshot,
       version: cloudMaintenance.version,
       created_at: cloudMaintenance.created_at,
       updated_at: cloudMaintenance.updated_at,
@@ -4728,7 +5870,7 @@ export const cloudSyncService = {
       action: 'replace-local',
       message: '',
       details: [],
-      counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
+      counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0, maintenanceTaxonomy: 0 },
       summary: { uploaded: 0, downloaded: 0, deletedFromCloud: 0, deletedFromLocal: 0, conflictsResolved: 0 }
     };
 
@@ -4752,7 +5894,12 @@ export const cloudSyncService = {
         result.details.push(...applyResult.errors);
       }
 
-      result.success = result.details.length === 0;
+      const taxonomyDownload = await this.downloadMaintenanceTaxonomy(userId, new Map(), { clearDirty: true });
+      result.details.push(...taxonomyDownload.details);
+      result.counts.maintenanceTaxonomy = (taxonomyDownload.systems || 0) + (taxonomyDownload.categories || 0);
+      result.summary.downloaded += result.counts.maintenanceTaxonomy;
+
+      result.success = taxonomyDownload.success !== false && !result.details.some((detail) => /failed|error|exception/i.test(detail));
       result.message = result.success 
         ? `Replacement complete: ${result.summary.downloaded} records downloaded.`
         : 'Replacement completed with errors';
