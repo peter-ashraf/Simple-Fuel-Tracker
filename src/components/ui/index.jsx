@@ -34,9 +34,17 @@ export const MetricCard = forwardRef(({ as: Component = "div", className, childr
 });
 MetricCard.displayName = "MetricCard"
 
-export const Input = forwardRef(({ className, ...props }, ref) => (
+function getNumericInputMode({ type, step, inputMode }) {
+  if (inputMode || type !== "number") return inputMode;
+  return step && step !== "1" ? "decimal" : "numeric";
+}
+
+export const Input = forwardRef(({ className, inputMode, type, step, ...props }, ref) => (
   <input
     ref={ref}
+    type={type}
+    step={step}
+    inputMode={getNumericInputMode({ type, step, inputMode })}
     className={cn("input-field", className)}
     {...props}
   />

@@ -288,6 +288,7 @@ export default function TripCostEstimator() {
             <div className="flex gap-2">
               <Input
                 type="number"
+                step="0.1"
                 value={tripDistance}
                 onChange={(e) => setTripDistance(e.target.value)}
                 placeholder="100"
@@ -450,6 +451,7 @@ export default function TripCostEstimator() {
             {useManualConsumption && (
               <Input
                 type="number"
+                step="0.01"
                 value={manualConsumption}
                 onChange={(e) => setManualConsumption(e.target.value)}
                 placeholder="km/L"
@@ -486,6 +488,7 @@ export default function TripCostEstimator() {
             {useManualPrice && (
               <Input
                 type="number"
+                step="0.01"
                 value={manualFuelPrice}
                 onChange={(e) => setManualFuelPrice(e.target.value)}
                 placeholder="EGP/L"

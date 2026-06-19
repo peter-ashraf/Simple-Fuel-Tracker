@@ -974,6 +974,7 @@ export default function Settings() {
                     </Label>
                     <Input
                       type="number"
+                      step="0.01"
                       value={editingTankCapacity}
                       onChange={(e) => setEditingTankCapacity(e.target.value)}
                       className="py-1 px-2 text-xs h-auto bg-slate-100 dark:bg-slate-900"
@@ -1170,6 +1171,7 @@ export default function Settings() {
                   </Label>
                   <Input
                     type="number"
+                    step="0.01"
                     value={activeVehicleForm.tankCapacity || ""}
                     onChange={(e) =>
                       setActiveVehicleForm((prev) => ({

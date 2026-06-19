@@ -37,6 +37,7 @@ export default function Analytics() {
   const [activeGraphIndex, setActiveGraphIndex] = useState(0);
   const graphDropdownRef = useRef(null);
   const [isGraphDropdownOpen, setIsGraphDropdownOpen] = useState(false);
+  const [expandedHealthIssueIds, setExpandedHealthIssueIds] = useState([]);
 
   const formatMonthLabel = useCallback((dateStr) => {
     const d = new Date(dateStr + '-01');
@@ -122,18 +123,74 @@ export default function Analytics() {
     const suspiciousEfficiencyCount = tripData.filter((trip) => trip.kmPerLiter > 0 && (trip.kmPerLiter < 4 || trip.kmPerLiter > 30)).length;
     const partialFillCount = sortedByDate.filter((fill) => fill.isPartial || fill.partialFill).length;
 
-    if (duplicateDateCount > 0) issues.push(`${duplicateDateCount} date${duplicateDateCount === 1 ? '' : 's'} have multiple fill-ups`);
-    if (missingPriceCount > 0) issues.push(`${missingPriceCount} fill-up${missingPriceCount === 1 ? '' : 's'} missing price`);
-    if (invalidVolumeCount > 0) issues.push(`${invalidVolumeCount} fill-up${invalidVolumeCount === 1 ? '' : 's'} with invalid liters`);
-    if (odometerReversalCount > 0) issues.push(`${odometerReversalCount} odometer reversal${odometerReversalCount === 1 ? '' : 's'} by date order`);
-    if (suspiciousEfficiencyCount > 0) issues.push(`${suspiciousEfficiencyCount} unusual efficiency result${suspiciousEfficiencyCount === 1 ? '' : 's'}`);
-    if (partialFillCount > 0) issues.push(`${partialFillCount} partial fill-up${partialFillCount === 1 ? '' : 's'} may affect averages`);
+    if (duplicateDateCount > 0) {
+      issues.push({
+        id: "duplicate-dates",
+        title: `${duplicateDateCount} date${duplicateDateCount === 1 ? '' : 's'} have multiple fill-ups`,
+        details: Object.entries(dateCounts)
+          .filter(([, count]) => count > 1)
+          .map(([date, count]) => `${date}: ${count} fill-ups`),
+      });
+    }
+    if (missingPriceCount > 0) {
+      issues.push({
+        id: "missing-price",
+        title: `${missingPriceCount} fill-up${missingPriceCount === 1 ? '' : 's'} missing price`,
+        details: sortedByDate
+          .filter((fill) => !Number(fill.pricePerLiter))
+          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+      });
+    }
+    if (invalidVolumeCount > 0) {
+      issues.push({
+        id: "invalid-liters",
+        title: `${invalidVolumeCount} fill-up${invalidVolumeCount === 1 ? '' : 's'} with invalid liters`,
+        details: sortedByDate
+          .filter((fill) => Number(fill.liters) <= 0)
+          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+      });
+    }
+    if (odometerReversalCount > 0) {
+      issues.push({
+        id: "odometer-reversal",
+        title: `${odometerReversalCount} odometer reversal${odometerReversalCount === 1 ? '' : 's'} by date order`,
+        details: sortedByDate
+          .filter((fill, index) => index > 0 && Number(fill.odometer) < Number(sortedByDate[index - 1].odometer))
+          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+      });
+    }
+    if (suspiciousEfficiencyCount > 0) {
+      issues.push({
+        id: "suspicious-efficiency",
+        title: `${suspiciousEfficiencyCount} unusual efficiency result${suspiciousEfficiencyCount === 1 ? '' : 's'}`,
+        details: tripData
+          .filter((trip) => trip.kmPerLiter > 0 && (trip.kmPerLiter < 4 || trip.kmPerLiter > 30))
+          .map((trip) => `${trip.date} · ${formatEfficiency2Dec(trip.kmPerLiter)} km/L`),
+      });
+    }
+    if (partialFillCount > 0) {
+      issues.push({
+        id: "partial-fill",
+        title: `${partialFillCount} partial fill-up${partialFillCount === 1 ? '' : 's'} may affect averages`,
+        details: sortedByDate
+          .filter((fill) => fill.isPartial || fill.partialFill)
+          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+      });
+    }
 
     return {
       status: issues.length === 0 ? 'good' : issues.length <= 2 ? 'review' : 'attention',
       issues,
     };
   })();
+
+  const toggleHealthIssue = (issueId) => {
+    setExpandedHealthIssueIds((current) =>
+      current.includes(issueId)
+        ? current.filter((id) => id !== issueId)
+        : [...current, issueId],
+    );
+  };
 
   const graphs = [
     { id: 'efficiency', title: t('efficiency_history'), subtitle: t('km_per_liter_over_time'), icon: TrendUp, color: 'emerald', data: tripData.map(t => t.kmPerLiter), labels: tripData.map(t => t.date) },
@@ -364,15 +421,46 @@ export default function Analytics() {
             </div>
           ) : (
             <div className="mt-4 space-y-2">
-              {dataHealth.issues.map((issue) => (
-                <div
-                  key={issue}
-                  className="flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600 dark:bg-white/[0.04] dark:text-slate-300"
-                >
-                  <Warning weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <span>{issue}</span>
-                </div>
-              ))}
+              {dataHealth.issues.map((issue) => {
+                const isExpanded = expandedHealthIssueIds.includes(issue.id);
+
+                return (
+                  <div
+                    key={issue.id}
+                    className="rounded-2xl bg-slate-50 text-xs font-bold text-slate-600 dark:bg-white/[0.04] dark:text-slate-300"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleHealthIssue(issue.id)}
+                      className="flex w-full items-start gap-2 p-3 text-start"
+                    >
+                      <Warning weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="flex-1">{issue.title}</span>
+                      <CaretDown
+                        weight="bold"
+                        className={cn(
+                          "mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform",
+                          isExpanded && "rotate-180",
+                        )}
+                      />
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t border-slate-200 px-4 pb-3 pt-2 dark:border-white/10">
+                        <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
+                          {issue.details.map((detail) => (
+                            <p
+                              key={detail}
+                              className="rounded-xl bg-white px-3 py-2 text-[11px] font-semibold text-slate-500 dark:bg-slate-950/40 dark:text-slate-400"
+                            >
+                              {detail}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>

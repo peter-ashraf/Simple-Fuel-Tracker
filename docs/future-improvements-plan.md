@@ -42,8 +42,8 @@ Priority: Highest
 Risk: Medium  
 Priority: High
 
-- [ ] Make Data Health items expandable or clickable.
-- [ ] Show exact affected entries for each issue group.
+- [x] Make Data Health items expandable or clickable.
+- [x] Show affected dates/entries for each issue group.
 - [ ] Add actions:
   - open affected fill-up
   - open affected maintenance entry
@@ -138,7 +138,24 @@ Priority: Medium
 - [ ] Check RTL layout for the updated modals/panels.
 - [ ] Run lint/build.
 
-## Phase 7: Later Product Improvements
+## Phase 7: Mobile Input UX
+
+Risk: Low  
+Priority: Medium
+
+- [x] Use iPhone-friendly numeric keyboards for shared numeric `Input` fields:
+  - whole-number fields use `inputMode="numeric"`
+  - decimal fields use `inputMode="decimal"`
+- [ ] Audit future raw `<input type="number">` additions so they do not bypass the shared behavior.
+- [ ] Manually QA on iPhone/PWA for:
+  - fill-up odometer
+  - liters
+  - fuel cost
+  - maintenance odometer/interval/safety/cost
+  - tire calculator
+  - trip estimator
+
+## Phase 8: Later Product Improvements
 
 Risk: Medium to High  
 Priority: Later
@@ -162,4 +179,4 @@ Priority: Later
 
 ## Next Recommended Start
 
-Start with **Phase 1: Maintenance Forecast And Reminder Improvements** as a separate checkpoint. It has the biggest user-facing value, but it should not be mixed with backup/import or sync modal work because it touches due-state logic across Dashboard, Maintenance, and notifications.
+Start with **Phase 2: Data Health V2** if you want the safest visible improvement next, or **Phase 4: Manual Sync Modal V2** if sync clarity becomes more urgent. Keep those separate from backup/import and maintenance sync model work.
