@@ -50,6 +50,9 @@ import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { makeMaintenanceTypeKey } from "../utils/maintenanceTypeKey";
+import { calculateAverageDailyDistance } from "../utils/calculations";
+import { buildMaintenanceForecast, getReminderState } from "../utils/maintenanceForecast";
+import { useNotifications } from "../hooks/useNotifications";
 
 const MAINTENANCE_TAXONOMY_DIRTY_KEY = "fueltracker-maintenance-taxonomy-dirty";
 
@@ -139,6 +142,7 @@ export default function Maintenance() {
   } = useFuel();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { notificationsEnabled } = useNotifications();
 
   const [activeTab, setActiveTab] = useState("overview"); // overview, history, settings
   const [searchTerm, setSearchTerm] = useState("");
@@ -204,6 +208,10 @@ export default function Maintenance() {
     activeVehicleFillUps.length > 0
       ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer
       : 0;
+  const avgDailyDistance = useMemo(
+    () => calculateAverageDailyDistance(activeVehicleFillUps),
+    [activeVehicleFillUps],
+  );
 
   const filteredEntries = useMemo(() => {
     return maintenanceEntries
@@ -291,64 +299,27 @@ export default function Maintenance() {
     );
   };
 
-  const categoryProgress = useMemo(() => {
-    return categories
-      .filter((cat) => maintenanceSettings?.categorySettings?.[cat.id]?.enabled !== false)
-      .map((cat) => {
-      const logs = maintenanceEntries
-        .filter((e) => e.type === cat.id)
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        );
-      const latestCompletion = logs[0];
-      const catSettings = maintenanceSettings?.categorySettings?.[cat.id] || {};
-      const interval =
-        catSettings.intervalKm || cat.defaultInterval?.value || 0;
-      const margin =
-        catSettings.safetyMarginKm || cat.defaultSafetyMarginKm || 2000;
-      let lastPerformedODO = latestCompletion
-        ? Number(
-            latestCompletion.performedAtODO ?? latestCompletion.odometer ?? 0,
-          )
-        : 0;
-      let nextDueODO = latestCompletion
-        ? Number(
-            latestCompletion.nextDueODO ??
-              latestCompletion.next_due_odometer ??
-              latestCompletion.nextDueOdometer ??
-              lastPerformedODO + interval,
-          )
-        : lastPerformedODO + interval;
-      if (nextDueODO === 0 && lastPerformedODO > 0 && interval > 0) {
-        nextDueODO = lastPerformedODO + interval;
-      }
-
-      let alertODO = nextDueODO - margin;
-      const remainingKm = nextDueODO - currentOdometer;
-      const progressPercent =
-        interval > 0
-          ? ((currentOdometer - lastPerformedODO) / interval) * 100
-          : 0;
-      let status = "upcoming";
-      const isTracked = !!latestCompletion;
-      if (!isTracked) status = "untracked";
-      else if (currentOdometer >= nextDueODO) status = "overdue";
-      else if (currentOdometer >= alertODO) status = "due-soon";
-      return {
-        ...cat,
-        remainingKm,
-        progressPercent,
-        status,
-        isTracked,
-        intervalKm: interval,
-        safetyMarginKm: margin,
-        nextDueODO,
-        latestLog: latestCompletion || null,
-        latestLogId: latestCompletion?.id || null,
-      };
-    });
-  }, [categories, maintenanceEntries, currentOdometer, maintenanceSettings]);
+  const categoryProgress = useMemo(
+    () =>
+      buildMaintenanceForecast({
+        categories,
+        entries: maintenanceEntries,
+        maintenanceSettings,
+        currentOdometer,
+        avgDailyDistance,
+      }).map((item) => ({
+        ...item,
+        reminderState: getReminderState({ item, notificationsEnabled }),
+      })),
+    [
+      avgDailyDistance,
+      categories,
+      currentOdometer,
+      maintenanceEntries,
+      maintenanceSettings,
+      notificationsEnabled,
+    ],
+  );
 
   const systemStatus = useMemo(() => {
     return maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at).map((system) => {
@@ -594,8 +565,10 @@ export default function Maintenance() {
     const remainingText = item.status === "overdue"
       ? `${Math.abs(item.remainingKm).toLocaleString()} ${t("overdue")}`
       : `${item.remainingKm.toLocaleString()} ${t("km_left")}`;
+    const reminderStateKey = (item.reminderState || "watching").replace("-", "_");
 
     return [
+      [t("reminder_state"), t(reminderStateKey)],
       [t("date"), displayDate],
       [t("odometer"), performedOdo ? `${performedOdo.toLocaleString()} km` : "-"],
       [t("current_mileage"), `${currentOdometer.toLocaleString()} km`],

@@ -14,23 +14,23 @@ This file tracks the next planned work after the sync, backup/export, lint, and 
 Risk: High  
 Priority: Highest
 
-- [ ] Audit current dashboard due-soon logic, maintenance overview status logic, and notification settings.
-- [ ] Make due-soon and overdue checks consistently use active `maintenanceEntries`.
-- [ ] Base reminder status on:
+- [x] Audit current dashboard due-soon logic, maintenance overview status logic, and notification settings.
+- [x] Make due-soon and overdue checks consistently use active `maintenanceEntries`.
+- [x] Base reminder status on:
   - latest maintenance entry per category
   - current odometer
   - interval km
   - safety margin km
   - enabled/disabled category setting
-- [ ] Improve estimated due date using the all-entry average daily distance calculation.
-- [ ] Show clear states in maintenance item details:
+- [x] Improve estimated due date using the all-entry average daily distance calculation.
+- [x] Show clear states in maintenance item details:
   - notifications off
   - watching
   - due soon
   - overdue
-- [ ] Ensure dashboard Due Soon card and Maintenance overview agree.
-- [ ] Keep time-based recurring reminders as a later phase unless the odometer-based flow is fully stable.
-- [ ] Run lint/build.
+- [x] Ensure dashboard Due Soon card and Maintenance overview agree.
+- [x] Keep time-based recurring reminders as a later phase unless the odometer-based flow is fully stable.
+- [x] Run lint/build.
 - [ ] Manual QA:
   - add tracked maintenance
   - edit interval/safety

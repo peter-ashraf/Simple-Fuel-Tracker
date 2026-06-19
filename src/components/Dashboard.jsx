@@ -20,6 +20,7 @@ import {
   calculateTripMetrics,
   calculateAverageDailyDistance,
 } from "../utils/calculations";
+import { buildMaintenanceForecast } from "../utils/maintenanceForecast";
 import {
   calculateEfficiencyThresholds,
   getEfficiencyBarClass,
@@ -30,7 +31,6 @@ import {
   formatCurrency2Dec,
   formatEfficiency2Dec,
 } from "../utils/formatting";
-import { getMaintenanceCategory } from "../data/maintenanceCategories";
 import { useTranslation } from "react-i18next";
 
 export default function Dashboard() {
@@ -40,6 +40,7 @@ export default function Dashboard() {
     activeVehicleFillUpsByOdometer,
     maintenanceEntries,
     maintenanceSettings,
+    categories,
   } = useFuel();
   const { t, i18n } = useTranslation();
   const [predictedModalOpen, setPredictedModalOpen] = useState(false);
@@ -54,106 +55,35 @@ export default function Dashboard() {
       ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer
       : 0;
 
-  const normalizeMaintenancePredictionEntry = (entry) => {
-    const category = getMaintenanceCategory(entry.type);
-    const categorySettings = maintenanceSettings?.categorySettings?.[entry.type];
-    const nextDueODO = Number(
-      entry.nextDueODO ??
-        entry.nextDueOdometer ??
-        entry.next_due_odometer ??
-        0,
-    );
-    const safetyMargin = Number(
-      entry.safetyMarginKm ??
-        entry.safety ??
-        categorySettings?.safetyMarginKm ??
-        category.defaultSafetyMarginKm ??
-        maintenanceSettings?.defaultSafetyMarginKm ??
-        0,
-    );
-    const alertODO = Number(
-      entry.alertODO ??
-        entry.alertOdometer ??
-        (nextDueODO > 0 && safetyMargin > 0 ? nextDueODO - safetyMargin : 0),
-    );
-
-    return {
-      ...entry,
-      nextDueODO,
-      alertODO,
-      categoryId: category.id,
-      categoryColor: category.color,
-    };
-  };
-
-  const getMaintenanceAlerts = () => {
-    if (!maintenanceEntries?.length || currentOdometer === 0) return [];
-    return maintenanceEntries
-      .filter((entry) => {
-        const categorySettings =
-          maintenanceSettings?.categorySettings?.[entry.type];
-        if (categorySettings?.enabled === false) return false;
-        const normalized = normalizeMaintenancePredictionEntry(entry);
-        return normalized.nextDueODO > 0 && normalized.alertODO > 0;
-      })
-      .map((entry) => {
-        const normalized = normalizeMaintenancePredictionEntry(entry);
-        let status = "ok";
-        if (currentOdometer >= normalized.nextDueODO) status = "critical";
-        else if (currentOdometer >= normalized.alertODO) status = "warning";
-        return {
-          ...normalized,
-          status,
-          remainingKm: Math.max(0, normalized.nextDueODO - currentOdometer),
-        };
-      })
-      .filter((item) => item.status === "critical")
-      .sort((a, b) => a.remainingKm - b.remainingKm)
-      .slice(0, 3);
-  };
-
-  const maintenanceAlerts = getMaintenanceAlerts();
   const avgDailyDistance = calculateAverageDailyDistance(activeVehicleFillUps);
 
-  const getUpcomingMaintenance = () => {
-    if (
-      !maintenanceEntries?.length ||
-      currentOdometer === 0 ||
-      avgDailyDistance <= 0
-    )
-      return [];
-    return maintenanceEntries
-      .filter((entry) => {
-        const categorySettings =
-          maintenanceSettings?.categorySettings?.[entry.type];
-        if (categorySettings?.enabled === false) return false;
-        
-        // Only show if it's within the user-defined alert threshold
-        // (odometer is between alertODO and nextDueODO)
-        const normalized = normalizeMaintenancePredictionEntry(entry);
-        return normalized.nextDueODO > 0 &&
-               normalized.alertODO > 0 &&
-               currentOdometer >= normalized.alertODO &&
-               currentOdometer < normalized.nextDueODO;
-      })
-      .map((entry) => {
-        const normalized = normalizeMaintenancePredictionEntry(entry);
-        const kmRemaining = normalized.nextDueODO - currentOdometer;
-        const daysRemaining = Math.ceil(kmRemaining / avgDailyDistance);
-        const projectedDate = new Date();
-        projectedDate.setDate(projectedDate.getDate() + daysRemaining);
-        return {
-          ...normalized,
-          kmRemaining,
-          daysRemaining,
-          projectedDate,
-        };
-      })
-      .sort((a, b) => a.daysRemaining - b.daysRemaining)
-      .slice(0, 3);
-  };
+  const maintenanceForecast = useMemo(
+    () =>
+      buildMaintenanceForecast({
+        categories,
+        entries: maintenanceEntries,
+        maintenanceSettings,
+        currentOdometer,
+        avgDailyDistance,
+      }),
+    [
+      avgDailyDistance,
+      categories,
+      currentOdometer,
+      maintenanceEntries,
+      maintenanceSettings,
+    ],
+  );
 
-  const upcomingMaintenance = getUpcomingMaintenance();
+  const maintenanceAlerts = maintenanceForecast
+    .filter((item) => item.status === "overdue")
+    .sort((a, b) => Math.abs(a.remainingKm) - Math.abs(b.remainingKm))
+    .slice(0, 3);
+
+  const upcomingMaintenance = maintenanceForecast
+    .filter((item) => item.status === "due-soon" && item.projectedDate)
+    .sort((a, b) => (a.daysRemaining ?? 999999) - (b.daysRemaining ?? 999999))
+    .slice(0, 3);
 
   const getMaintenanceDetailRows = (item) => {
     if (!item) return [];
@@ -168,6 +98,10 @@ export default function Dashboard() {
     const interval = Number(item.intervalKm ?? item.distance ?? 0);
     const safety = Number(item.safetyMarginKm ?? item.safety ?? 0);
     const nextDue = Number(item.nextDueODO ?? item.next_due_odometer ?? 0);
+    const remainingKm = Math.max(
+      0,
+      Number(item.kmUntilDue ?? item.remainingKm ?? item.kmRemaining ?? 0),
+    );
 
     return [
       [t("date"), serviceDate],
@@ -176,7 +110,7 @@ export default function Dashboard() {
       [t("distance"), interval ? `${interval.toLocaleString()} km` : "-"],
       [t("safety_margin"), safety ? `${safety.toLocaleString()} km` : "-"],
       [t("next_due"), nextDue ? `${nextDue.toLocaleString()} km` : "-"],
-      [t("remaining"), `${item.kmRemaining.toLocaleString()} ${t("km_left")}`],
+      [t("remaining"), `${remainingKm.toLocaleString()} ${t("km_left")}`],
       [t("due_soon"), projectedDate],
       [t("price"), item.cost != null ? `${Number(item.cost).toFixed(2)} ${t("currency")}` : "-"],
       [t("notes"), item.notes || "-"],
@@ -627,32 +561,39 @@ export default function Dashboard() {
                 </div>
               </>
             ) : (
-              upcomingMaintenance.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => setSelectedMaintenanceDetail(item)}
-                  className="w-full rounded-2xl p-4 text-start bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 transition-transform active:scale-[0.98]"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-1.5 h-10 rounded-full"
-                      style={{ backgroundColor: item.categoryColor }}
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-blue-700 dark:text-blue-400">
-                        {t(item.categoryId)}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {item.kmRemaining.toLocaleString()} {t('km_left')}
-                      </p>
+              upcomingMaintenance.map((item) => {
+                const remainingKm = Math.max(
+                  0,
+                  Number(item.kmUntilDue ?? item.remainingKm ?? item.kmRemaining ?? 0),
+                );
+
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => setSelectedMaintenanceDetail(item)}
+                    className="w-full rounded-2xl p-4 text-start bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 transition-transform active:scale-[0.98]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-1.5 h-10 rounded-full"
+                        style={{ backgroundColor: item.categoryColor }}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-400">
+                          {t(item.categoryId)}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {remainingKm.toLocaleString()} {t("km_left")}
+                        </p>
+                      </div>
+                      <div className="text-end text-xs font-bold text-blue-600 dark:text-blue-400">
+                        {format(item.projectedDate, "MMM d")}
+                      </div>
                     </div>
-                    <div className="text-end text-xs font-bold text-blue-600 dark:text-blue-400">
-                      {format(item.projectedDate, "MMM d")}
-                    </div>
-                  </div>
-                </button>
-              ))
+                  </button>
+                );
+              })
             )}
           </div>
         </Modal>

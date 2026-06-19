@@ -84,19 +84,25 @@ export function useNotifications() {
     if (!notificationsEnabled || !entries?.length) return;
 
     entries.forEach((entry) => {
-      if (entry.nextDueODO && currentOdometer > 0) {
-        const kmUntilDue = entry.nextDueODO - currentOdometer;
+      const nextDueODO = Number(entry.nextDueODO ?? entry.nextDueOdometer ?? entry.next_due_odometer ?? 0);
+      const alertODO = Number(entry.alertODO ?? 0);
+      const typeLabel = entry.name || entry.type || entry.categoryId || 'Maintenance';
+      const kmUntilDue = Number.isFinite(entry.kmUntilDue)
+        ? entry.kmUntilDue
+        : nextDueODO - currentOdometer;
 
-        if (kmUntilDue <= 0) {
-          sendNotification(`${entry.type} - Overdue`, {
-            body: `Your ${entry.type} maintenance is overdue. Odometer: ${currentOdometer.toLocaleString()} km, Due at: ${entry.nextDueODO.toLocaleString()} km.`,
-            tag: `entry-${entry.id}-overdue`,
+      if (nextDueODO && currentOdometer > 0) {
+
+        if (entry.status === 'overdue' || kmUntilDue <= 0) {
+          sendNotification(`${typeLabel} - Overdue`, {
+            body: `Your ${typeLabel} maintenance is overdue. Odometer: ${currentOdometer.toLocaleString()} km, Due at: ${nextDueODO.toLocaleString()} km.`,
+            tag: `maintenance-${entry.categoryId || entry.id}-overdue`,
             requireInteraction: true
           });
-        } else if (entry.alertODO && currentOdometer >= entry.alertODO) {
-          sendNotification(`${entry.type} - Due Soon`, {
-            body: `${entry.type} is due soon. Only ${kmUntilDue.toLocaleString()} km remaining.`,
-            tag: `entry-${entry.id}-soon`
+        } else if (entry.status === 'due-soon' || (alertODO && currentOdometer >= alertODO)) {
+          sendNotification(`${typeLabel} - Due Soon`, {
+            body: `${typeLabel} is due soon. Only ${kmUntilDue.toLocaleString()} km remaining.`,
+            tag: `maintenance-${entry.categoryId || entry.id}-soon`
           });
         }
       }

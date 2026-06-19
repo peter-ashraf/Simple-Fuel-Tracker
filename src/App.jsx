@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useMemo } from "react";
 import {
   Routes,
   Route,
@@ -25,6 +25,8 @@ import { useFuel } from "./hooks/useFuelContext";
 import { useNotifications } from "./hooks/useNotifications";
 import { useTranslation } from "react-i18next";
 import { authService } from "./services/authService";
+import { calculateAverageDailyDistance } from "./utils/calculations";
+import { buildMaintenanceForecast } from "./utils/maintenanceForecast";
 
 // Pages
 import Dashboard from "./components/Dashboard";
@@ -269,8 +271,38 @@ export default function App() {
   const [migrationResult, setMigrationResult] = useState(null);
 
   // Check for due maintenance reminders on app open
-  const { maintenanceEntries, activeVehicleFillUps } = useFuel();
+  const {
+    maintenanceEntries,
+    activeVehicleFillUps,
+    categories,
+    maintenanceSettings,
+  } = useFuel();
   const { checkMaintenanceReminders } = useNotifications();
+  const currentOdometer =
+    activeVehicleFillUps.length > 0
+      ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer
+      : 0;
+  const avgDailyDistance = useMemo(
+    () => calculateAverageDailyDistance(activeVehicleFillUps),
+    [activeVehicleFillUps],
+  );
+  const maintenanceForecast = useMemo(
+    () =>
+      buildMaintenanceForecast({
+        categories,
+        entries: maintenanceEntries,
+        maintenanceSettings,
+        currentOdometer,
+        avgDailyDistance,
+      }).filter((item) => item.isTracked),
+    [
+      avgDailyDistance,
+      categories,
+      currentOdometer,
+      maintenanceEntries,
+      maintenanceSettings,
+    ],
+  );
 
   useEffect(() => {
     // Single-flight initialization guard:
@@ -477,19 +509,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Get current odometer
-    const currentOdometer =
-      activeVehicleFillUps.length > 0
-        ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer
-        : 0;
-
     // Check for due reminders (with a small delay to ensure everything is loaded)
     const timer = setTimeout(() => {
-      checkMaintenanceReminders(maintenanceEntries, currentOdometer);
+      checkMaintenanceReminders(maintenanceForecast, currentOdometer);
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [maintenanceEntries, activeVehicleFillUps, checkMaintenanceReminders]);
+  }, [checkMaintenanceReminders, currentOdometer, maintenanceForecast]);
 
   // Show loading state
   if (loading) {
