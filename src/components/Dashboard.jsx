@@ -88,16 +88,17 @@ export default function Dashboard() {
   const getMaintenanceDetailRows = (item) => {
     if (!item) return [];
 
-    const serviceDate = item.date || item.timestamp
-      ? format(new Date(item.date || item.timestamp), "MMM d, yyyy")
+    const log = item.latestLog || {};
+    const serviceDate = item.date || item.timestamp || log.date || log.timestamp
+      ? format(new Date(item.date || item.timestamp || log.date || log.timestamp), "MMM d, yyyy")
       : "-";
     const projectedDate = item.projectedDate
       ? format(item.projectedDate, "MMM d, yyyy")
       : "-";
-    const performedOdo = Number(item.performedAtODO ?? item.odometer ?? 0);
-    const interval = Number(item.intervalKm ?? item.distance ?? 0);
-    const safety = Number(item.safetyMarginKm ?? item.safety ?? 0);
-    const nextDue = Number(item.nextDueODO ?? item.next_due_odometer ?? 0);
+    const performedOdo = Number(item.performedAtODO ?? log.performedAtODO ?? item.odometer ?? log.odometer ?? 0);
+    const interval = Number(item.intervalKm ?? log.intervalKm ?? item.distance ?? log.distance ?? 0);
+    const safety = Number(item.safetyMarginKm ?? log.safetyMarginKm ?? item.safety ?? log.safety ?? 0);
+    const nextDue = Number(item.nextDueODO ?? log.nextDueODO ?? item.next_due_odometer ?? log.next_due_odometer ?? 0);
     const remainingKm = Math.max(
       0,
       Number(item.kmUntilDue ?? item.remainingKm ?? item.kmRemaining ?? 0),
@@ -112,8 +113,8 @@ export default function Dashboard() {
       [t("next_due"), nextDue ? `${nextDue.toLocaleString()} km` : "-"],
       [t("remaining"), `${remainingKm.toLocaleString()} ${t("km_left")}`],
       [t("due_soon"), projectedDate],
-      [t("price"), item.cost != null ? `${Number(item.cost).toFixed(2)} ${t("currency")}` : "-"],
-      [t("notes"), item.notes || "-"],
+      [t("price"), item.cost != null ? `${Number(item.cost).toFixed(2)} ${t("currency")}` : log.cost != null ? `${Number(log.cost).toFixed(2)} ${t("currency")}` : "-"],
+      [t("notes"), item.notes || log.notes || "-"],
     ];
   };
 

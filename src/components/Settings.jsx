@@ -44,7 +44,11 @@ import { refreshLocalStorageState } from "../hooks/useLocalStorage";
 const MotionDiv = motion.div;
 const MIN_APP_UPDATE_CHECK_MS = 900;
 const APP_VERSION = __APP_VERSION__;
+const APP_BUILD_NUMBER = __APP_BUILD_NUMBER__;
 const APP_BUILD_DATE = __APP_BUILD_DATE__;
+const APP_VERSION_LABEL = APP_BUILD_NUMBER
+  ? `v${APP_VERSION} (Build ${APP_BUILD_NUMBER})`
+  : `v${APP_VERSION}`;
 const todayISO = () => new Date().toISOString().substring(0, 10);
 const cloudRestoreTypes = [
   { id: "fillups", label: "Fill-ups" },
@@ -1321,7 +1325,7 @@ export default function Settings() {
                 {t("current_app_version")}
               </p>
               <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
-                v{APP_VERSION}
+                {APP_VERSION_LABEL}
               </p>
             </div>
             <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-white/[0.04]">
@@ -1804,7 +1808,7 @@ export default function Settings() {
                       {t("current_app_version")}
                     </p>
                     <p className="mt-1 font-bold text-slate-800 dark:text-slate-100">
-                      v{APP_VERSION}
+                      {APP_VERSION_LABEL}
                     </p>
                   </div>
                   <div className="rounded-xl bg-white p-3 dark:bg-slate-900">

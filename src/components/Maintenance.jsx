@@ -72,7 +72,7 @@ const ICON_MAP = {
   Disc: ICON_MAP_DATA.Tire,
 };
 
-function MaintenanceUndoToast({ label, t, onUndo, onClose }) {
+function MaintenanceUndoToast({ title, label, t, onUndo, onClose }) {
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
@@ -95,7 +95,7 @@ function MaintenanceUndoToast({ label, t, onUndo, onClose }) {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-black text-slate-900 dark:text-white">
-            {t("maintenance_deleted_pending")}
+            {title || t("maintenance_deleted_pending")}
           </p>
           <p className="truncate text-xs font-semibold text-slate-500">
             {label} - {countdown}s
@@ -508,6 +508,7 @@ export default function Maintenance() {
     if (deletedSystem) {
       setTaxonomyUndoToast({
         id: `system-${deletedSystem.id}`,
+        title: t("maintenance_system_removed"),
         label: deletedSystem.name,
         onUndo: () => {
           markMaintenanceTaxonomyDirty();
@@ -634,6 +635,7 @@ export default function Maintenance() {
       const cat = getCategoryById(removedCatId);
       setTaxonomyUndoToast({
         id: `subcategory-${editingSystemId}-${removedCatId}`,
+        title: t("maintenance_subcategory_removed"),
         label: cat?.name || removedCatId,
         onUndo: () => {
           markMaintenanceTaxonomyDirty();
@@ -1638,6 +1640,7 @@ export default function Maintenance() {
       <AnimatePresence>
         {taxonomyUndoToast && (
           <MaintenanceUndoToast
+            title={taxonomyUndoToast.title}
             label={taxonomyUndoToast.label}
             t={t}
             onUndo={undoTaxonomyChange}

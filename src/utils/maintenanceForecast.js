@@ -13,6 +13,16 @@ const numberFrom = (...values) => {
   return 0;
 };
 
+const parseDescription = (value) => {
+  if (!value || typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 export const getLatestMaintenanceEntriesByCategory = (entries = []) => {
   const latest = new Map();
 
@@ -57,13 +67,20 @@ export const buildMaintenanceForecast = ({
     )
     .map((category) => {
       const latestLog = latestByCategory.get(category.id) || null;
+      const parsedDescription = parseDescription(latestLog?.description);
       const categorySettings = maintenanceSettings?.categorySettings?.[category.id] || {};
       const intervalKm = numberFrom(
+        latestLog?.intervalKm,
+        latestLog?.distance,
+        parsedDescription.distance,
         categorySettings.intervalKm,
         category.defaultInterval?.value,
         category.defaultDistance,
       );
       const safetyMarginKm = numberFrom(
+        latestLog?.safetyMarginKm,
+        latestLog?.safety,
+        parsedDescription.safety,
         categorySettings.safetyMarginKm,
         category.defaultSafetyMarginKm,
         maintenanceSettings.defaultSafetyMarginKm,
@@ -116,6 +133,10 @@ export const buildMaintenanceForecast = ({
         latestLog,
         latestLogId: latestLog?.id || null,
         isTracked: Boolean(latestLog),
+        date: latestLog?.date || latestLog?.timestamp || null,
+        timestamp: latestLog?.timestamp || latestLog?.date || null,
+        cost: latestLog?.cost ?? null,
+        notes: latestLog?.notes ?? parsedDescription.notes ?? "",
         intervalKm,
         safetyMarginKm,
         performedAtODO,

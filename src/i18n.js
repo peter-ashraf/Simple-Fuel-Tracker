@@ -212,6 +212,8 @@ const resources = {
       "undo": "Undo",
       "close": "Close",
       "maintenance_deleted_pending": "Maintenance entry removed",
+      "maintenance_system_removed": "System removed",
+      "maintenance_subcategory_removed": "Subcategory removed",
       "maintenance_untracked_hint": "No maintenance entry has been recorded for this item yet.",
       "reminder_state": "Reminder state",
       "notifications_off": "Notifications off",

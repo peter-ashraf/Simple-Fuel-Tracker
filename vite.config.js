@@ -92,6 +92,7 @@ export default defineConfig(({ mode }) => {
     } : {},
     define: {
       __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0'),
+      __APP_BUILD_NUMBER__: JSON.stringify(process.env.VITE_APP_BUILD_NUMBER || process.env.GITHUB_RUN_NUMBER || ''),
       __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString())
     },
     build: {
