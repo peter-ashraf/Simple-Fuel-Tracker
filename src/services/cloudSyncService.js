@@ -3123,19 +3123,9 @@ export const cloudSyncService = {
       if (fillupsError) {
         console.warn('[Sync][syncFromCloud] Fillups fetch failed:', fillupsError.message);
       } else {
-        const mappedFillups = (fillups || []).map(f => ({
-          id: f.id,
-          vehicleId: f.vehicle_id,
-          date: f.date,
-          odometer: f.odometer,
-          liters: f.liters,
-          pricePerLiter: f.price_per_liter,
-          totalCost: f.total_cost,
-          station: f.station,
-          notes: f.notes,
-          fullTank: f.full_tank,
-          timestamp: f.created_at
-        }));
+        const mappedFillups = (fillups || []).map((f) =>
+          this.mapCloudFillupToLocal(f),
+        );
         localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(mappedFillups));
       }
 
@@ -5197,26 +5187,14 @@ export const cloudSyncService = {
    * @returns {void}
    */
   downloadSingleFillup(fillup) {
-    const mapped = {
-      id: fillup.id,
-      vehicleId: fillup.vehicle_id,
-      date: fillup.date,  // The actual fill-up date (when the fueling happened)
-      odometer: fillup.odometer,
-      liters: fillup.liters,
-      pricePerLiter: fillup.price_per_liter,
-      totalCost: fillup.total_cost,
-      station: fillup.station,
-      notes: fillup.notes,
-      fullTank: fillup.full_tank,
-      timestamp: fillup.date,  // Use the actual fill-up date as timestamp for display
-      createdAt: fillup.created_at,  // When the record was created in the app/cloud
-      updatedAt: fillup.updated_at,
-      stableKey: fillup.stable_key,
-      deletedAt: fillup.deleted_at
-    };
+    const mapped = this.mapCloudFillupToLocal(fillup);
 
     const fillups = JSON.parse(localStorage.getItem('fueltracker-fillups-v2') || '[]');
-    const existingIndex = fillups.findIndex(f => f.id === fillup.id);
+    const stableKey = fillup.stable_key || fillup.stableKey;
+    const existingIndex = fillups.findIndex((f) =>
+      (stableKey && (f.stableKey === stableKey || f.stable_key === stableKey)) ||
+      f.id === fillup.id,
+    );
     
     if (existingIndex >= 0) {
       fillups[existingIndex] = mapped;

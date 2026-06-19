@@ -134,7 +134,6 @@ export default function Maintenance() {
     setMaintenanceSystems,
     updateMaintenanceCategory,
     addMaintenanceCategory,
-    updateMaintenanceSettings,
     updateCategorySettings,
     requestMaintenanceEntryDelete,
     undoMaintenanceEntryDelete,
@@ -166,11 +165,15 @@ export default function Maintenance() {
   const [renamingCatName, setRenamingCatName] = useState("");
   const [justSavedCatId, setJustSavedCatId] = useState(null);
   const [systemSaveFeedback, setSystemSaveFeedback] = useState(false);
+  const [draftSystem, setDraftSystem] = useState(null);
 
   // Confirm Modals
   const [confirmDeleteSystem, setConfirmDeleteSystem] = useState(null); // stores id
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null); // stores id
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryInterval, setNewCategoryInterval] = useState("10000");
+  const [newCategorySafety, setNewCategorySafety] = useState("2000");
+  const [taxonomyUndoToast, setTaxonomyUndoToast] = useState(null);
 
   const categoryDropdownRef = useRef(null);
   const deleteMaintenanceEntryRef = useRef(deleteMaintenanceEntry);
@@ -384,8 +387,17 @@ export default function Maintenance() {
     ? activeSystem.categories.find((item) => item.id === selectedMaintenanceItemId)
     : null;
   const editingSystem = editingSystemId
-    ? maintenanceSystems.find((s) => s.id === editingSystemId)
+    ? draftSystem || maintenanceSystems.find((s) => s.id === editingSystemId)
     : null;
+
+  const closeEditSystemModal = () => {
+    setEditingSystemId(null);
+    setDraftSystem(null);
+    setNewCategoryName("");
+    setNewCategoryInterval("10000");
+    setNewCategorySafety("2000");
+    setSystemSaveFeedback(false);
+  };
 
   const handleSaveSystemName = () => {
     if (!editingSystemId || !editSystemName.trim()) return;
@@ -393,6 +405,37 @@ export default function Maintenance() {
     const currentSystem = maintenanceSystems.find(
       (s) => s.id === editingSystemId,
     );
+    const normalizedName = editSystemName.trim().toLowerCase();
+    const duplicateSystem = maintenanceSystems.some((system) =>
+      system.id !== editingSystemId &&
+      !system.deletedAt &&
+      !system.deleted_at &&
+      system.name?.trim().toLowerCase() === normalizedName
+    );
+
+    if (duplicateSystem) {
+      setSystemSaveFeedback("duplicate");
+      return;
+    }
+
+    if (draftSystem) {
+      const now = new Date().toISOString();
+      markMaintenanceTaxonomyDirty();
+      setMaintenanceSystems((prev) => [
+        ...prev,
+        {
+          ...draftSystem,
+          name: editSystemName.trim(),
+          icon: editSystemIcon,
+          updatedAt: now,
+          updated_at: now,
+        },
+      ]);
+      setSystemSaveFeedback("saved");
+      setTimeout(closeEditSystemModal, 1000);
+      return;
+    }
+
     if (
       currentSystem?.name === editSystemName.trim() &&
       currentSystem?.icon === editSystemIcon
@@ -400,7 +443,7 @@ export default function Maintenance() {
       setSystemSaveFeedback("no-change");
       setTimeout(() => {
         setSystemSaveFeedback(false);
-        setEditingSystemId(null);
+        closeEditSystemModal();
       }, 1000);
       return;
     }
@@ -422,8 +465,7 @@ export default function Maintenance() {
     );
     setSystemSaveFeedback("saved");
     setTimeout(() => {
-      setSystemSaveFeedback(false);
-      setEditingSystemId(null);
+      closeEditSystemModal();
     }, 1000);
   };
 
@@ -447,6 +489,7 @@ export default function Maintenance() {
 
   const handleDeleteSystem = () => {
     const deletedAt = new Date().toISOString();
+    const deletedSystem = maintenanceSystems.find((s) => s.id === confirmDeleteSystem);
     markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
@@ -462,8 +505,29 @@ export default function Maintenance() {
           : s,
       ),
     );
+    if (deletedSystem) {
+      setTaxonomyUndoToast({
+        id: `system-${deletedSystem.id}`,
+        label: deletedSystem.name,
+        onUndo: () => {
+          markMaintenanceTaxonomyDirty();
+          setMaintenanceSystems((prev) => prev.map((system) =>
+            system.id === deletedSystem.id
+              ? {
+                  ...system,
+                  deletedAt: null,
+                  deleted_at: null,
+                  updatedAt: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  version: Number(system.version || 1) + 1,
+                }
+              : system
+          ));
+        },
+      });
+    }
     setConfirmDeleteSystem(null);
-    setEditingSystemId(null);
+    closeEditSystemModal();
   };
 
   const handleAddSystem = () => {
@@ -493,8 +557,7 @@ export default function Maintenance() {
       deleted_at: null,
       version: 1,
     };
-    markMaintenanceTaxonomyDirty();
-    setMaintenanceSystems((prev) => [...prev, newSystem]);
+    setDraftSystem(newSystem);
     setEditingSystemId(newId);
     setEditSystemName(newSystem.name);
     setEditSystemIcon(newSystem.icon);
@@ -502,13 +565,32 @@ export default function Maintenance() {
 
   const handleAddCustomCategory = async () => {
     if (!newCategoryName.trim() || !editingSystemId) return;
+    const interval = Number(newCategoryInterval) || 0;
+    const safety = Number(newCategorySafety) || 0;
     const category = await addMaintenanceCategory({
       name: newCategoryName.trim(),
       color: "#64748b",
-      defaultInterval: { value: 10000, unit: "km" },
-      defaultSafetyMarginKm: maintenanceSettings.defaultSafetyMarginKm || 2000
+      defaultInterval: { value: interval, unit: "km" },
+      defaultSafetyMarginKm: safety,
     });
     markMaintenanceTaxonomyDirty();
+    updateCategorySettings(category.id, {
+      intervalKm: interval,
+      safetyMarginKm: safety,
+    });
+    if (draftSystem) {
+      setDraftSystem((prev) => ({
+        ...prev,
+        categories: Array.from(new Set([...(prev.categories || []), category.id])),
+        updatedAt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        version: Number(prev.version || 1) + 1,
+      }));
+      setNewCategoryName("");
+      setNewCategoryInterval("10000");
+      setNewCategorySafety("2000");
+      return;
+    }
     setMaintenanceSystems((prev) => prev.map((system) =>
       system.id === editingSystemId
         ? {
@@ -521,9 +603,13 @@ export default function Maintenance() {
         : system
     ));
     setNewCategoryName("");
+    setNewCategoryInterval("10000");
+    setNewCategorySafety("2000");
   };
 
   const handleDeleteSubCategory = () => {
+    const removedCatId = confirmDeleteCat;
+    const systemBefore = maintenanceSystems.find((s) => s.id === editingSystemId);
     markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
@@ -538,6 +624,33 @@ export default function Maintenance() {
           : s,
       ),
     );
+    if (draftSystem) {
+      setDraftSystem((prev) => prev
+        ? { ...prev, categories: prev.categories.filter((id) => id !== removedCatId) }
+        : prev
+      );
+    }
+    if (systemBefore && removedCatId) {
+      const cat = getCategoryById(removedCatId);
+      setTaxonomyUndoToast({
+        id: `subcategory-${editingSystemId}-${removedCatId}`,
+        label: cat?.name || removedCatId,
+        onUndo: () => {
+          markMaintenanceTaxonomyDirty();
+          setMaintenanceSystems((prev) => prev.map((system) =>
+            system.id === systemBefore.id
+              ? {
+                  ...system,
+                  categories: Array.from(new Set([...(system.categories || []), removedCatId])),
+                  updatedAt: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  version: Number(system.version || 1) + 1,
+                }
+              : system
+          ));
+        },
+      });
+    }
     setConfirmDeleteCat(null);
   };
 
@@ -610,6 +723,12 @@ export default function Maintenance() {
     if (!deleteToast) return;
     await deleteMaintenanceEntry(deleteToast.entryId);
     setDeleteToast(null);
+  };
+
+  const undoTaxonomyChange = () => {
+    if (!taxonomyUndoToast) return;
+    taxonomyUndoToast.onUndo();
+    setTaxonomyUndoToast(null);
   };
 
   const handleExportPDF = async () => {
@@ -875,30 +994,6 @@ export default function Maintenance() {
             exit={{ opacity: 0, x: -10 }}
             className="grid grid-cols-1 gap-4"
           >
-            <Card className="p-5 space-y-4">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                  {t("defaults")}
-                </h3>
-                <p className="text-xs font-semibold text-slate-500">
-                  {t("maintenance_defaults_hint")}
-                </p>
-              </div>
-              <div>
-                <Label>{t("safety_margin")} (km)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={maintenanceSettings.defaultSafetyMarginKm || 0}
-                  onChange={(event) =>
-                    updateMaintenanceSettings({
-                      defaultSafetyMarginKm: Number(event.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </Card>
-
             <h3 className="px-1 text-xs font-black uppercase tracking-wider text-slate-400">
               {t("systems")}
             </h3>
@@ -1100,7 +1195,7 @@ export default function Maintenance() {
 
       <Modal
         isOpen={!!editingSystemId}
-        onClose={() => setEditingSystemId(null)}
+        onClose={closeEditSystemModal}
         title={t("edit") + " " + t("systems")}
       >
         <div className="flex max-h-[72vh] flex-col gap-4">
@@ -1132,20 +1227,44 @@ export default function Maintenance() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[1fr_auto] gap-2">
-              <Input
-                value={newCategoryName}
-                onChange={(event) => setNewCategoryName(event.target.value)}
-                placeholder={t("custom_category")}
-              />
-              <button
-                type="button"
-                onClick={handleAddCustomCategory}
-                disabled={!newCategoryName.trim()}
-                className="rounded-xl bg-slate-900 px-4 text-xs font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
-              >
-                {t("add")}
-              </button>
+            <div className="space-y-2 rounded-2xl bg-slate-50 p-2 dark:bg-white/5">
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Input
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  placeholder={t("custom_category")}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomCategory}
+                  disabled={!newCategoryName.trim()}
+                  className="rounded-xl bg-slate-900 px-4 text-xs font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                >
+                  {t("add")}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px]">{t("distance")}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={newCategoryInterval}
+                    onChange={(event) => setNewCategoryInterval(event.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px]">{t("safety_margin")}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={newCategorySafety}
+                    onChange={(event) => setNewCategorySafety(event.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1155,8 +1274,8 @@ export default function Maintenance() {
               const isRenaming = renamingCatId === catId;
               const catSettings = maintenanceSettings?.categorySettings?.[catId] || {};
               const enabled = catSettings.enabled !== false;
-              const interval = catSettings.intervalKm ?? cat.defaultInterval?.value ?? 0;
-              const margin = catSettings.safetyMarginKm ?? cat.defaultSafetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+              const interval = catSettings.intervalKm ?? cat.defaultInterval?.value ?? "";
+              const margin = catSettings.safetyMarginKm ?? cat.defaultSafetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? "";
               return (
                 <div
                   key={catId}
@@ -1231,7 +1350,11 @@ export default function Maintenance() {
                         type="number"
                         min="0"
                         value={interval}
-                        onChange={(event) => updateCategorySettings(catId, { intervalKm: Number(event.target.value) || 0 })}
+                        onChange={(event) =>
+                          updateCategorySettings(catId, {
+                            intervalKm: event.target.value === "" ? "" : Number(event.target.value),
+                          })
+                        }
                         className="text-sm"
                       />
                     </div>
@@ -1241,7 +1364,11 @@ export default function Maintenance() {
                         type="number"
                         min="0"
                         value={margin}
-                        onChange={(event) => updateCategorySettings(catId, { safetyMarginKm: Number(event.target.value) || 0 })}
+                        onChange={(event) =>
+                          updateCategorySettings(catId, {
+                            safetyMarginKm: event.target.value === "" ? "" : Number(event.target.value),
+                          })
+                        }
                         className="text-sm"
                       />
                     </div>
@@ -1254,6 +1381,7 @@ export default function Maintenance() {
           <div className="flex shrink-0 gap-3 pt-1">
             <button
               onClick={() => setConfirmDeleteSystem(editingSystemId)}
+              disabled={!!draftSystem}
               className="p-4 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl transition-all active:scale-[0.98]"
             >
               <Trash weight="duotone" className="w-6 h-6" />
@@ -1264,6 +1392,8 @@ export default function Maintenance() {
                 "flex-1 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
                 systemSaveFeedback === "saved"
                   ? "bg-emerald-500 text-white"
+                  : systemSaveFeedback === "duplicate"
+                    ? "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-300"
                   : systemSaveFeedback === "no-change"
                     ? "bg-slate-200 dark:bg-slate-800 text-slate-500"
                     : "bg-slate-900 dark:bg-white text-white dark:text-slate-900",
@@ -1273,6 +1403,11 @@ export default function Maintenance() {
                 <>
                   <Check weight="bold" className="w-5 h-5" />
                   <span>{t("saved")}</span>
+                </>
+              ) : systemSaveFeedback === "duplicate" ? (
+                <>
+                  <Warning weight="bold" className="w-5 h-5" />
+                  <span>{t("duplicate")}</span>
                 </>
               ) : systemSaveFeedback === "no-change" ? (
                 <>
@@ -1497,6 +1632,16 @@ export default function Maintenance() {
             t={t}
             onUndo={undoMaintenanceDelete}
             onClose={finalizeMaintenanceDelete}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {taxonomyUndoToast && (
+          <MaintenanceUndoToast
+            label={taxonomyUndoToast.label}
+            t={t}
+            onUndo={undoTaxonomyChange}
+            onClose={() => setTaxonomyUndoToast(null)}
           />
         )}
       </AnimatePresence>

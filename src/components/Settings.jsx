@@ -1273,12 +1273,12 @@ export default function Settings() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-slate-900 dark:text-white">
-                {t("maintenance")}
+                {t("app_notifications")}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {notificationsEnabled
-                  ? "Maintenance reminders are enabled."
-                  : "Enable alerts for upcoming maintenance reminders."}
+                  ? t("app_notifications_enabled")
+                  : t("app_notifications_disabled")}
               </p>
             </div>
             <button
@@ -1289,7 +1289,7 @@ export default function Settings() {
               className={`relative ms-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notificationsEnabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? (isRtl ? "-translate-x-5" : "translate-x-5") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? (isRtl ? "-translate-x-6" : "translate-x-6") : isRtl ? "-translate-x-1" : "translate-x-1"}`}
               />
             </button>
           </div>

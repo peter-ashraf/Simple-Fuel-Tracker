@@ -112,7 +112,7 @@ function Header() {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] px-5 py-4 flex items-center justify-center">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 flex items-center justify-center">
       <div className="w-full max-w-lg flex items-center justify-between">
         <div className="flex items-center gap-3 relative" ref={dropdownRef}>
           <div className="bg-emerald-500/10 dark:bg-emerald-500/20 p-2 rounded-xl border-0">
@@ -531,11 +531,22 @@ export default function App() {
     return <LoginScreen />;
   }
 
+  const showBottomNav =
+    !location.pathname.startsWith("/trip-estimator") &&
+    !location.pathname.startsWith("/tyre-calculator");
+
   return (
-    <div className="pb-28 max-w-lg mx-auto relative min-h-screen flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
+    <div className="app-shell max-w-lg mx-auto relative overflow-hidden flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300">
       <Header />
 
-      <main className="flex-1 px-5 pt-20">
+      <main
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-[calc(5rem+env(safe-area-inset-top))]",
+          showBottomNav
+            ? "pb-[calc(7rem+env(safe-area-inset-bottom))]"
+            : "pb-[calc(2rem+env(safe-area-inset-bottom))]",
+        )}
+      >
         <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -556,9 +567,8 @@ export default function App() {
       </main>
 
       {/* Bottom Tab Bar */}
-      {!location.pathname.startsWith("/trip-estimator") &&
-        !location.pathname.startsWith("/tyre-calculator") && (
-          <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-black/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/[0.06] p-1 z-50 transition-colors duration-300">
+      {showBottomNav && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-black/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/[0.06] px-1 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] z-50 transition-colors duration-300">
             <div className="flex items-center justify-between h-[72px] max-w-lg mx-auto px-4 relative">
               <NavLink
                 to="/"

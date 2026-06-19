@@ -15,18 +15,27 @@ export default function MaintenanceForm() {
   
   const queryParams = new URLSearchParams(location.search);
   const initialType = queryParams.get('type');
+  const activeMaintenanceSystems = maintenanceSystems.filter(
+    (system) => !system.deletedAt && !system.deleted_at,
+  );
   
-  const getDefaultInterval = (categoryId) => {
+  const getCategoryDefaults = (categoryId) => {
     if (!categoryId) return '';
     const category = getCategoryById(categoryId);
-    return category?.defaultInterval?.value ? String(category.defaultInterval.value) : '';
+    const categorySettings = maintenanceSettings?.categorySettings?.[categoryId] || {};
+    const interval = categorySettings.intervalKm ?? category?.defaultInterval?.value ?? '';
+    const safety = categorySettings.safetyMarginKm ?? category?.defaultSafetyMarginKm ?? maintenanceSettings.defaultSafetyMarginKm ?? 2000;
+    return {
+      interval: interval === '' ? '' : String(interval),
+      safety: safety === '' ? '' : String(safety),
+    };
   };
 
   const [type, setType] = useState(initialType || '');
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [performedAtODO, setPerformedAtODO] = useState('');
-  const [intervalKm, setIntervalKm] = useState(() => getDefaultInterval(initialType));
-  const [safetyMarginKm, setSafetyMarginKm] = useState(maintenanceSettings.defaultSafetyMarginKm || 2000);
+  const [intervalKm, setIntervalKm] = useState(() => getCategoryDefaults(initialType).interval);
+  const [safetyMarginKm, setSafetyMarginKm] = useState(() => getCategoryDefaults(initialType).safety);
   const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -39,8 +48,10 @@ export default function MaintenanceForm() {
   };
 
   const handleSelectType = (categoryId) => {
+    const defaults = getCategoryDefaults(categoryId);
     setType(categoryId);
-    setIntervalKm(getDefaultInterval(categoryId));
+    setIntervalKm(defaults.interval);
+    setSafetyMarginKm(defaults.safety);
   };
 
   const handleSubmit = (e) => {
@@ -72,7 +83,7 @@ export default function MaintenanceForm() {
 
         {!selectedSystemId ? (
           <div className="grid grid-cols-1 gap-3">
-            {maintenanceSystems.map(system => (
+            {activeMaintenanceSystems.map(system => (
               <Card key={system.id} className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setSelectedSystemId(system.id)}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: system.color }}><Wrench weight="duotone" className="w-6 h-6" /></div>
@@ -87,8 +98,9 @@ export default function MaintenanceForm() {
             <button onClick={() => setSelectedSystemId(null)} className="text-xs font-bold text-emerald-500 uppercase flex items-center gap-1 mb-2">
               <CaretLeft weight="duotone" className={cn("w-3 h-3", isRtl && "rotate-180")} /> {t('back')}
             </button>
-            {maintenanceSystems.find(s => s.id === selectedSystemId).categories.map(catId => {
+            {activeMaintenanceSystems.find(s => s.id === selectedSystemId)?.categories.map(catId => {
               const cat = getCategoryById(catId);
+              if (!cat || cat.deletedAt || cat.deleted_at) return null;
               return (
                 <Card key={catId} className="p-5 flex items-center justify-between cursor-pointer" onClick={() => handleSelectType(catId)}>
                   <div className="flex items-center gap-4">

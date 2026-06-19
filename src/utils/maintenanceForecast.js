@@ -50,7 +50,11 @@ export const buildMaintenanceForecast = ({
   const latestByCategory = getLatestMaintenanceEntriesByCategory(entries);
 
   return categories
-    .filter((category) => maintenanceSettings?.categorySettings?.[category.id]?.enabled !== false)
+    .filter((category) =>
+      !category.deletedAt &&
+      !category.deleted_at &&
+      maintenanceSettings?.categorySettings?.[category.id]?.enabled !== false
+    )
     .map((category) => {
       const latestLog = latestByCategory.get(category.id) || null;
       const categorySettings = maintenanceSettings?.categorySettings?.[category.id] || {};

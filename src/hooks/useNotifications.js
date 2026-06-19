@@ -1,6 +1,42 @@
 import { useState, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 
+const NOTIFICATION_HISTORY_KEY = 'fueltracker-notification-history-v1';
+const MAINTENANCE_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function readNotificationHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeNotificationHistory(history) {
+  localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
+}
+
+function shouldSendMaintenanceReminder(reminderKey, signature) {
+  const now = Date.now();
+  const history = readNotificationHistory();
+  const previous = history[reminderKey];
+  const cooldownExpired =
+    !previous?.sentAt ||
+    now - Number(previous.sentAt) >= MAINTENANCE_REMINDER_COOLDOWN_MS;
+  const changedMeaningfully = previous?.signature !== signature;
+
+  if (previous && !cooldownExpired && !changedMeaningfully) {
+    return false;
+  }
+
+  history[reminderKey] = {
+    sentAt: now,
+    signature,
+  };
+  writeNotificationHistory(history);
+  return true;
+}
+
 export function useNotifications() {
   const isNotificationSupported = 'Notification' in window;
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage('fueltracker-notifications-enabled', false);
@@ -90,19 +126,28 @@ export function useNotifications() {
       const kmUntilDue = Number.isFinite(entry.kmUntilDue)
         ? entry.kmUntilDue
         : nextDueODO - currentOdometer;
+      const itemKey = entry.categoryId || entry.stableKey || entry.id || entry.type || typeLabel;
 
       if (nextDueODO && currentOdometer > 0) {
 
         if (entry.status === 'overdue' || kmUntilDue <= 0) {
+          const reminderKey = `maintenance-${itemKey}-overdue`;
+          const signature = `overdue:${nextDueODO}`;
+          if (!shouldSendMaintenanceReminder(reminderKey, signature)) return;
+
           sendNotification(`${typeLabel} - Overdue`, {
             body: `Your ${typeLabel} maintenance is overdue. Odometer: ${currentOdometer.toLocaleString()} km, Due at: ${nextDueODO.toLocaleString()} km.`,
-            tag: `maintenance-${entry.categoryId || entry.id}-overdue`,
+            tag: reminderKey,
             requireInteraction: true
           });
         } else if (entry.status === 'due-soon' || (alertODO && currentOdometer >= alertODO)) {
+          const reminderKey = `maintenance-${itemKey}-soon`;
+          const signature = `soon:${nextDueODO}:${alertODO}`;
+          if (!shouldSendMaintenanceReminder(reminderKey, signature)) return;
+
           sendNotification(`${typeLabel} - Due Soon`, {
             body: `${typeLabel} is due soon. Only ${kmUntilDue.toLocaleString()} km remaining.`,
-            tag: `maintenance-${entry.categoryId || entry.id}-soon`
+            tag: reminderKey
           });
         }
       }
