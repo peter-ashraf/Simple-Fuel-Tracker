@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
         open: false
       }),
       !shouldAnalyze && VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         includeAssets: ['icon.png', 'favicon.svg'],
         manifest: {
           name: 'Fuel Tracker',
@@ -90,6 +90,10 @@ export default defineConfig(({ mode }) => {
     esbuild: isProd ? {
       drop: ['console', 'debugger']
     } : {},
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0'),
+      __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString())
+    },
     build: {
       rollupOptions: {
         output: {

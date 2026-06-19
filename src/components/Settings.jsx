@@ -43,6 +43,8 @@ import { refreshLocalStorageState } from "../hooks/useLocalStorage";
 
 const MotionDiv = motion.div;
 const MIN_APP_UPDATE_CHECK_MS = 900;
+const APP_VERSION = __APP_VERSION__;
+const APP_BUILD_DATE = __APP_BUILD_DATE__;
 const todayISO = () => new Date().toISOString().substring(0, 10);
 const cloudRestoreTypes = [
   { id: "fillups", label: "Fill-ups" },
@@ -51,6 +53,17 @@ const cloudRestoreTypes = [
 
 const wait = (duration) =>
   new Promise((resolve) => setTimeout(resolve, duration));
+
+const formatAppDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
 const getCloudRestoreItemKey = (type, record) => `${type}:${record.id}`;
 
@@ -210,6 +223,8 @@ export default function Settings() {
   const [appUpdateCheckModal, setAppUpdateCheckModal] = useState({
     isOpen: false,
     status: null,
+    registration: null,
+    checkedAt: null,
   });
   const [activeSettingsSection, setActiveSettingsSection] = useState("account");
   const settingsSections = [
@@ -327,16 +342,14 @@ export default function Settings() {
     setNotificationError("Notification permission was not granted.");
   };
 
-  const showAppUpdateCheckModal = (status) => {
-    setAppUpdateCheckModal({ isOpen: true, status });
-  };
-
-  const notifyUpdateAvailable = (registration) => {
-    window.dispatchEvent(
-      new CustomEvent("app-update-available", {
-        detail: { registration, source: "manual" },
-      }),
-    );
+  const showAppUpdateCheckModal = (status, extra = {}) => {
+    setAppUpdateCheckModal({
+      isOpen: true,
+      status,
+      registration: null,
+      checkedAt: new Date().toISOString(),
+      ...extra,
+    });
   };
 
   const waitForWaitingServiceWorker = (registration) =>
@@ -399,8 +412,7 @@ export default function Settings() {
 
       if (registration.waiting) {
         await minimumCheckingTime;
-        notifyUpdateAvailable(registration);
-        setAppUpdateCheckModal({ isOpen: false, status: null });
+        showAppUpdateCheckModal("available", { registration });
         return;
       }
 
@@ -411,8 +423,7 @@ export default function Settings() {
 
       if (updatedRegistration?.waiting) {
         await minimumCheckingTime;
-        notifyUpdateAvailable(updatedRegistration);
-        setAppUpdateCheckModal({ isOpen: false, status: null });
+        showAppUpdateCheckModal("available", { registration: updatedRegistration });
         return;
       }
 
@@ -425,6 +436,26 @@ export default function Settings() {
     } finally {
       setIsCheckingAppUpdate(false);
     }
+  };
+
+  const handleApplyCheckedAppUpdate = () => {
+    const registration = appUpdateCheckModal.registration;
+    setAppUpdateCheckModal((prev) => ({ ...prev, status: "applying" }));
+
+    const reloadOnce = () => {
+      window.location.reload();
+    };
+
+    if (registration?.waiting) {
+      navigator.serviceWorker?.addEventListener("controllerchange", reloadOnce, {
+        once: true,
+      });
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      setTimeout(reloadOnce, 2500);
+      return;
+    }
+
+    window.location.reload();
   };
 
   const handleExport = async (type = "json") => {
@@ -1282,6 +1313,24 @@ export default function Settings() {
               {t("check_for_app_updates_description")}
             </p>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-white/[0.04]">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                {t("current_app_version")}
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
+                v{APP_VERSION}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-white/[0.04]">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                {t("current_app_update_date")}
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
+                {formatAppDate(APP_BUILD_DATE)}
+              </p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={handleManualAppUpdateCheck}
@@ -1705,11 +1754,20 @@ export default function Settings() {
       <Modal
         isOpen={appUpdateCheckModal.isOpen}
         onClose={() =>
-          setAppUpdateCheckModal({ isOpen: false, status: null })
+          setAppUpdateCheckModal({
+            isOpen: false,
+            status: null,
+            registration: null,
+            checkedAt: null,
+          })
         }
         title={
           appUpdateCheckModal.status === "checking"
             ? t("checking_updates")
+            : appUpdateCheckModal.status === "available"
+            ? t("app_update_available_title")
+            : appUpdateCheckModal.status === "applying"
+            ? t("reloading")
             : appUpdateCheckModal.status === "error"
             ? t("app_update_check_failed_title")
             : t("app_update_none_title")
@@ -1728,6 +1786,45 @@ export default function Settings() {
                   {t("app_update_checking_description")}
                 </p>
               </div>
+            ) : appUpdateCheckModal.status === "available" ? (
+              <div className="space-y-4">
+                <p className="text-sm font-semibold leading-relaxed text-slate-700 dark:text-slate-200">
+                  {t("app_update_available_description")}
+                </p>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <p className="text-xs font-bold leading-relaxed text-emerald-800 dark:text-emerald-200">
+                    {t("app_update_available_details")}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
+                    <p className="font-black uppercase tracking-wider text-slate-400">
+                      {t("current_app_version")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-800 dark:text-slate-100">
+                      v{APP_VERSION}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
+                    <p className="font-black uppercase tracking-wider text-slate-400">
+                      {t("app_update_checked_at")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-800 dark:text-slate-100">
+                      {formatAppDate(appUpdateCheckModal.checkedAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : appUpdateCheckModal.status === "applying" ? (
+              <div className="flex items-center gap-3">
+                <ArrowClockwise
+                  weight="duotone"
+                  className="h-5 w-5 animate-spin text-emerald-500"
+                />
+                <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
+                  {t("app_update_applying_description")}
+                </p>
+              </div>
             ) : (
               <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
                 {appUpdateCheckModal.status === "error"
@@ -1737,12 +1834,45 @@ export default function Settings() {
             )}
           </div>
 
-          {appUpdateCheckModal.status !== "checking" && (
+          {appUpdateCheckModal.status === "available" && (
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() =>
-                  setAppUpdateCheckModal({ isOpen: false, status: null })
+                  setAppUpdateCheckModal({
+                    isOpen: false,
+                    status: null,
+                    registration: null,
+                    checkedAt: null,
+                  })
+                }
+                className="rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-600 transition-colors dark:bg-slate-800 dark:text-slate-300"
+              >
+                {t("update_later")}
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyCheckedAppUpdate}
+                className="rounded-xl bg-emerald-500 py-3 text-xs font-bold text-white transition-colors"
+              >
+                {t("update_now")}
+              </button>
+            </div>
+          )}
+
+          {appUpdateCheckModal.status !== "checking" &&
+            appUpdateCheckModal.status !== "available" &&
+            appUpdateCheckModal.status !== "applying" && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setAppUpdateCheckModal({
+                    isOpen: false,
+                    status: null,
+                    registration: null,
+                    checkedAt: null,
+                  })
                 }
                 className="rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-600 transition-colors dark:bg-slate-800 dark:text-slate-300"
               >
