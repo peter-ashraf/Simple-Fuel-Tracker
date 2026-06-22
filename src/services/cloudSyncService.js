@@ -724,7 +724,7 @@ function mergeDownloadedMaintenanceTaxonomy(cloudSystems = [], cloudCategories =
       mergedSystems.forEach((system) => {
         system.categories = (system.categories || []).filter((id) => id !== categoryId);
       });
-      if (cloudCategory.system_stable_key) {
+      if (cloudCategory.system_stable_key && !cloudCategory.deleted_at) {
         const parentSystem = mergedSystems.find((system) =>
           [system.id, system.stableKey, system.stable_key, system.typeKey, system.type_key].includes(cloudCategory.system_stable_key)
         );
