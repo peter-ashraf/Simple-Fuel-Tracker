@@ -2034,7 +2034,8 @@ export const cloudSyncService = {
       const changeDetection = detectChanges(localDataSummary, cloudDataSummary);
       
       if (!changeDetection.hasChanges) {
-        const taxonomyUpload = options.silent
+        const shouldSyncDirtyTaxonomy = hasDirtyMaintenanceTaxonomy();
+        const taxonomyUpload = options.silent && !shouldSyncDirtyTaxonomy
           ? { success: true, skipped: true, systems: 0, categories: 0, details: ['Maintenance taxonomy upload skipped during background sync.'] }
           : await this.uploadMaintenanceTaxonomy(userId, await this.buildVehicleIdMap(userId), { clearDirty: true });
         result.details.push(...taxonomyUpload.details);
@@ -2174,7 +2175,8 @@ export const cloudSyncService = {
         }
       }
 
-      const taxonomyUpload = options.silent
+      const shouldSyncDirtyTaxonomy = hasDirtyMaintenanceTaxonomy();
+      const taxonomyUpload = options.silent && !shouldSyncDirtyTaxonomy
         ? { success: true, skipped: true, systems: 0, categories: 0, details: ['Maintenance taxonomy upload skipped during background sync.'] }
         : await this.uploadMaintenanceTaxonomy(userId, vehicleIdMap, { clearDirty: true });
       result.details.push(...taxonomyUpload.details);

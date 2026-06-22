@@ -177,7 +177,11 @@ export function useMaintenanceState(selectedVehicleId) {
   }, [maintenanceSystems, setMaintenanceSystems]);
 
   const getCategoryById = (id) => {
-    return categories.find((cat) => cat.id === id) || categories.find((cat) => cat.id === 'custom') || categories[0];
+    const activeCategories = categories.filter((cat) => !cat.deletedAt && !cat.deleted_at);
+    const activeCategory = activeCategories.find((cat) => cat.id === id);
+    if (activeCategory) return activeCategory;
+    if (id && categories.some((cat) => cat.id === id)) return undefined;
+    return activeCategories.find((cat) => cat.id === 'custom') || activeCategories[0];
   };
 
   const normalizeMaintenanceEntry = (entry, existing = {}) => {

@@ -165,6 +165,7 @@ export default function Maintenance() {
   const [renamingCatName, setRenamingCatName] = useState("");
   const [justSavedCatId, setJustSavedCatId] = useState(null);
   const [systemSaveFeedback, setSystemSaveFeedback] = useState(false);
+  const [systemModalHasTaxonomyChanges, setSystemModalHasTaxonomyChanges] = useState(false);
   const [draftSystem, setDraftSystem] = useState(null);
 
   // Confirm Modals
@@ -302,10 +303,20 @@ export default function Maintenance() {
     );
   };
 
+  const activeCategories = useMemo(
+    () => categories.filter((category) => !category.deletedAt && !category.deleted_at),
+    [categories],
+  );
+
+  const activeMaintenanceSystems = useMemo(
+    () => maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at),
+    [maintenanceSystems],
+  );
+
   const categoryProgress = useMemo(
     () =>
       buildMaintenanceForecast({
-        categories,
+        categories: activeCategories,
         entries: maintenanceEntries,
         maintenanceSettings,
         currentOdometer,
@@ -316,7 +327,7 @@ export default function Maintenance() {
       })),
     [
       avgDailyDistance,
-      categories,
+      activeCategories,
       currentOdometer,
       maintenanceEntries,
       maintenanceSettings,
@@ -325,7 +336,7 @@ export default function Maintenance() {
   );
 
   const systemStatus = useMemo(() => {
-    return maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at).map((system) => {
+    return activeMaintenanceSystems.map((system) => {
       const systemCategories = categoryProgress.filter((cp) =>
         system.categories.includes(cp.id),
       );
@@ -378,7 +389,7 @@ export default function Maintenance() {
         displayColor: color,
       };
     });
-  }, [categoryProgress, maintenanceSystems, t]);
+  }, [activeMaintenanceSystems, categoryProgress, t]);
 
   const activeSystem = selectedSystemId
     ? systemStatus.find((s) => s.id === selectedSystemId)
@@ -397,6 +408,7 @@ export default function Maintenance() {
     setNewCategoryInterval("10000");
     setNewCategorySafety("2000");
     setSystemSaveFeedback(false);
+    setSystemModalHasTaxonomyChanges(false);
   };
 
   const handleSaveSystemName = () => {
@@ -438,7 +450,8 @@ export default function Maintenance() {
 
     if (
       currentSystem?.name === editSystemName.trim() &&
-      currentSystem?.icon === editSystemIcon
+      currentSystem?.icon === editSystemIcon &&
+      !systemModalHasTaxonomyChanges
     ) {
       setSystemSaveFeedback("no-change");
       setTimeout(() => {
@@ -482,6 +495,7 @@ export default function Maintenance() {
     }
 
     updateMaintenanceCategory(catId, { name: newName });
+    setSystemModalHasTaxonomyChanges(true);
     setJustSavedCatId(catId);
     setTimeout(() => setJustSavedCatId(null), 2000);
     setRenamingCatId(null);
@@ -574,6 +588,7 @@ export default function Maintenance() {
       defaultInterval: { value: interval, unit: "km" },
       defaultSafetyMarginKm: safety,
     });
+    setSystemModalHasTaxonomyChanges(true);
     markMaintenanceTaxonomyDirty();
     updateCategorySettings(category.id, {
       intervalKm: interval,
@@ -612,6 +627,7 @@ export default function Maintenance() {
     const removedCatId = confirmDeleteCat;
     const systemBefore = maintenanceSystems.find((s) => s.id === editingSystemId);
     const deletedAt = new Date().toISOString();
+    setSystemModalHasTaxonomyChanges(true);
     markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
@@ -909,7 +925,7 @@ export default function Maintenance() {
                           >
                             {t("all_categories")}
                           </button>
-                          {categories.map((cat) => (
+                          {activeCategories.map((cat) => (
                             <button
                               key={cat.id}
                               onClick={() => {
@@ -1015,7 +1031,7 @@ export default function Maintenance() {
               {t("systems")}
             </h3>
 
-            {maintenanceSystems.filter((system) => !system.deletedAt && !system.deleted_at).map((system) => {
+            {activeMaintenanceSystems.map((system) => {
               const Icon = ICON_MAP[system.icon] || Wrench;
               return (
                 <Card
@@ -1039,7 +1055,7 @@ export default function Maintenance() {
                         {translateSystemName(system.name)}
                       </h4>
                       <p className="text-[10px] text-slate-500">
-                        {system.categories.length} {t("sub_categories")}
+                        {system.categories.filter((catId) => getCategoryById(catId)).length} {t("sub_categories")}
                       </p>
                     </div>
                   </div>
@@ -1288,6 +1304,7 @@ export default function Maintenance() {
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
             {editingSystem?.categories.map((catId) => {
               const cat = getCategoryById(catId);
+              if (!cat) return null;
               const isRenaming = renamingCatId === catId;
               const catSettings = maintenanceSettings?.categorySettings?.[catId] || {};
               const enabled = catSettings.enabled !== false;
@@ -1317,7 +1334,10 @@ export default function Maintenance() {
                     <div className="flex gap-1">
                       <button
                         type="button"
-                        onClick={() => updateCategorySettings(catId, { enabled: !enabled })}
+                        onClick={() => {
+                          setSystemModalHasTaxonomyChanges(true);
+                          updateCategorySettings(catId, { enabled: !enabled });
+                        }}
                         className={cn(
                           "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors",
                           enabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700",
@@ -1367,11 +1387,12 @@ export default function Maintenance() {
                         type="number"
                         min="0"
                         value={interval}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          setSystemModalHasTaxonomyChanges(true);
                           updateCategorySettings(catId, {
                             intervalKm: event.target.value === "" ? "" : Number(event.target.value),
-                          })
-                        }
+                          });
+                        }}
                         className="text-sm"
                       />
                     </div>
@@ -1381,11 +1402,12 @@ export default function Maintenance() {
                         type="number"
                         min="0"
                         value={margin}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          setSystemModalHasTaxonomyChanges(true);
                           updateCategorySettings(catId, {
                             safetyMarginKm: event.target.value === "" ? "" : Number(event.target.value),
-                          })
-                        }
+                          });
+                        }}
                         className="text-sm"
                       />
                     </div>
@@ -1531,11 +1553,11 @@ export default function Maintenance() {
               <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-black text-blue-500">
                 {pdfSystemIds.length === 0
                   ? `${t("all") || "All"}`
-                  : `${pdfSystemIds.length}/${maintenanceSystems.length}`}
+                  : `${pdfSystemIds.length}/${activeMaintenanceSystems.length}`}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {maintenanceSystems.map((system) => {
+              {activeMaintenanceSystems.map((system) => {
                 const selected = pdfSystemIds.includes(system.id);
                 return (
                   <button
