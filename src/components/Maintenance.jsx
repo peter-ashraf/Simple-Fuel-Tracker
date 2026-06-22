@@ -611,6 +611,7 @@ export default function Maintenance() {
   const handleDeleteSubCategory = () => {
     const removedCatId = confirmDeleteCat;
     const systemBefore = maintenanceSystems.find((s) => s.id === editingSystemId);
+    const deletedAt = new Date().toISOString();
     markMaintenanceTaxonomyDirty();
     setMaintenanceSystems((prev) =>
       prev.map((s) =>
@@ -633,12 +634,26 @@ export default function Maintenance() {
     }
     if (systemBefore && removedCatId) {
       const cat = getCategoryById(removedCatId);
+      updateMaintenanceCategory(removedCatId, {
+        deletedAt,
+        deleted_at: deletedAt,
+        updatedAt: deletedAt,
+        updated_at: deletedAt,
+        lastAction: "DELETE",
+      });
       setTaxonomyUndoToast({
         id: `subcategory-${editingSystemId}-${removedCatId}`,
         title: t("maintenance_subcategory_removed"),
         label: cat?.name || removedCatId,
         onUndo: () => {
           markMaintenanceTaxonomyDirty();
+          updateMaintenanceCategory(removedCatId, {
+            deletedAt: null,
+            deleted_at: null,
+            updatedAt: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            lastAction: null,
+          });
           setMaintenanceSystems((prev) => prev.map((system) =>
             system.id === systemBefore.id
               ? {

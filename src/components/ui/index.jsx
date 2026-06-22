@@ -39,16 +39,49 @@ function getNumericInputMode({ type, step, inputMode }) {
   return step && step !== "1" ? "decimal" : "numeric";
 }
 
-export const Input = forwardRef(({ className, inputMode, type, step, ...props }, ref) => (
-  <input
-    ref={ref}
-    type={type}
-    step={step}
-    inputMode={getNumericInputMode({ type, step, inputMode })}
-    className={cn("input-field", className)}
-    {...props}
-  />
-));
+function formatNumericInputValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const raw = String(value).replace(/,/g, "");
+  if (!/^-?\d*\.?\d*$/.test(raw) || raw === "-" || raw === ".") return String(value);
+
+  const sign = raw.startsWith("-") ? "-" : "";
+  const unsigned = sign ? raw.slice(1) : raw;
+  const [integerPart, decimalPart] = unsigned.split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}${formattedInteger}${decimalPart !== undefined ? `.${decimalPart}` : ""}`;
+}
+
+export const Input = forwardRef(({ className, inputMode, type, step, value, onChange, ...props }, ref) => {
+  const isNumeric = type === "number";
+  const displayValue = isNumeric ? formatNumericInputValue(value) : value;
+
+  const handleChange = (event) => {
+    if (!isNumeric || !onChange) {
+      onChange?.(event);
+      return;
+    }
+
+    const rawValue = event.target.value.replace(/,/g, "");
+    onChange({
+      ...event,
+      target: { ...event.target, value: rawValue },
+      currentTarget: { ...event.currentTarget, value: rawValue },
+    });
+  };
+
+  return (
+    <input
+      ref={ref}
+      type={isNumeric ? "text" : type}
+      step={step}
+      value={displayValue}
+      onChange={handleChange}
+      inputMode={getNumericInputMode({ type, step, inputMode })}
+      className={cn("input-field", className)}
+      {...props}
+    />
+  );
+});
 Input.displayName = "Input"
 
 export const Label = forwardRef(({ className, children, ...props }, ref) => (
