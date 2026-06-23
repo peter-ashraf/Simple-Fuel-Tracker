@@ -1528,7 +1528,7 @@ export default function Maintenance() {
         title={t("export") || "Export PDF"}
         size="sm"
       >
-        <div className="flex max-h-[calc(100vh-9rem)] flex-col overflow-hidden sm:max-h-[76vh]">
+        <div className="flex max-h-[calc(100dvh-17rem)] flex-col overflow-hidden sm:max-h-[62vh]">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
               <button
