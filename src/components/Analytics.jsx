@@ -108,6 +108,12 @@ const createDataHealthIssueKey = (vehicleId, issue) =>
     ...(issue.details || []).map(getHealthDetailLabel),
   ].join('|');
 
+const getTaxonomyRecordLabel = (record) => {
+  const kind = record.entityType === 'maintenance_systems' ? 'System' : 'Category';
+  const name = record.name || record.type_key || record.stable_key || 'Unnamed';
+  return `${kind}: ${name}`;
+};
+
 export default function Analytics() {
   const {
     activeVehicleFillUps,
@@ -124,6 +130,11 @@ export default function Analytics() {
   const graphDropdownRef = useRef(null);
   const [isGraphDropdownOpen, setIsGraphDropdownOpen] = useState(false);
   const [expandedHealthIssueIds, setExpandedHealthIssueIds] = useState([]);
+  const [taxonomyHealth, setTaxonomyHealth] = useState({
+    status: 'idle',
+    diff: null,
+    error: '',
+  });
   const [dismissedHealthWarnings, setDismissedHealthWarnings] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(DATA_HEALTH_DISMISSED_KEY) || '[]');
@@ -131,6 +142,26 @@ export default function Analytics() {
       return [];
     }
   });
+
+  const taxonomyHealthSignature = useMemo(() => JSON.stringify({
+    vehicleId: activeVehicle?.id || null,
+    systems: (maintenanceSystems || []).map((system) => ({
+      id: system.id,
+      stableKey: system.stableKey || system.stable_key,
+      name: system.name,
+      categories: system.categories || [],
+      deletedAt: system.deletedAt || system.deleted_at || null,
+    })),
+    categories: (categories || []).map((category) => ({
+      id: category.id,
+      stableKey: category.stableKey || category.stable_key,
+      typeKey: category.typeKey || category.type_key,
+      name: category.name,
+      distance: category.defaultDistance || category.default_distance,
+      safety: category.defaultSafetyMarginKm || category.default_safety,
+      deletedAt: category.deletedAt || category.deleted_at || null,
+    })),
+  }), [activeVehicle?.id, maintenanceSystems, categories]);
 
   const formatMonthLabel = useCallback((dateStr) => {
     const d = new Date(dateStr + '-01');
@@ -186,6 +217,45 @@ export default function Analytics() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTaxonomyHealth = async () => {
+      setTaxonomyHealth({ status: 'checking', diff: null, error: '' });
+
+      try {
+        const [{ authService }, { cloudSyncService }] = await Promise.all([
+          import('../services/authService'),
+          import('../services/cloudSyncService'),
+        ]);
+        const session = await authService.getSession();
+        const user = session?.user;
+
+        if (!user?.id) {
+          if (!cancelled) setTaxonomyHealth({ status: 'idle', diff: null, error: '' });
+          return;
+        }
+
+        const diff = await cloudSyncService.getMaintenanceTaxonomyDiff(user.id);
+        if (!cancelled) setTaxonomyHealth({ status: 'ready', diff, error: '' });
+      } catch (error) {
+        if (!cancelled) {
+          setTaxonomyHealth({
+            status: 'error',
+            diff: null,
+            error: error?.message || 'Unable to check cloud maintenance setup.',
+          });
+        }
+      }
+    };
+
+    loadTaxonomyHealth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [taxonomyHealthSignature]);
 
   if (activeVehicleFillUps.length < 2) {
     return <PageWrapper className="py-20 text-center"><p className="text-slate-500 font-medium">{t('untracked')}</p></PageWrapper>;
@@ -256,6 +326,35 @@ export default function Analytics() {
         systemStableKeys.has(systemStableKey);
       return !categoryMatches || !systemMatches;
     });
+    const findCategoryForEntry = (entry) => (categories || []).find((category) =>
+      category.id === entry.type ||
+      category.typeKey === entry.type ||
+      category.type_key === entry.type ||
+      category.stableKey === entry.subcategoryStableKey ||
+      category.stable_key === entry.subcategory_stable_key
+    );
+    const maintenanceMissingCloudMapping = visibleMaintenance.filter((entry) => {
+      const category = findCategoryForEntry(entry);
+      if (!category) return false;
+      const system = (maintenanceSystems || []).find((candidate) => (candidate.categories || []).includes(category.id));
+      const isCustomCategory =
+        category.isDefault === false ||
+        category.is_default === false ||
+        Boolean((category.stableKey || category.stable_key) && (category.stableKey || category.stable_key) !== category.id);
+      const isCustomSystem =
+        system?.isDefault === false ||
+        system?.is_default === false ||
+        Boolean(system && (system.stableKey || system.stable_key) && (system.stableKey || system.stable_key) !== system.id);
+      const missingSubcategoryMapping = !entry.subcategoryStableKey && !entry.subcategory_stable_key;
+      const missingSystemMapping = !entry.systemStableKey && !entry.system_stable_key;
+      return (isCustomCategory || isCustomSystem) && (missingSubcategoryMapping || missingSystemMapping);
+    });
+    const taxonomyDiff = taxonomyHealth.status === 'ready' ? taxonomyHealth.diff : null;
+    const localOnlyTaxonomy = (taxonomyDiff?.localOnly || []).filter((record) => !record.deleted_at);
+    const cloudOnlyTaxonomy = (taxonomyDiff?.cloudOnly || []).filter((record) => !record.deleted_at);
+    const changedTaxonomy = taxonomyDiff?.bothChanged || [];
+    const localOnlySystems = localOnlyTaxonomy.filter((record) => record.entityType === 'maintenance_systems');
+    const localOnlyCategories = localOnlyTaxonomy.filter((record) => record.entityType === 'maintenance_subcategories');
 
     if (duplicateDateCount > 0) {
       issues.push({
@@ -358,6 +457,41 @@ export default function Analytics() {
         id: "maintenance-visible-tombstones",
         title: `${visibleTombstones.length} deleted maintenance record${visibleTombstones.length === 1 ? '' : 's'} still present in active state`,
         details: visibleTombstones.map(createMaintenanceHealthDetail),
+      });
+    }
+    if (localOnlySystems.length > 0) {
+      issues.push({
+        id: "taxonomy-local-systems",
+        title: `${localOnlySystems.length} custom maintenance system${localOnlySystems.length === 1 ? '' : 's'} not uploaded to cloud`,
+        details: localOnlySystems.map((record) => getTaxonomyRecordLabel(record)),
+      });
+    }
+    if (localOnlyCategories.length > 0) {
+      issues.push({
+        id: "taxonomy-local-categories",
+        title: `${localOnlyCategories.length} custom maintenance categor${localOnlyCategories.length === 1 ? 'y is' : 'ies are'} not uploaded to cloud`,
+        details: localOnlyCategories.map((record) => getTaxonomyRecordLabel(record)),
+      });
+    }
+    if (cloudOnlyTaxonomy.length > 0) {
+      issues.push({
+        id: "taxonomy-cloud-only",
+        title: `${cloudOnlyTaxonomy.length} cloud maintenance setup item${cloudOnlyTaxonomy.length === 1 ? '' : 's'} not on this device`,
+        details: cloudOnlyTaxonomy.map((record) => getTaxonomyRecordLabel(record)),
+      });
+    }
+    if (changedTaxonomy.length > 0) {
+      issues.push({
+        id: "taxonomy-changed",
+        title: `${changedTaxonomy.length} maintenance setup item${changedTaxonomy.length === 1 ? '' : 's'} differ from cloud`,
+        details: changedTaxonomy.map((record) => getTaxonomyRecordLabel(record.local || record.cloud || record)),
+      });
+    }
+    if (maintenanceMissingCloudMapping.length > 0) {
+      issues.push({
+        id: "maintenance-missing-cloud-mapping",
+        title: `${maintenanceMissingCloudMapping.length} maintenance entr${maintenanceMissingCloudMapping.length === 1 ? 'y needs' : 'ies need'} cloud category mapping`,
+        details: maintenanceMissingCloudMapping.map(createMaintenanceHealthDetail),
       });
     }
 

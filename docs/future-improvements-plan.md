@@ -190,11 +190,11 @@ Priority: High
   - duplicate maintenance records
   - deleted/tombstoned records still visible
   - entries with null key fields that may sync incorrectly
-- [ ] Add sync/taxonomy checks:
+- [x] Add sync/taxonomy checks:
   - custom system exists locally but not cloud
   - custom category exists locally but not cloud
   - maintenance entry has no category/system cloud mapping
-- [ ] Run lint/build.
+- [x] Run lint/build.
 
 ## Phase 5: Backup And Import Polish V2
 
