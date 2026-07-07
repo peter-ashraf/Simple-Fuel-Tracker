@@ -241,10 +241,10 @@ export default function History() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold">
-                  Entry removed: {pendingDeleteToast.label}
+                  {t("entry_removed", { label: pendingDeleteToast.label })}
                 </p>
                 <p className="text-[10px] font-semibold text-slate-400">
-                  Deleting in {pendingDeleteToast.remaining}s
+                  {t("deleting_in_seconds", { seconds: pendingDeleteToast.remaining })}
                 </p>
               </div>
               <button
@@ -253,13 +253,13 @@ export default function History() {
                 className="flex h-10 items-center gap-1.5 rounded-2xl bg-emerald-500 px-3 text-xs font-bold text-white transition hover:bg-emerald-400"
               >
                 <ArrowCounterClockwise weight="duotone" className="h-4 w-4" />
-                Undo
+                {t("undo")}
               </button>
               <button
                 type="button"
                 onClick={finalizePendingDelete}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
-                aria-label="Close delete notification"
+                aria-label={t("close_delete_notification")}
               >
                 <X weight="bold" className="h-4 w-4" />
               </button>

@@ -743,6 +743,17 @@ function mergeDownloadedMaintenanceTaxonomy(cloudSystems = [], cloudCategories =
     };
   });
 
+  const deletedCategoryIds = new Set(
+    mergedCategories
+      .filter((category) => category.deletedAt || category.deleted_at)
+      .map((category) => category.id)
+  );
+  if (deletedCategoryIds.size > 0) {
+    mergedSystems.forEach((system) => {
+      system.categories = (system.categories || []).filter((categoryId) => !deletedCategoryIds.has(categoryId));
+    });
+  }
+
   return { systems: mergedSystems, categories: mergedCategories, settings };
 }
 
@@ -1007,6 +1018,90 @@ function detectDuplicateFillupByFields(fillup, existingFillups, userId) {
   return { isDuplicate: false, existingId: null };
 }
 
+function getFillupBusinessKey(fillup) {
+  if (!fillup) return null;
+  const vehicleId = fillup.vehicleId || fillup.vehicle_id;
+  const date = fillup.date || (fillup.timestamp ? String(fillup.timestamp).slice(0, 10) : null);
+  const odometer = normalizeNullableNumber(fillup.odometer);
+  const liters = normalizeNullableNumber(fillup.liters);
+  const price = normalizeNullableNumber(fillup.pricePerLiter ?? fillup.price_per_liter);
+  const cost = normalizeNullableNumber(fillup.totalCost ?? fillup.total_cost);
+  if (!vehicleId || !date || odometer === null || liters === null) return null;
+  return [
+    vehicleId,
+    date,
+    odometer.toFixed(2),
+    liters.toFixed(2),
+    price === null ? '' : price.toFixed(3),
+    cost === null ? '' : cost.toFixed(2)
+  ].join('|');
+}
+
+function preferCloudRecord(current, candidate) {
+  if (!current) return candidate;
+  const currentHasStableKey = Boolean(current.stable_key || current.stableKey);
+  const candidateHasStableKey = Boolean(candidate.stable_key || candidate.stableKey);
+  if (candidateHasStableKey && !currentHasStableKey) return candidate;
+  if (currentHasStableKey && !candidateHasStableKey) return current;
+  const currentUpdated = new Date(current.updated_at || current.updatedAt || current.created_at || current.createdAt || 0).getTime();
+  const candidateUpdated = new Date(candidate.updated_at || candidate.updatedAt || candidate.created_at || candidate.createdAt || 0).getTime();
+  return candidateUpdated > currentUpdated ? candidate : current;
+}
+
+function dedupeCloudFillupsForLocalDownload(fillups = []) {
+  const byIdentity = new Map();
+  const byBusiness = new Map();
+
+  fillups
+    .filter((fillup) => !fillup.deleted_at && !fillup.deletedAt)
+    .forEach((fillup) => {
+      const identityKey = fillup.stable_key || fillup.stableKey || fillup.id;
+      const businessKey = getFillupBusinessKey(fillup);
+      if (identityKey) byIdentity.set(identityKey, preferCloudRecord(byIdentity.get(identityKey), fillup));
+      if (businessKey) byBusiness.set(businessKey, preferCloudRecord(byBusiness.get(businessKey), fillup));
+    });
+
+  const selected = new Map();
+  byBusiness.forEach((fillup) => selected.set(fillup.id, fillup));
+  byIdentity.forEach((fillup) => {
+    if (!getFillupBusinessKey(fillup)) selected.set(fillup.id, fillup);
+  });
+
+  return Array.from(selected.values());
+}
+
+function getMaintenanceBusinessKey(entry) {
+  if (!entry) return null;
+  const vehicleId = entry.vehicleId || entry.vehicle_id;
+  const date = entry.date || (entry.timestamp ? String(entry.timestamp).slice(0, 10) : null);
+  const type = entry.type || entry.subcategoryTypeKey || entry.subcategory_type_key;
+  const odometer = normalizeNullableNumber(entry.odometer ?? entry.performedAtODO);
+  const nextDue = normalizeNullableNumber(entry.nextDueOdometer ?? entry.next_due_odometer ?? entry.nextDueODO);
+  if (!vehicleId || !date || !type || odometer === null) return null;
+  return [vehicleId, date, type, odometer.toFixed(2), nextDue === null ? '' : nextDue.toFixed(2)].join('|');
+}
+
+function dedupeCloudMaintenanceForLocalDownload(maintenance = []) {
+  const usable = filterUsableMaintenanceRecords(maintenance).filter((entry) => !entry.deleted_at && !entry.deletedAt);
+  const byIdentity = new Map();
+  const byBusiness = new Map();
+
+  usable.forEach((entry) => {
+    const identityKey = entry.stable_key || entry.stableKey || entry.id;
+    const businessKey = getMaintenanceBusinessKey(entry);
+    if (identityKey) byIdentity.set(identityKey, preferCloudRecord(byIdentity.get(identityKey), entry));
+    if (businessKey) byBusiness.set(businessKey, preferCloudRecord(byBusiness.get(businessKey), entry));
+  });
+
+  const selected = new Map();
+  byBusiness.forEach((entry) => selected.set(entry.id, entry));
+  byIdentity.forEach((entry) => {
+    if (!getMaintenanceBusinessKey(entry)) selected.set(entry.id, entry);
+  });
+
+  return Array.from(selected.values());
+}
+
 /**
  * Normalize a fillup record for cloud upload/merge
  * Remaps vehicleId, validates required fields, computes missing total_cost
@@ -1019,7 +1114,7 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
   console.log(`[Sync][fillup] Normalizing fillup ${id}`);
 
   // Remap vehicleId if needed
-  const oldVehicleId = fillup.vehicleId;
+  const oldVehicleId = fillup.vehicleId || fillup.vehicle_id;
   const newVehicleId = vehicleIdMap.has(oldVehicleId) ? vehicleIdMap.get(oldVehicleId) : oldVehicleId;
 
   // Validate required fields
@@ -1038,7 +1133,8 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
     return { normalized: null, skipped: true, reason: 'missing liters' };
   }
 
-  if (!fillup.pricePerLiter || fillup.pricePerLiter === null || fillup.pricePerLiter === undefined) {
+  const rawPricePerLiter = fillup.pricePerLiter ?? fillup.price_per_liter;
+  if (!rawPricePerLiter || rawPricePerLiter === null || rawPricePerLiter === undefined) {
     console.log(`[Sync][fillup] Skipping fillup ${id} due to missing pricePerLiter`);
     return { normalized: null, skipped: true, reason: 'missing pricePerLiter' };
   }
@@ -1046,10 +1142,10 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
   // Convert numeric strings to numbers
   const odometer = Number(fillup.odometer);
   const liters = Number(fillup.liters);
-  const pricePerLiter = Number(fillup.pricePerLiter);
+  const pricePerLiter = Number(rawPricePerLiter);
 
   // Compute total_cost if missing or invalid
-  let totalCost = fillup.totalCost;
+  let totalCost = fillup.totalCost ?? fillup.total_cost;
   let computedTotal = false;
 
   if (totalCost === null || totalCost === undefined || totalCost === '' || isNaN(Number(totalCost))) {
@@ -1107,7 +1203,8 @@ function normalizeFillupForCloud(fillup, vehicleIdMap) {
     station: fillup.station || null,
     notes: fillup.notes || null,
     full_tank: fillup.fullTank !== undefined ? fillup.fullTank : true,
-    created_at: fillup.createdAt || new Date().toISOString()
+    created_at: fillup.createdAt || fillup.created_at || new Date().toISOString(),
+    updated_at: fillup.updatedAt || fillup.updated_at || new Date().toISOString()
   };
 
 
@@ -1335,6 +1432,10 @@ export const cloudSyncService = {
     return navigator.onLine;
   },
 
+  notifyLocalDataChanged(source = 'cloud-sync') {
+    window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { source } }));
+  },
+
   /**
    * Get the current user ID from Supabase
    */
@@ -1451,22 +1552,36 @@ export const cloudSyncService = {
     const selectedVehicleId = getSelectedVehicleLocalId();
     if (!selectedVehicleId) return null;
     if (vehicleIdMap.has(selectedVehicleId)) return vehicleIdMap.get(selectedVehicleId);
-    if (this.isValidUuid(selectedVehicleId)) return selectedVehicleId;
 
     const localVehicles = JSON.parse(localStorage.getItem('fueltracker-vehicles-v2') || '[]');
     const activeVehicle = localVehicles.find((vehicle) => vehicle.id === selectedVehicleId);
-    if (!activeVehicle?.stableKey && !activeVehicle?.stable_key) return null;
+    if (activeVehicle?.stableKey || activeVehicle?.stable_key) {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('stable_key', activeVehicle.stableKey || activeVehicle.stable_key)
+        .is('deleted_at', null)
+        .maybeSingle();
 
-    const { data, error } = await supabase
-      .from('vehicles')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('stable_key', activeVehicle.stableKey || activeVehicle.stable_key)
-      .is('deleted_at', null)
-      .maybeSingle();
+      if (error) throw error;
+      if (data?.id) return data.id;
+    }
 
-    if (error) throw error;
-    return data?.id || null;
+    if (this.isValidUuid(selectedVehicleId)) {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('id', selectedVehicleId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data?.id) return data.id;
+    }
+
+    return null;
   },
 
   async resolveAllCloudVehicleIds(userId, vehicleIdMap = new Map()) {
@@ -2532,7 +2647,11 @@ export const cloudSyncService = {
       if (fillupsError) {
         result.details.push(`Fillups fetch failed: ${fillupsError.message} (code: ${fillupsError.code})`);
       } else if (fillups) {
-        const mappedFillups = fillups.map(f => ({
+        const cloudFillupsForLocal = dedupeCloudFillupsForLocalDownload(fillups);
+        if (cloudFillupsForLocal.length !== fillups.filter((fillup) => !fillup.deleted_at).length) {
+          result.details.push(`Skipped ${fillups.filter((fillup) => !fillup.deleted_at).length - cloudFillupsForLocal.length} duplicate cloud fill-up record(s) during download.`);
+        }
+        const mappedFillups = cloudFillupsForLocal.map(f => ({
           id: f.id,
           vehicleId: f.vehicle_id,
           date: f.date,
@@ -2546,7 +2665,8 @@ export const cloudSyncService = {
           timestamp: f.date,
           createdAt: f.created_at,
           updatedAt: f.updated_at,
-          stableKey: f.stable_key,
+          stableKey: f.stable_key || f.id,
+          stable_key: f.stable_key || f.id,
           deletedAt: f.deleted_at
         }));
         localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(mappedFillups));
@@ -2564,11 +2684,12 @@ export const cloudSyncService = {
       if (maintenanceError) {
         result.details.push(`Maintenance fetch failed: ${maintenanceError.message} (code: ${maintenanceError.code})`);
       } else if (maintenance) {
-        const usableMaintenance = filterUsableMaintenanceRecords(maintenance);
-        if (usableMaintenance.length !== maintenance.length) {
-          result.details.push(`Skipped ${maintenance.length - usableMaintenance.length} hollow maintenance placeholder record(s) from cloud download.`);
+        const activeMaintenance = maintenance.filter((entry) => !entry.deleted_at);
+        const cloudMaintenanceForLocal = dedupeCloudMaintenanceForLocalDownload(maintenance);
+        if (cloudMaintenanceForLocal.length !== activeMaintenance.length) {
+          result.details.push(`Skipped ${activeMaintenance.length - cloudMaintenanceForLocal.length} duplicate or hollow maintenance record(s) during download.`);
         }
-        const mappedMaintenance = usableMaintenance.map((m) =>
+        const mappedMaintenance = cloudMaintenanceForLocal.map((m) =>
           this.mapCloudMaintenanceToLocal(m),
         );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
@@ -2632,6 +2753,7 @@ export const cloudSyncService = {
         localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
         // Set cloud synced flag to indicate local data is now in sync with cloud
         localStorage.setItem(CLOUD_SYNCED_FLAG_KEY, new Date().toISOString());
+        this.notifyLocalDataChanged('download-cloud-data-to-local');
         console.log('[Sync][download] Download successful, migration flags set');
       } else if (totalRecords > 0) {
         result.success = false;
@@ -2685,8 +2807,8 @@ export const cloudSyncService = {
 
       // Get existing cloud data to avoid duplicates (include stable_key for matching, filter out deleted records)
       const { data: existingVehicles, error: vehiclesFetchError } = await supabase.from('vehicles').select('*').eq('user_id', userId).is('deleted_at', null);
-      const { data: existingFillups, error: fillupsFetchError } = await supabase.from('fillups').select('id').eq('user_id', userId).is('deleted_at', null);
-      const { data: existingMaintenance, error: maintenanceFetchError } = await supabase.from('maintenance').select('id').eq('user_id', userId).is('deleted_at', null);
+      const { data: existingFillups, error: fillupsFetchError } = await supabase.from('fillups').select('*').eq('user_id', userId).is('deleted_at', null);
+      const { data: existingMaintenance, error: maintenanceFetchError } = await supabase.from('maintenance').select('*').eq('user_id', userId).is('deleted_at', null);
       const { data: existingTripEstimates, error: tripsFetchError } = await supabase.from('trip_estimates').select('id').eq('user_id', userId).is('deleted_at', null);
 
       if (vehiclesFetchError) result.details.push(`Cloud vehicles fetch failed: ${vehiclesFetchError.message}`);
@@ -2698,6 +2820,14 @@ export const cloudSyncService = {
       const existingFillupIds = new Set(existingFillups?.map(f => f.id) || []);
       const existingMaintenanceIds = new Set(existingMaintenance?.map(m => m.id) || []);
       const existingTripEstimateIds = new Set(existingTripEstimates?.map(t => t.id) || []);
+      const existingFillupStableKeys = new Map();
+      const existingMaintenanceStableKeys = new Map();
+      existingFillups?.forEach((fillup) => {
+        if (fillup.stable_key) existingFillupStableKeys.set(fillup.stable_key, fillup);
+      });
+      existingMaintenance?.forEach((entry) => {
+        if (entry.stable_key) existingMaintenanceStableKeys.set(entry.stable_key, entry);
+      });
 
       result.details.push(`Existing cloud records: ${existingVehicleIds.size} vehicles, ${existingFillupIds.size} fillups, ${existingMaintenanceIds.size} maintenance, ${existingTripEstimateIds.size} trips`);
 
@@ -2778,7 +2908,8 @@ export const cloudSyncService = {
 
       // Upload fillups (skip existing) with normalization
       for (const fillup of remappedFillups) {
-        if (!existingFillupIds.has(fillup.id)) {
+        const fillupStableKey = fillup.stableKey || fillup.stable_key || fillup.id;
+        if (!existingFillupIds.has(fillup.id) && !existingFillupStableKeys.has(fillupStableKey)) {
           const { normalized, skipped: fillupSkippedNorm, reason, computedTotal } = normalizeFillupForCloud(fillup, vehicleIdMap);
           
           if (fillupSkippedNorm) {
@@ -2790,9 +2921,17 @@ export const cloudSyncService = {
           if (computedTotal) {
             fillupComputedTotal++;
           }
+
+          const duplicateCheck = detectDuplicateFillupByFields(normalized, existingFillups || [], userId);
+          if (duplicateCheck.isDuplicate) {
+            fillupSkipped++;
+            skipped++;
+            continue;
+          }
           
           const { error } = await supabase.from('fillups').upsert({
             ...normalized,
+            stable_key: fillupStableKey,
             user_id: userId
           });
           if (error) {
@@ -2809,7 +2948,8 @@ export const cloudSyncService = {
       // Upload maintenance (skip existing)
       const { systems: mergeMaintenanceSystems, categories: mergeMaintenanceCategories } = loadLocalMaintenanceTaxonomy();
       for (const entry of remappedMaintenance) {
-        if (!existingMaintenanceIds.has(entry.id)) {
+        const maintenanceStableKey = entry.stableKey || entry.stable_key || entry.id;
+        if (!existingMaintenanceIds.has(entry.id) && !existingMaintenanceStableKeys.has(maintenanceStableKey)) {
           // CRITICAL FIX: Preserve original maintenance date (same logic as fill-ups)
           // Priority order: date > timestamp > createdAt
           let normalizedMaintenanceDate = null;
@@ -2838,9 +2978,9 @@ export const cloudSyncService = {
           }
 
           const taxonomyMeta = getMaintenanceTaxonomyMetadata(entry, mergeMaintenanceSystems, mergeMaintenanceCategories);
-          const mappedEntryVehicleId = vehicleIdMap.get(entry.vehicleId) || entry.vehicleId;
-
-          const { error } = await supabase.from('maintenance').upsert({
+          const entryVehicleId = entry.vehicleId || entry.vehicle_id;
+          const mappedEntryVehicleId = vehicleIdMap.get(entryVehicleId) || entryVehicleId;
+          const maintenancePayload = {
             id: entry.id,
             user_id: userId,
             vehicle_id: mappedEntryVehicleId,
@@ -2851,12 +2991,24 @@ export const cloudSyncService = {
             odometer: entry.odometer || null,
             next_due_date: entry.nextDueDate || null,
             next_due_odometer: entry.nextDueOdometer || null,
+            stable_key: maintenanceStableKey,
             created_at: entry.createdAt || new Date().toISOString(),
+            updated_at: entry.updatedAt || entry.updated_at || new Date().toISOString(),
             subcategory_stable_key: taxonomyMeta.subcategoryStableKey,
             subcategory_type_key: taxonomyMeta.subcategoryTypeKey,
             system_stable_key: taxonomyMeta.systemStableKey,
             subcategory_name_snapshot: taxonomyMeta.subcategoryNameSnapshot
-          });
+          };
+
+          const duplicateMaintenance = (existingMaintenance || []).some((cloudEntry) =>
+            getMaintenanceBusinessKey(cloudEntry) === getMaintenanceBusinessKey(maintenancePayload)
+          );
+          if (duplicateMaintenance) {
+            skipped++;
+            continue;
+          }
+
+          const { error } = await supabase.from('maintenance').upsert(maintenancePayload);
           if (error) {
             maintenanceErrors++;
             result.details.push(`Maintenance merge failed: ${error.message} (code: ${error.code})`);
@@ -3011,6 +3163,7 @@ export const cloudSyncService = {
             station: fillup.station || null,
             notes: fillup.notes || null,
             full_tank: fillup.fullTank !== undefined ? fillup.fullTank : true,
+            stable_key: fillup.stableKey || fillup.stable_key || fillup.id || uuidv4(),
             created_at: fillup.createdAt || new Date().toISOString()
           });
         }
@@ -3031,6 +3184,7 @@ export const cloudSyncService = {
             odometer: entry.odometer || null,
             next_due_date: entry.nextDueDate || null,
             next_due_odometer: entry.nextDueOdometer || null,
+            stable_key: entry.stableKey || entry.stable_key || entry.id || uuidv4(),
             created_at: entry.createdAt || new Date().toISOString()
           });
         }
@@ -3125,7 +3279,7 @@ export const cloudSyncService = {
       if (fillupsError) {
         console.warn('[Sync][syncFromCloud] Fillups fetch failed:', fillupsError.message);
       } else {
-        const mappedFillups = (fillups || []).map((f) =>
+        const mappedFillups = dedupeCloudFillupsForLocalDownload(fillups || []).map((f) =>
           this.mapCloudFillupToLocal(f),
         );
         localStorage.setItem('fueltracker-fillups-v2', JSON.stringify(mappedFillups));
@@ -3142,8 +3296,8 @@ export const cloudSyncService = {
       if (maintenanceError) {
         console.warn('[Sync][syncFromCloud] Maintenance fetch failed:', maintenanceError.message);
       } else {
-        const usableMaintenance = filterUsableMaintenanceRecords(maintenance || []);
-        const mappedMaintenance = usableMaintenance.map((m) =>
+        const cloudMaintenanceForLocal = dedupeCloudMaintenanceForLocalDownload(maintenance || []);
+        const mappedMaintenance = cloudMaintenanceForLocal.map((m) =>
           this.mapCloudMaintenanceToLocal(m),
         );
         localStorage.setItem('fueltracker-maintenance-entries-v3', JSON.stringify(mappedMaintenance));
@@ -3173,6 +3327,7 @@ export const cloudSyncService = {
       if (taxonomyDownload.success === false) {
         console.warn('[Sync][syncFromCloud] Maintenance taxonomy fetch failed:', taxonomyDownload.details.join(' '));
       }
+      this.notifyLocalDataChanged('sync-from-cloud');
     } catch (error) {
       console.warn('[Sync][syncFromCloud] Failed:', error);
     }
@@ -3242,7 +3397,9 @@ export const cloudSyncService = {
               total_cost: data.totalCost,
               station: data.station || null,
               notes: data.notes || null,
-              full_tank: data.fullTank !== undefined ? data.fullTank : true
+              full_tank: data.fullTank !== undefined ? data.fullTank : true,
+              stable_key: data.stableKey || data.stable_key || data.id || uuidv4(),
+              updated_at: data.updatedAt || data.updated_at || new Date().toISOString()
             });
           } else if (item.table === 'maintenance') {
             const data = item.data;
@@ -3256,7 +3413,9 @@ export const cloudSyncService = {
               cost: data.cost || null,
               odometer: data.odometer || null,
               next_due_date: data.nextDueDate || null,
-              next_due_odometer: data.nextDueOdometer || null
+              next_due_odometer: data.nextDueOdometer || null,
+              stable_key: data.stableKey || data.stable_key || data.id || uuidv4(),
+              updated_at: data.updatedAt || data.updated_at || new Date().toISOString()
             });
           }
           processed.push(item.id);
@@ -3438,7 +3597,15 @@ export const cloudSyncService = {
         if (countsMatch || noActionableDifference) {
           console.log('[Sync][initialize] Counts still match, skipping modal and setting up sync listener');
           this.setupOnlineSyncListener(userId, { decision: null });
-          if (this.isOnline()) await this.syncAfterMutation(userId);
+          if (this.isOnline()) {
+            const startupSync = await this.syncBothSides(userId);
+            if (startupSync?.needsResolution) {
+              pendingSyncStatus = startupSync;
+              localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(startupSync));
+              return startupSync;
+            }
+            this.notifyLocalDataChanged('startup-counts-cache-sync');
+          }
           return null;
         } else {
           console.log('[Sync][initialize] Counts no longer match, removing countsMatchedNoConflict flag');
@@ -3458,12 +3625,24 @@ export const cloudSyncService = {
         if (migrationDecision === 'download') {
           console.log('[Sync][initialize] Stored decision is download — skipping startup auto-upload');
           this.setupOnlineSyncListener(userId, { decision: 'download' });
+          if (this.isOnline()) {
+            await this.syncFromCloud(userId);
+            this.notifyLocalDataChanged('startup-download-refresh');
+          }
           return null;
         }
 
         console.log('[Sync][initialize] Setting up sync listener with decision:', migrationDecision);
         this.setupOnlineSyncListener(userId, { decision: migrationDecision });
-        if (this.isOnline()) await this.syncAfterMutation(userId);
+        if (this.isOnline()) {
+          const startupSync = await this.syncBothSides(userId);
+          if (startupSync?.needsResolution) {
+            pendingSyncStatus = startupSync;
+            localStorage.setItem(PENDING_SYNC_STATUS_KEY, JSON.stringify(startupSync));
+            return startupSync;
+          }
+          this.notifyLocalDataChanged('startup-two-way-sync');
+        }
         return null;
       }
 
@@ -4177,7 +4356,7 @@ export const cloudSyncService = {
     const cloudMap = new Map();
 
     activeLocal.forEach(r => {
-      const key = r.stableKey || r.id;
+      const key = r.stableKey || r.stable_key || r.id;
       localMap.set(key, r);
     });
 
@@ -4314,8 +4493,14 @@ export const cloudSyncService = {
     for (const cat of categories) {
       const localRecords = JSON.parse(localStorage.getItem(cat.localKey) || '[]');
       const { data: cloudRecords } = await supabase.from(cat.table).select('*').eq('user_id', userId);
+      let comparableCloudRecords = cloudRecords || [];
+      if (cat.type === 'fillup') {
+        comparableCloudRecords = dedupeCloudFillupsForLocalDownload(comparableCloudRecords);
+      } else if (cat.type === 'maintenance') {
+        comparableCloudRecords = dedupeCloudMaintenanceForLocalDownload(comparableCloudRecords);
+      }
       
-      const diff = this.computeDiff(localRecords, cloudRecords || [], cat.type);
+      const diff = this.computeDiff(localRecords, comparableCloudRecords, cat.type);
       detailedDiff.entities[cat.key] = diff;
       
       detailedDiff.summary.localOnly += diff.localOnly.length;
@@ -4382,7 +4567,7 @@ export const cloudSyncService = {
 
     // Index local records by stable_key (or id as fallback)
     localFillups.forEach(f => {
-      const key = f.stableKey || f.id;
+      const key = f.stableKey || f.stable_key || f.id;
       localMap.set(key, f);
     });
 
@@ -5208,6 +5393,7 @@ export const cloudSyncService = {
   },
 
   mapCloudFillupToLocal(fillup) {
+    const stableKey = fillup.stable_key || fillup.stableKey || fillup.id;
     return {
       id: fillup.id,
       vehicleId: fillup.vehicle_id,
@@ -5222,7 +5408,8 @@ export const cloudSyncService = {
       timestamp: fillup.date,
       createdAt: fillup.created_at,
       updatedAt: fillup.updated_at,
-      stableKey: fillup.stable_key,
+      stableKey,
+      stable_key: stableKey,
       deletedAt: fillup.deleted_at,
       syncStatus: 'synced',
     };
@@ -5272,7 +5459,7 @@ export const cloudSyncService = {
       parsedNextDueOdometer > 0 && safetyMargin !== null
         ? parsedNextDueOdometer - Number(safetyMargin)
         : (existing.alertODO ?? null);
-    const stableKey = cloudMaintenance.stable_key || cloudMaintenance.stableKey || existing.stableKey;
+    const stableKey = cloudMaintenance.stable_key || cloudMaintenance.stableKey || existing.stableKey || cloudMaintenance.id;
 
     return {
       id: existing.id || cloudMaintenance.id,
@@ -5829,12 +6016,26 @@ export const cloudSyncService = {
     action: 'sync-both',
     message: '',
     details: [],
-    counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0 },
+    counts: { vehicles: 0, fillups: 0, maintenance: 0, tripEstimates: 0, maintenanceTaxonomy: 0 },
     summary: { uploaded: 0, downloaded: 0, deletedFromCloud: 0, deletedFromLocal: 0, conflictsResolved: 0 }
   };
 
   try {
     const detailedDiff = await this.getDetailedSyncDiff(userId);
+    const taxonomyWasDirty = hasDirtyMaintenanceTaxonomy();
+    const taxonomyResult = taxonomyWasDirty
+      ? await this.uploadMaintenanceTaxonomy(userId, new Map(), { clearDirty: true })
+      : await this.downloadMaintenanceTaxonomy(userId, new Map(), { clearDirty: false });
+    result.details.push(...(taxonomyResult.details || []));
+    result.counts.maintenanceTaxonomy = (taxonomyResult.systems || 0) + (taxonomyResult.categories || 0);
+    if (taxonomyWasDirty) {
+      result.summary.uploaded += result.counts.maintenanceTaxonomy;
+    } else {
+      result.summary.downloaded += result.counts.maintenanceTaxonomy;
+    }
+    if (taxonomyResult.success === false) {
+      result.details.push('Maintenance taxonomy sync failed.');
+    }
 
     // 🟢 ONLY TRIGGER EARLY RETURN IF NOT RESOLVING CONFLICTS
     if (detailedDiff.conflicts.length > 0 && !resolutionStrategy) {
@@ -5869,7 +6070,7 @@ export const cloudSyncService = {
       result.details.push(...applyResult.errors);
     }
 
-    result.success = result.details.length === 0;
+    result.success = result.details.length === 0 || result.details.every((detail) => !/failed|error|exception/i.test(detail));
     result.message = result.success 
       ? `Sync complete: ${result.summary.uploaded} uploaded, ${result.summary.downloaded} downloaded.`
       : 'Sync completed with errors';

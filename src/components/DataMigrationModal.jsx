@@ -12,6 +12,7 @@ import {
   Info,
 } from "@phosphor-icons/react";
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   isNoOpSync,
   getResultTitle,
@@ -68,6 +69,7 @@ export default function DataMigrationModal({
   userId,
   setSyncStatus,
 }) {
+  const { t } = useTranslation();
   const safeSyncStatus = syncStatus ?? {};
 
   const {
@@ -577,7 +579,7 @@ export default function DataMigrationModal({
                     {detailedDiff && (
                       <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl space-y-3">
                         <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Pending Changes
+                          {t("pending_changes")}
                         </h4>
                         <div className="space-y-2">
                           {detailedDiff.summary?.localOnly > 0 && (
@@ -760,8 +762,8 @@ export default function DataMigrationModal({
                     >
                       <CloudArrowUp weight="duotone" className="w-5 h-5" />
                       {isImportedData
-                        ? "Upload to Cloud (Recommended)"
-                        : "Upload Local Data to Cloud"}
+                        ? t("upload_to_cloud_recommended")
+                        : t("upload_local_data_to_cloud")}
                     </button>
                   )}
                   {!hasLocalData && hasCloudData && (
@@ -771,7 +773,7 @@ export default function DataMigrationModal({
                       className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                     >
                       <CloudArrowDown weight="duotone" className="w-5 h-5" />
-                      Download Cloud Data
+                      {t("download_cloud_data")}
                     </button>
                   )}
                   <button
@@ -781,9 +783,9 @@ export default function DataMigrationModal({
                   >
                     {hasLocalData
                       ? isImportedData
-                        ? "Keep Local Only (Cloud Sync Disabled)"
-                        : "Keep Local Only for Now"
-                      : "Start Fresh (No Sync)"}
+                        ? t("keep_local_cloud_sync_disabled")
+                        : t("keep_local_only_for_now")
+                      : t("start_fresh_no_sync")}
                   </button>
                   {isImportedData && (
                     <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2">
@@ -803,7 +805,7 @@ export default function DataMigrationModal({
                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <CloudArrowDown weight="duotone" className="w-5 h-5" />
-                    Download Cloud Data
+                    {t("download_cloud_data")}
                   </button>
                   <button
                     onClick={handleKeepLocal}
@@ -824,7 +826,7 @@ export default function DataMigrationModal({
                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-2xl transition flex items-center justify-center gap-2"
                   >
                     <ArrowsMerge weight="duotone" className="w-5 h-5" />
-                    Sync both sides
+                    {t("sync_both_sides")}
                   </button>
                   <button
                     onClick={handleUpload}
@@ -894,7 +896,7 @@ export default function DataMigrationModal({
                             weight="duotone"
                             className="w-5 h-5"
                           />
-                          Download cloud data
+                          {t("download_cloud_data")}
                         </button>
                       )}
 
@@ -902,7 +904,7 @@ export default function DataMigrationModal({
                       onClick={onCancel}
                       className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
                     >
-                      Close / cancel
+                      {t("close_cancel")}
                     </button>
                   </div>
                 </div>

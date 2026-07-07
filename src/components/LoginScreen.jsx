@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { authService } from '../services/authService';
 import { GasPump, Envelope, Lock, User, UserPlus, SignIn, Eye, EyeSlash } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
 
 const MotionDiv = motion.div;
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [isLogin, setIsLogin] = useState(true);
   const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
@@ -22,16 +24,16 @@ export default function LoginScreen() {
     setError('');
     setResetMessage('');
     if (!identifier.trim()) {
-      setError('Enter your username or email first.');
+      setError(t('enter_username_or_email_first'));
       return;
     }
 
     setLoading(true);
     try {
       await authService.sendPasswordReset(identifier);
-      setResetMessage('Password reset instructions were sent to your email.');
+      setResetMessage(t('password_reset_sent'));
     } catch (err) {
-      setError(err.message || 'Could not send password reset instructions.');
+      setError(err.message || t('password_reset_failed'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +60,7 @@ export default function LoginScreen() {
       // Reload to trigger auth check in App
       window.location.reload();
     } catch (err) {
-      setError(err.message || 'Authentication failed');
+      setError(err.message || t('authentication_failed'));
       setLoading(false);
       setSyncing(false);
     }
@@ -78,10 +80,10 @@ export default function LoginScreen() {
             <GasPump weight="duotone" className="text-emerald-500 dark:text-emerald-400 w-10 h-10" />
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-            Fuel Tracker
+            {t('app_name')}
           </h1>
           <p className="text-slate-500 dark:text-slate-400">
-            {isLogin ? 'Sign in to sync your data' : 'Create an account to get started'}
+            {isLogin ? t('login_subtitle') : t('signup_subtitle')}
           </p>
         </div>
 
@@ -95,7 +97,7 @@ export default function LoginScreen() {
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-                Syncing your data...
+                {t('syncing_your_data')}
               </p>
             </div>
           </MotionDiv>
@@ -105,7 +107,7 @@ export default function LoginScreen() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              {isLogin ? 'Username or email' : 'Email'}
+              {isLogin ? t('username_or_email') : t('email')}
             </label>
             <div className="relative">
               {isLogin ? (
@@ -118,7 +120,7 @@ export default function LoginScreen() {
                 value={isLogin ? identifier : email}
                 onChange={(e) => isLogin ? setIdentifier(e.target.value) : setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
-                placeholder={isLogin ? 'username or email' : 'your@email.com'}
+                placeholder={isLogin ? t('username_or_email_placeholder') : t('email_placeholder')}
                 required
                 disabled={loading || syncing}
               />
@@ -128,7 +130,7 @@ export default function LoginScreen() {
           {!isLogin && (
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Username
+                {t('username')}
               </label>
               <div className="relative">
                 <User weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
@@ -137,7 +139,7 @@ export default function LoginScreen() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
-                  placeholder="username"
+                  placeholder={t('username_placeholder')}
                   required
                   disabled={loading || syncing}
                   minLength={3}
@@ -150,7 +152,7 @@ export default function LoginScreen() {
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Password
+              {t('password')}
             </label>
             <div className="relative">
               <Lock weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
@@ -159,7 +161,7 @@ export default function LoginScreen() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-12 pr-12 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
-                placeholder="••••••••"
+                placeholder="********"
                 required
                 disabled={loading || syncing}
                 minLength={6}
@@ -191,7 +193,7 @@ export default function LoginScreen() {
                   htmlFor="remember-me"
                   className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
-                  Remember me
+                  {t('remember_me')}
                 </label>
               </div>
               <button
@@ -200,7 +202,7 @@ export default function LoginScreen() {
                 disabled={loading || syncing}
                 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
               >
-                Forgot password?
+                {t('forgot_password')}
               </button>
             </div>
           )}
@@ -233,12 +235,12 @@ export default function LoginScreen() {
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {isLogin ? 'Signing in...' : 'Creating account...'}
+                {isLogin ? t('signing_in') : t('creating_account')}
               </>
             ) : (
               <>
                 {isLogin ? <SignIn weight="duotone" className="w-5 h-5" /> : <UserPlus weight="duotone" className="w-5 h-5" />}
-                {isLogin ? 'Sign In' : 'Create Account'}
+                {isLogin ? t('sign_in') : t('create_account')}
               </>
             )}
           </button>
@@ -256,13 +258,13 @@ export default function LoginScreen() {
             disabled={loading || syncing}
             className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition disabled:opacity-50"
           >
-            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+            {isLogin ? t('switch_to_signup') : t('switch_to_login')}
           </button>
         </div>
 
         {/* Privacy Note */}
         <p className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">
-          Your data is encrypted and stored securely. You can delete your account at any time.
+          {t('privacy_note')}
         </p>
       </MotionDiv>
     </div>

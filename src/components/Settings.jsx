@@ -592,20 +592,18 @@ export default function Settings() {
       setSyncConfirmModal({
         isOpen: true,
         action: "download",
-        title: "Download Cloud Data",
-        message:
-          "This will replace all local data on this device with your cloud data. Any unsynced local changes will be lost.",
-        confirmText: "Download",
+        title: t("download_cloud_data"),
+        message: t("download_cloud_data_confirm_message"),
+        confirmText: t("download"),
       });
       return;
     } else if (action === "merge") {
       setSyncConfirmModal({
         isOpen: true,
         action: "merge",
-        title: "Merge Data",
-        message:
-          "This will merge local and cloud data. Conflicts will be resolved by keeping the most recent version of each record.",
-        confirmText: "Merge",
+        title: t("merge_data"),
+        message: t("merge_data_confirm_message"),
+        confirmText: t("merge"),
       });
       return;
     }
@@ -1454,7 +1452,7 @@ export default function Settings() {
                 onClick={handleOpenManualSync}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition"
               >
-                <CloudArrowUp weight="duotone" size={18} /> Manual Sync
+                <CloudArrowUp weight="duotone" size={18} /> {t("manual_sync")}
               </button>
             </Card>
           </section>
@@ -2308,7 +2306,7 @@ export default function Settings() {
       <Modal
         isOpen={manualSyncModalOpen}
         onClose={handleCloseManualSync}
-        title="Manual Sync"
+        title={t("manual_sync")}
         size="sm"
       >
         <div className="p-1 space-y-4">
@@ -2435,14 +2433,11 @@ export default function Settings() {
                           <Check weight="bold" />
                         </div>
                         <h4 className="font-bold text-emerald-900 dark:text-emerald-100 italic">
-                          Everything in Sync
+                          {t("everything_in_sync")}
                         </h4>
                       </div>
                       <p className="text-sm text-emerald-700 dark:text-emerald-300 leading-relaxed">
-                        Your data already matches on both local and cloud
-                        storage. No synchronization is currently needed. Click
-                        Refresh to re-check if you've made changes on another
-                        device.
+                        {t("everything_in_sync_description")}
                       </p>
                     </div>
 
@@ -2455,13 +2450,13 @@ export default function Settings() {
                         {isSyncing ? (
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : null}
-                        Refresh Status
+                        {t("refresh_status")}
                       </button>
                       <button
                         onClick={handleCloseManualSync}
                         className="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition"
                       >
-                        Close
+                        {t("close")}
                       </button>
                     </div>
                   </div>
@@ -2473,7 +2468,7 @@ export default function Settings() {
                   {showActionsAnyway && (
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 p-3 rounded-2xl mb-1">
                       <p className="text-xs text-amber-700 dark:text-amber-300 font-medium text-center">
-                        Force Sync Mode enabled via repeated refresh.
+                        {t("force_sync_mode_enabled")}
                       </p>
                     </div>
                   )}
@@ -2481,7 +2476,7 @@ export default function Settings() {
                   {!showActionsAnyway && pendingChangeLines.length > 0 && (
                     <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 p-4 rounded-2xl">
                       <p className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-300 mb-2">
-                        Pending Changes
+                        {t("pending_changes")}
                       </p>
                       <div className="space-y-1">
                         {pendingChangeLines.map((line) => (
@@ -2498,9 +2493,9 @@ export default function Settings() {
                       onClick={() => handleManualSyncAction("merge")}
                       className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition shadow-lg shadow-blue-500/25 flex flex-col items-center justify-center text-center px-4"
                     >
-                      <span className="text-base">Merge Data</span>
+                      <span className="text-base">{t("merge_data")}</span>
                       <span className="text-[10px] opacity-80 font-normal mt-0.5">
-                        Combine local and cloud records (Recommended)
+                        {t("merge_data_description")}
                       </span>
                     </button>
 
@@ -2509,13 +2504,13 @@ export default function Settings() {
                         onClick={() => handleManualSyncAction("upload")}
                         className="py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-2xl transition shadow-md shadow-emerald-500/20 text-sm"
                       >
-                        Upload to Cloud
+                        {t("upload_to_cloud")}
                       </button>
                       <button
                         onClick={() => handleManualSyncAction("download")}
                         className="py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-2xl transition shadow-md shadow-indigo-500/20 text-sm"
                       >
-                        Download from Cloud
+                        {t("download_from_cloud")}
                       </button>
                     </div>
 
@@ -2528,13 +2523,13 @@ export default function Settings() {
                         {isSyncing ? (
                           <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-600 rounded-full animate-spin" />
                         ) : null}
-                        Refresh
+                        {t("refresh")}
                       </button>
                       <button
                         onClick={handleCloseManualSync}
                         className="py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl transition text-sm"
                       >
-                        Cancel
+                        {t("cancel")}
                       </button>
                     </div>
                   </div>
@@ -2624,7 +2619,7 @@ export default function Settings() {
                 onClick={handleCloseManualSync}
                 className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs"
               >
-                Close
+                {t("close")}
               </button>
             </div>
           )}
