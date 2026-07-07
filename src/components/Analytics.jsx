@@ -29,6 +29,7 @@ import chartjsPluginAnnotation from 'chartjs-plugin-annotation';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler, chartjsPluginAnnotation);
 
 const MotionDiv = motion.div;
+const DATA_HEALTH_DISMISSED_KEY = 'fueltracker-data-health-dismissed-v1';
 
 const normalizeDataHealthNumber = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -97,6 +98,16 @@ const createMaintenanceHealthDetail = (entry) => ({
   id: entry.id,
 });
 
+const getHealthDetailLabel = (detail) =>
+  typeof detail === 'string' ? detail : detail?.label || '';
+
+const createDataHealthIssueKey = (vehicleId, issue) =>
+  [
+    vehicleId || 'unknown-vehicle',
+    issue.id,
+    ...(issue.details || []).map(getHealthDetailLabel),
+  ].join('|');
+
 export default function Analytics() {
   const {
     activeVehicleFillUps,
@@ -113,6 +124,13 @@ export default function Analytics() {
   const graphDropdownRef = useRef(null);
   const [isGraphDropdownOpen, setIsGraphDropdownOpen] = useState(false);
   const [expandedHealthIssueIds, setExpandedHealthIssueIds] = useState([]);
+  const [dismissedHealthWarnings, setDismissedHealthWarnings] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DATA_HEALTH_DISMISSED_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const formatMonthLabel = useCallback((dateStr) => {
     const d = new Date(dateStr + '-01');
@@ -343,9 +361,17 @@ export default function Analytics() {
       });
     }
 
+    const issuesWithKeys = issues.map((issue) => ({
+      ...issue,
+      dismissKey: createDataHealthIssueKey(activeVehicle?.id, issue),
+    }));
+    const visibleIssues = issuesWithKeys.filter((issue) => !dismissedHealthWarnings.includes(issue.dismissKey));
+
     return {
-      status: issues.length === 0 ? 'good' : issues.length <= 2 ? 'review' : 'attention',
-      issues,
+      status: visibleIssues.length === 0 ? 'good' : visibleIssues.length <= 2 ? 'review' : 'attention',
+      issues: visibleIssues,
+      totalIssues: issues.length,
+      dismissedCount: issuesWithKeys.length - visibleIssues.length,
     };
   })();
 
@@ -368,6 +394,25 @@ export default function Analytics() {
     if (detail.actionType === 'fillup') {
       navigate('/history');
     }
+  };
+
+  const persistDismissedHealthWarnings = (nextDismissed) => {
+    setDismissedHealthWarnings(nextDismissed);
+    localStorage.setItem(DATA_HEALTH_DISMISSED_KEY, JSON.stringify(nextDismissed));
+  };
+
+  const dismissHealthIssue = (issue) => {
+    if (!issue.dismissKey) return;
+    persistDismissedHealthWarnings([
+      ...new Set([...dismissedHealthWarnings, issue.dismissKey]),
+    ]);
+    setExpandedHealthIssueIds((current) => current.filter((id) => id !== issue.id));
+  };
+
+  const restoreDismissedHealthWarnings = () => {
+    const activeVehiclePrefix = `${activeVehicle?.id || 'unknown-vehicle'}|`;
+    const nextDismissed = dismissedHealthWarnings.filter((key) => !key.startsWith(activeVehiclePrefix));
+    persistDismissedHealthWarnings(nextDismissed);
   };
 
   const graphs = [
@@ -578,6 +623,15 @@ export default function Analytics() {
               <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                 Quick checks for entries that can distort stats, forecasts, or sync review.
               </p>
+              {dataHealth.dismissedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={restoreDismissedHealthWarnings}
+                  className="mt-2 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-300"
+                >
+                  Restore {dataHealth.dismissedCount} hidden
+                </button>
+              )}
             </div>
             <span
               className={cn(
@@ -607,21 +661,30 @@ export default function Analytics() {
                     key={issue.id}
                     className="rounded-2xl bg-slate-50 text-xs font-bold text-slate-600 dark:bg-white/[0.04] dark:text-slate-300"
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleHealthIssue(issue.id)}
-                      className="flex w-full items-start gap-2 p-3 text-start"
-                    >
-                      <Warning weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                      <span className="flex-1">{issue.title}</span>
-                      <CaretDown
-                        weight="bold"
-                        className={cn(
-                          "mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform",
-                          isExpanded && "rotate-180",
-                        )}
-                      />
-                    </button>
+                    <div className="flex items-start gap-2 p-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleHealthIssue(issue.id)}
+                        className="flex min-w-0 flex-1 items-start gap-2 text-start"
+                      >
+                        <Warning weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                        <span className="flex-1">{issue.title}</span>
+                        <CaretDown
+                          weight="bold"
+                          className={cn(
+                            "mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform",
+                            isExpanded && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dismissHealthIssue(issue)}
+                        className="shrink-0 rounded-lg bg-slate-200/70 px-2 py-1 text-[10px] font-black uppercase text-slate-500 transition hover:bg-slate-300 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/15"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
                     {isExpanded && (
                       <div className="border-t border-slate-200 px-4 pb-3 pt-2 dark:border-white/10">
                         <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
