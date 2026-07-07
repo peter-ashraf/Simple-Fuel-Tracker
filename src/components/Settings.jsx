@@ -55,6 +55,22 @@ const cloudRestoreTypes = [
   { id: "maintenance", label: "Maintenance entries" },
 ];
 
+const syncDiffEntityLabels = {
+  vehicles: "sync_entity_vehicles",
+  fillups: "sync_entity_fillups",
+  maintenance: "sync_entity_maintenance",
+  tripEstimates: "sync_entity_trips",
+  maintenanceTaxonomy: "sync_entity_maintenance_setup",
+};
+
+const syncDiffBuckets = [
+  { key: "localOnly", label: "sync_diff_local_only" },
+  { key: "cloudOnly", label: "sync_diff_cloud_only" },
+  { key: "bothChanged", label: "sync_diff_both_changed" },
+  { key: "localDeleted", label: "sync_diff_local_deleted" },
+  { key: "cloudDeleted", label: "sync_diff_cloud_deleted" },
+];
+
 const wait = (duration) =>
   new Promise((resolve) => setTimeout(resolve, duration));
 
@@ -70,6 +86,44 @@ const formatAppDate = (value) => {
 };
 
 const getCloudRestoreItemKey = (type, record) => `${type}:${record.id}`;
+
+const getSyncChangeDetails = (syncSummary, t) => {
+  const entities = syncSummary?.detailedDiff?.entities || {};
+  const rows = Object.entries(syncDiffEntityLabels)
+    .map(([entityKey, labelKey]) => {
+      const diff = entities[entityKey];
+      if (!diff) return null;
+
+      const parts = syncDiffBuckets
+        .map(({ key, label }) => {
+          const count = diff[key]?.length || 0;
+          return count > 0 ? `${count} ${t(label)}` : null;
+        })
+        .filter(Boolean);
+
+      if (parts.length === 0) return null;
+
+      return {
+        key: entityKey,
+        label: t(labelKey),
+        details: parts.join(", "),
+      };
+    })
+    .filter(Boolean);
+
+  if (
+    syncSummary?.taxonomyDirty &&
+    !rows.some((row) => row.key === "maintenanceTaxonomy")
+  ) {
+    rows.push({
+      key: "maintenanceTaxonomy",
+      label: t("sync_entity_maintenance_setup"),
+      details: t("sync_diff_changed_locally"),
+    });
+  }
+
+  return rows;
+};
 
 const parseMaintenanceDescription = (description) => {
   if (!description) return { notes: "", interval: null, safety: null };
@@ -2402,27 +2456,11 @@ export default function Settings() {
                 !syncSummary?.taxonomyDirty;
 
               const showActionsAnyway = refreshCount >= 4;
-              const pendingChangeLines = [];
-
-              if (syncSummary?.taxonomyDirty) {
-                pendingChangeLines.push("Maintenance systems, categories, or rules changed locally.");
-              }
-
-              if ((diff?.localOnly || 0) > 0) {
-                pendingChangeLines.push(`${diff.localOnly} local record${diff.localOnly !== 1 ? "s" : ""} not in cloud.`);
-              }
-              if ((diff?.cloudOnly || 0) > 0) {
-                pendingChangeLines.push(`${diff.cloudOnly} cloud record${diff.cloudOnly !== 1 ? "s" : ""} not on this device.`);
-              }
-              if ((diff?.bothChanged || 0) > 0) {
-                pendingChangeLines.push(`${diff.bothChanged} record${diff.bothChanged !== 1 ? "s" : ""} changed in both places.`);
-              }
-              if ((diff?.localDeleted || 0) > 0) {
-                pendingChangeLines.push(`${diff.localDeleted} local deletion${diff.localDeleted !== 1 ? "s" : ""} pending upload.`);
-              }
-              if ((diff?.cloudDeleted || 0) > 0) {
-                pendingChangeLines.push(`${diff.cloudDeleted} cloud deletion${diff.cloudDeleted !== 1 ? "s" : ""} pending download.`);
-              }
+              const syncChangeDetails = getSyncChangeDetails(syncSummary, t);
+              const hasPendingChanges =
+                syncChangeDetails.length > 0 ||
+                (diff?.total || 0) > 0 ||
+                syncSummary?.taxonomyDirty;
 
               if (isInSync && !showActionsAnyway) {
                 return (
@@ -2473,18 +2511,41 @@ export default function Settings() {
                     </div>
                   )}
 
-                  {!showActionsAnyway && pendingChangeLines.length > 0 && (
+                  {!showActionsAnyway && hasPendingChanges && (
                     <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 p-4 rounded-2xl">
-                      <p className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-300 mb-2">
-                        {t("pending_changes")}
-                      </p>
-                      <div className="space-y-1">
-                        {pendingChangeLines.map((line) => (
-                          <p key={line} className="text-sm text-blue-900 dark:text-blue-100">
-                            - {line}
-                          </p>
-                        ))}
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <p className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-300">
+                          {t("pending_changes")}
+                        </p>
+                        {diff?.total > 0 ? (
+                          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
+                            {t(diff.total === 1 ? "sync_change_count_one" : "sync_change_count", { count: diff.total })}
+                          </span>
+                        ) : null}
                       </div>
+
+                      {syncChangeDetails.length > 0 ? (
+                        <div className="space-y-2">
+                          {syncChangeDetails.map((row) => (
+                            <div
+                              key={row.key}
+                              className="flex items-start justify-between gap-3 text-sm"
+                            >
+                              <span className="font-semibold text-blue-950 dark:text-blue-50">
+                                {row.label}
+                              </span>
+                              <span className="text-right text-blue-800 dark:text-blue-200">
+                                {row.details}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-blue-900 dark:text-blue-100">
+                          {t("sync_no_change_details")}
+                        </p>
+                      )}
+
                     </div>
                   )}
 

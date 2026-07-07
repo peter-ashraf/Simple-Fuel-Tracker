@@ -267,6 +267,62 @@ function normalizeNullableText(value) {
   return String(value);
 }
 
+function normalizeDateOnly(value) {
+  if (!value) return null;
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw.slice(0, 10) || null;
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeBoolean(value, fallback = null) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = String(value).toLowerCase().trim();
+  if (['true', '1', 'yes'].includes(normalized)) return true;
+  if (['false', '0', 'no'].includes(normalized)) return false;
+  return fallback;
+}
+
+function nullableNumbersMatch(a, b, precision = 0.001) {
+  const left = normalizeNullableNumber(a);
+  const right = normalizeNullableNumber(b);
+  if (left === null || right === null) return left === right;
+  return Math.abs(left - right) < precision;
+}
+
+function fillupPayloadMatchesCloud(localFillup, cloudRecord) {
+  if (!localFillup || !cloudRecord) return false;
+
+  const localLiters = normalizeNullableNumber(localFillup.liters);
+  const localPrice = normalizeNullableNumber(localFillup.pricePerLiter ?? localFillup.price_per_liter);
+  const localTotal =
+    normalizeNullableNumber(localFillup.totalCost ?? localFillup.total_cost) ??
+    (localLiters !== null && localPrice !== null
+      ? Math.round(localLiters * localPrice * 100) / 100
+      : null);
+
+  const cloudTotal =
+    normalizeNullableNumber(cloudRecord.total_cost) ??
+    (normalizeNullableNumber(cloudRecord.liters) !== null && normalizeNullableNumber(cloudRecord.price_per_liter) !== null
+      ? Math.round(normalizeNullableNumber(cloudRecord.liters) * normalizeNullableNumber(cloudRecord.price_per_liter) * 100) / 100
+      : null);
+
+  return normalizeNullableText(localFillup.vehicleId ?? localFillup.vehicle_id) === normalizeNullableText(cloudRecord.vehicle_id) &&
+    normalizeDateOnly(localFillup.date || localFillup.timestamp || localFillup.createdAt || localFillup.created_at) === normalizeDateOnly(cloudRecord.date) &&
+    nullableNumbersMatch(localFillup.odometer, cloudRecord.odometer, 0.01) &&
+    nullableNumbersMatch(localFillup.liters, cloudRecord.liters, 0.01) &&
+    nullableNumbersMatch(localFillup.pricePerLiter ?? localFillup.price_per_liter, cloudRecord.price_per_liter, 0.001) &&
+    nullableNumbersMatch(localTotal, cloudTotal, 0.01) &&
+    normalizeNullableText(localFillup.station) === normalizeNullableText(cloudRecord.station) &&
+    normalizeNullableText(localFillup.notes) === normalizeNullableText(cloudRecord.notes) &&
+    normalizeBoolean(localFillup.fullTank ?? localFillup.full_tank, true) === normalizeBoolean(cloudRecord.full_tank, true) &&
+    normalizeNullableText(localFillup.stableKey ?? localFillup.stable_key) === normalizeNullableText(cloudRecord.stable_key) &&
+    normalizeNullableText(localFillup.deletedAt ?? localFillup.deleted_at) === normalizeNullableText(cloudRecord.deleted_at);
+}
+
 function normalizeMaintenanceDescription(value) {
   if (value === null || value === undefined || value === '') {
     return JSON.stringify({ distance: null, safety: null, notes: '' });
@@ -313,6 +369,72 @@ function maintenancePayloadMatchesCloud(payload, cloudRecord) {
     normalizeNullableText(payload.subcategory_type_key) === normalizeNullableText(cloudRecord.subcategory_type_key) &&
     normalizeNullableText(payload.system_stable_key) === normalizeNullableText(cloudRecord.system_stable_key) &&
     normalizeNullableText(payload.subcategory_name_snapshot) === normalizeNullableText(cloudRecord.subcategory_name_snapshot);
+}
+
+function mapLocalMaintenanceToCloudPayload(record) {
+  let nestedMeta = {};
+  if (typeof record.metadata === 'string') {
+    try {
+      nestedMeta = JSON.parse(record.metadata);
+    } catch {
+      nestedMeta = {};
+    }
+  } else if (record.metadata && typeof record.metadata === 'object') {
+    nestedMeta = record.metadata;
+  }
+
+  if (typeof record.description === 'string') {
+    try {
+      const parsedDescription = JSON.parse(record.description);
+      if (parsedDescription && typeof parsedDescription === 'object') {
+        nestedMeta = { ...nestedMeta, ...parsedDescription };
+      }
+    } catch {
+      // Plain text descriptions are handled as notes below.
+    }
+  }
+
+  const odometer = record.odometer ?? record.performedAtODO ?? nestedMeta.odometer ?? null;
+  const distance = record.distance ?? record.intervalKm ?? nestedMeta.distance ?? null;
+  const safety = record.safety ?? record.safetyMarginKm ?? nestedMeta.safety ?? null;
+  const notes = record.notes ?? nestedMeta.notes ?? (typeof record.description === 'string' && !record.description.trim().startsWith('{') ? record.description : '');
+  const nextDueOdometer =
+    record.next_due_odometer ??
+    record.nextDueOdometer ??
+    record.nextDueODO ??
+    nestedMeta.next_due_odometer ??
+    (odometer != null && distance != null ? Number(odometer) + Number(distance) : null);
+  const maintenanceDate =
+    record.date ??
+    record.maintenanceDate ??
+    record.maintenance_date ??
+    (record.timestamp ? normalizeDateOnly(record.timestamp) : null) ??
+    (record.createdAt ? normalizeDateOnly(record.createdAt) : null) ??
+    (record.created_at ? normalizeDateOnly(record.created_at) : null);
+  const { systems, categories } = loadLocalMaintenanceTaxonomy();
+  const taxonomyMeta = getMaintenanceTaxonomyMetadata(record, systems, categories);
+
+  return {
+    stable_key: record.stableKey || record.stable_key,
+    user_id: record.user_id || null,
+    vehicle_id: record.vehicleId || record.vehicle_id,
+    date: maintenanceDate,
+    type: record.type || null,
+    description: JSON.stringify({
+      distance: normalizeNullableNumber(distance),
+      safety: normalizeNullableNumber(safety),
+      notes: notes || ''
+    }),
+    cost: normalizeNullableNumber(record.cost),
+    odometer: normalizeNullableNumber(odometer),
+    next_due_date: record.nextDueDate || record.next_due_date || null,
+    next_due_odometer: normalizeNullableNumber(nextDueOdometer),
+    deleted_at: record.deletedAt || record.deleted_at || null,
+    subcategory_stable_key: taxonomyMeta.subcategoryStableKey,
+    subcategory_type_key: taxonomyMeta.subcategoryTypeKey,
+    system_stable_key: taxonomyMeta.systemStableKey,
+    subcategory_name_snapshot: taxonomyMeta.subcategoryNameSnapshot
+  };
 }
 
 function taxonomyPayloadMatchesCloud(payload, cloudRecord) {
@@ -4414,8 +4536,10 @@ export const cloudSyncService = {
           const cloudUpdated = cloud.updated_at || cloud.created_at;
 
           let contentChanged = false;
-          if (type === 'maintenance') {
-            contentChanged = !maintenancePayloadMatchesCloud(this.mapLocalToCloud(local, 'maintenance'), cloud);
+          if (type === 'fillup') {
+            contentChanged = !fillupPayloadMatchesCloud(local, cloud);
+          } else if (type === 'maintenance') {
+            contentChanged = !maintenancePayloadMatchesCloud(mapLocalMaintenanceToCloudPayload(local), cloud);
           } else {
             // Check fields for content change
             for (const [cloudField, localField] of Object.entries(fields)) {
