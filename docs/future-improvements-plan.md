@@ -184,7 +184,7 @@ Priority: High
   - open affected fill-up
   - open affected maintenance entry
   - ignore/dismiss warning locally
-- [ ] Add maintenance-specific checks:
+- [x] Add maintenance-specific checks:
   - missing odometer
   - missing category/system mapping
   - duplicate maintenance records

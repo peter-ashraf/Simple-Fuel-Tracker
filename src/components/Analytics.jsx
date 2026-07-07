@@ -29,8 +29,70 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 
 const MotionDiv = motion.div;
 
+const normalizeDataHealthNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numberValue = Number(value);
+  return Number.isNaN(numberValue) ? null : numberValue;
+};
+
+const getMaintenanceDate = (entry) =>
+  entry.date ||
+  (entry.timestamp ? String(entry.timestamp).slice(0, 10) : null) ||
+  (entry.createdAt ? String(entry.createdAt).slice(0, 10) : null) ||
+  (entry.created_at ? String(entry.created_at).slice(0, 10) : null) ||
+  'No date';
+
+const parseMaintenanceDescription = (description) => {
+  if (!description || typeof description !== 'string') return {};
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { notes: description };
+  }
+};
+
+const getMaintenanceInterval = (entry) => {
+  const description = parseMaintenanceDescription(entry.description);
+  return normalizeDataHealthNumber(
+    entry.distance ??
+    entry.intervalKm ??
+    description.distance,
+  );
+};
+
+const getMaintenanceOdometer = (entry) =>
+  normalizeDataHealthNumber(entry.odometer ?? entry.performedAtODO);
+
+const getMaintenanceNextDue = (entry) =>
+  normalizeDataHealthNumber(
+    entry.nextDueOdometer ??
+    entry.next_due_odometer ??
+    entry.nextDueODO,
+  );
+
+const getMaintenanceHealthLabel = (entry) => {
+  const date = getMaintenanceDate(entry);
+  const odometer = getMaintenanceOdometer(entry);
+  const type = entry.subcategoryNameSnapshot || entry.subcategory_name_snapshot || entry.type || 'Unknown service';
+  return `${type} · ${date} · ${odometer === null ? 'No odometer' : `${odometer.toLocaleString()} km`}`;
+};
+
+const getMaintenanceBusinessKey = (entry) => [
+  entry.type || entry.subcategoryTypeKey || entry.subcategory_type_key || '',
+  getMaintenanceDate(entry),
+  getMaintenanceOdometer(entry) ?? '',
+  getMaintenanceNextDue(entry) ?? '',
+].join('|');
+
 export default function Analytics() {
-  const { activeVehicleFillUps, activeVehicle } = useFuel();
+  const {
+    activeVehicleFillUps,
+    activeVehicle,
+    maintenanceEntries,
+    categories,
+    maintenanceSystems,
+  } = useFuel();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -110,6 +172,8 @@ export default function Analytics() {
   const predictiveDailyDistance = calculateAverageDailyDistance(activeVehicleFillUps);
   const dataHealth = (() => {
     const sortedByDate = [...activeVehicleFillUps].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const activeMaintenance = (maintenanceEntries || []).filter((entry) => !entry.pendingDelete);
+    const visibleMaintenance = activeMaintenance.filter((entry) => !entry.deletedAt && !entry.deleted_at);
     const issues = [];
     const dateCounts = sortedByDate.reduce((counts, fill) => {
       const dateKey = format(new Date(fill.timestamp), 'yyyy-MM-dd');
@@ -122,6 +186,45 @@ export default function Analytics() {
     const odometerReversalCount = sortedByDate.filter((fill, index) => index > 0 && Number(fill.odometer) < Number(sortedByDate[index - 1].odometer)).length;
     const suspiciousEfficiencyCount = tripData.filter((trip) => trip.kmPerLiter > 0 && (trip.kmPerLiter < 4 || trip.kmPerLiter > 30)).length;
     const partialFillCount = sortedByDate.filter((fill) => fill.isPartial || fill.partialFill).length;
+    const categoryIds = new Set((categories || []).map((category) => category.id));
+    const categoryStableKeys = new Set((categories || []).map((category) => category.stableKey || category.stable_key).filter(Boolean));
+    const categoryTypeKeys = new Set((categories || []).flatMap((category) => [category.typeKey, category.type_key, category.id]).filter(Boolean));
+    const systemIds = new Set((maintenanceSystems || []).map((system) => system.id));
+    const systemStableKeys = new Set((maintenanceSystems || []).map((system) => system.stableKey || system.stable_key || system.id).filter(Boolean));
+    const maintenanceDuplicateGroups = visibleMaintenance.reduce((groups, entry) => {
+      const key = getMaintenanceBusinessKey(entry);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(entry);
+      return groups;
+    }, {});
+    const duplicateMaintenanceGroups = Object.values(maintenanceDuplicateGroups).filter((group) => group.length > 1);
+    const hollowMaintenance = visibleMaintenance.filter((entry) => {
+      const hasType = Boolean(entry.type || entry.subcategoryTypeKey || entry.subcategory_type_key);
+      const hasDate = getMaintenanceDate(entry) !== 'No date';
+      return hasType &&
+        hasDate &&
+        getMaintenanceOdometer(entry) === null &&
+        getMaintenanceInterval(entry) === null &&
+        getMaintenanceNextDue(entry) === null &&
+        !entry.cost &&
+        !entry.notes &&
+        !entry.description;
+    });
+    const missingMaintenanceOdometer = visibleMaintenance.filter((entry) => getMaintenanceOdometer(entry) === null);
+    const missingMaintenanceKeyFields = visibleMaintenance.filter((entry) => !entry.stableKey && !entry.stable_key);
+    const visibleTombstones = activeMaintenance.filter((entry) => entry.deletedAt || entry.deleted_at || entry.lastAction === 'DELETE');
+    const missingMaintenanceMapping = visibleMaintenance.filter((entry) => {
+      const categoryMatches =
+        categoryIds.has(entry.type) ||
+        categoryTypeKeys.has(entry.type) ||
+        categoryStableKeys.has(entry.subcategoryStableKey || entry.subcategory_stable_key);
+      const systemStableKey = entry.systemStableKey || entry.system_stable_key;
+      const systemMatches =
+        !systemStableKey ||
+        systemIds.has(systemStableKey) ||
+        systemStableKeys.has(systemStableKey);
+      return !categoryMatches || !systemMatches;
+    });
 
     if (duplicateDateCount > 0) {
       issues.push({
@@ -175,6 +278,49 @@ export default function Analytics() {
         details: sortedByDate
           .filter((fill) => fill.isPartial || fill.partialFill)
           .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+      });
+    }
+
+    if (hollowMaintenance.length > 0) {
+      issues.push({
+        id: "maintenance-hollow",
+        title: `${hollowMaintenance.length} hollow maintenance record${hollowMaintenance.length === 1 ? '' : 's'} with missing service data`,
+        details: hollowMaintenance.map(getMaintenanceHealthLabel),
+      });
+    }
+    if (missingMaintenanceOdometer.length > 0) {
+      issues.push({
+        id: "maintenance-missing-odometer",
+        title: `${missingMaintenanceOdometer.length} maintenance entr${missingMaintenanceOdometer.length === 1 ? 'y is' : 'ies are'} missing odometer`,
+        details: missingMaintenanceOdometer.map(getMaintenanceHealthLabel),
+      });
+    }
+    if (missingMaintenanceMapping.length > 0) {
+      issues.push({
+        id: "maintenance-missing-mapping",
+        title: `${missingMaintenanceMapping.length} maintenance entr${missingMaintenanceMapping.length === 1 ? 'y has' : 'ies have'} missing category or system mapping`,
+        details: missingMaintenanceMapping.map(getMaintenanceHealthLabel),
+      });
+    }
+    if (duplicateMaintenanceGroups.length > 0) {
+      issues.push({
+        id: "maintenance-duplicates",
+        title: `${duplicateMaintenanceGroups.length} duplicate maintenance group${duplicateMaintenanceGroups.length === 1 ? '' : 's'} found`,
+        details: duplicateMaintenanceGroups.map((group) => `${getMaintenanceHealthLabel(group[0])} · ${group.length} copies`),
+      });
+    }
+    if (missingMaintenanceKeyFields.length > 0) {
+      issues.push({
+        id: "maintenance-missing-keys",
+        title: `${missingMaintenanceKeyFields.length} maintenance entr${missingMaintenanceKeyFields.length === 1 ? 'y is' : 'ies are'} missing stable keys`,
+        details: missingMaintenanceKeyFields.map(getMaintenanceHealthLabel),
+      });
+    }
+    if (visibleTombstones.length > 0) {
+      issues.push({
+        id: "maintenance-visible-tombstones",
+        title: `${visibleTombstones.length} deleted maintenance record${visibleTombstones.length === 1 ? '' : 's'} still present in active state`,
+        details: visibleTombstones.map(getMaintenanceHealthLabel),
       });
     }
 
