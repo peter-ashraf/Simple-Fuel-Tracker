@@ -20,6 +20,7 @@ import {
   CaretDown 
 } from '@phosphor-icons/react';
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { formatEfficiency2Dec } from '../utils/formatting';
 import { calculateEfficiencyThresholds } from '../utils/efficiencyThresholds';
 import { useTranslation } from 'react-i18next';
@@ -75,7 +76,7 @@ const getMaintenanceHealthLabel = (entry) => {
   const date = getMaintenanceDate(entry);
   const odometer = getMaintenanceOdometer(entry);
   const type = entry.subcategoryNameSnapshot || entry.subcategory_name_snapshot || entry.type || 'Unknown service';
-  return `${type} · ${date} · ${odometer === null ? 'No odometer' : `${odometer.toLocaleString()} km`}`;
+  return `${type} - ${date} - ${odometer === null ? 'No odometer' : `${odometer.toLocaleString()} km`}`;
 };
 
 const getMaintenanceBusinessKey = (entry) => [
@@ -85,6 +86,17 @@ const getMaintenanceBusinessKey = (entry) => [
   getMaintenanceNextDue(entry) ?? '',
 ].join('|');
 
+const createFillupHealthDetail = (fill) => ({
+  label: `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} - ${Number(fill.odometer || 0).toLocaleString()} km`,
+  actionType: 'fillup',
+});
+
+const createMaintenanceHealthDetail = (entry) => ({
+  label: getMaintenanceHealthLabel(entry),
+  actionType: 'maintenance',
+  id: entry.id,
+});
+
 export default function Analytics() {
   const {
     activeVehicleFillUps,
@@ -93,6 +105,7 @@ export default function Analytics() {
     categories,
     maintenanceSystems,
   } = useFuel();
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language.startsWith('ar');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -232,7 +245,10 @@ export default function Analytics() {
         title: `${duplicateDateCount} date${duplicateDateCount === 1 ? '' : 's'} have multiple fill-ups`,
         details: Object.entries(dateCounts)
           .filter(([, count]) => count > 1)
-          .map(([date, count]) => `${date}: ${count} fill-ups`),
+          .map(([date, count]) => ({
+            label: `${date}: ${count} fill-ups`,
+            actionType: 'fillup',
+          })),
       });
     }
     if (missingPriceCount > 0) {
@@ -241,7 +257,7 @@ export default function Analytics() {
         title: `${missingPriceCount} fill-up${missingPriceCount === 1 ? '' : 's'} missing price`,
         details: sortedByDate
           .filter((fill) => !Number(fill.pricePerLiter))
-          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+          .map(createFillupHealthDetail),
       });
     }
     if (invalidVolumeCount > 0) {
@@ -250,7 +266,7 @@ export default function Analytics() {
         title: `${invalidVolumeCount} fill-up${invalidVolumeCount === 1 ? '' : 's'} with invalid liters`,
         details: sortedByDate
           .filter((fill) => Number(fill.liters) <= 0)
-          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+          .map(createFillupHealthDetail),
       });
     }
     if (odometerReversalCount > 0) {
@@ -259,7 +275,7 @@ export default function Analytics() {
         title: `${odometerReversalCount} odometer reversal${odometerReversalCount === 1 ? '' : 's'} by date order`,
         details: sortedByDate
           .filter((fill, index) => index > 0 && Number(fill.odometer) < Number(sortedByDate[index - 1].odometer))
-          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+          .map(createFillupHealthDetail),
       });
     }
     if (suspiciousEfficiencyCount > 0) {
@@ -268,7 +284,7 @@ export default function Analytics() {
         title: `${suspiciousEfficiencyCount} unusual efficiency result${suspiciousEfficiencyCount === 1 ? '' : 's'}`,
         details: tripData
           .filter((trip) => trip.kmPerLiter > 0 && (trip.kmPerLiter < 4 || trip.kmPerLiter > 30))
-          .map((trip) => `${trip.date} · ${formatEfficiency2Dec(trip.kmPerLiter)} km/L`),
+          .map((trip) => `${trip.date} - ${formatEfficiency2Dec(trip.kmPerLiter)} km/L`),
       });
     }
     if (partialFillCount > 0) {
@@ -277,7 +293,7 @@ export default function Analytics() {
         title: `${partialFillCount} partial fill-up${partialFillCount === 1 ? '' : 's'} may affect averages`,
         details: sortedByDate
           .filter((fill) => fill.isPartial || fill.partialFill)
-          .map((fill) => `${format(new Date(fill.timestamp), 'yyyy-MM-dd')} · ${Number(fill.odometer || 0).toLocaleString()} km`),
+          .map(createFillupHealthDetail),
       });
     }
 
@@ -285,42 +301,45 @@ export default function Analytics() {
       issues.push({
         id: "maintenance-hollow",
         title: `${hollowMaintenance.length} hollow maintenance record${hollowMaintenance.length === 1 ? '' : 's'} with missing service data`,
-        details: hollowMaintenance.map(getMaintenanceHealthLabel),
+        details: hollowMaintenance.map(createMaintenanceHealthDetail),
       });
     }
     if (missingMaintenanceOdometer.length > 0) {
       issues.push({
         id: "maintenance-missing-odometer",
         title: `${missingMaintenanceOdometer.length} maintenance entr${missingMaintenanceOdometer.length === 1 ? 'y is' : 'ies are'} missing odometer`,
-        details: missingMaintenanceOdometer.map(getMaintenanceHealthLabel),
+        details: missingMaintenanceOdometer.map(createMaintenanceHealthDetail),
       });
     }
     if (missingMaintenanceMapping.length > 0) {
       issues.push({
         id: "maintenance-missing-mapping",
         title: `${missingMaintenanceMapping.length} maintenance entr${missingMaintenanceMapping.length === 1 ? 'y has' : 'ies have'} missing category or system mapping`,
-        details: missingMaintenanceMapping.map(getMaintenanceHealthLabel),
+        details: missingMaintenanceMapping.map(createMaintenanceHealthDetail),
       });
     }
     if (duplicateMaintenanceGroups.length > 0) {
       issues.push({
         id: "maintenance-duplicates",
         title: `${duplicateMaintenanceGroups.length} duplicate maintenance group${duplicateMaintenanceGroups.length === 1 ? '' : 's'} found`,
-        details: duplicateMaintenanceGroups.map((group) => `${getMaintenanceHealthLabel(group[0])} · ${group.length} copies`),
+        details: duplicateMaintenanceGroups.map((group) => ({
+          ...createMaintenanceHealthDetail(group[0]),
+          label: `${getMaintenanceHealthLabel(group[0])} · ${group.length} copies`,
+        })),
       });
     }
     if (missingMaintenanceKeyFields.length > 0) {
       issues.push({
         id: "maintenance-missing-keys",
         title: `${missingMaintenanceKeyFields.length} maintenance entr${missingMaintenanceKeyFields.length === 1 ? 'y is' : 'ies are'} missing stable keys`,
-        details: missingMaintenanceKeyFields.map(getMaintenanceHealthLabel),
+        details: missingMaintenanceKeyFields.map(createMaintenanceHealthDetail),
       });
     }
     if (visibleTombstones.length > 0) {
       issues.push({
         id: "maintenance-visible-tombstones",
         title: `${visibleTombstones.length} deleted maintenance record${visibleTombstones.length === 1 ? '' : 's'} still present in active state`,
-        details: visibleTombstones.map(getMaintenanceHealthLabel),
+        details: visibleTombstones.map(createMaintenanceHealthDetail),
       });
     }
 
@@ -336,6 +355,19 @@ export default function Analytics() {
         ? current.filter((id) => id !== issueId)
         : [...current, issueId],
     );
+  };
+
+  const handleHealthDetailAction = (detail) => {
+    if (!detail || typeof detail === 'string') return;
+
+    if (detail.actionType === 'maintenance' && detail.id) {
+      navigate(`/maintenance/edit/${detail.id}`);
+      return;
+    }
+
+    if (detail.actionType === 'fillup') {
+      navigate('/history');
+    }
   };
 
   const graphs = [
@@ -496,7 +528,7 @@ export default function Analytics() {
                     {t('efficient_level')}
                   </p>
                   <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                    ≥ {efficiencyThresholds.high.toFixed(2)}
+                    {'>='} {efficiencyThresholds.high.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -593,14 +625,28 @@ export default function Analytics() {
                     {isExpanded && (
                       <div className="border-t border-slate-200 px-4 pb-3 pt-2 dark:border-white/10">
                         <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
-                          {issue.details.map((detail) => (
-                            <p
-                              key={detail}
-                              className="rounded-xl bg-white px-3 py-2 text-[11px] font-semibold text-slate-500 dark:bg-slate-950/40 dark:text-slate-400"
-                            >
-                              {detail}
-                            </p>
-                          ))}
+                          {issue.details.map((detail, detailIndex) => {
+                            const detailLabel = typeof detail === 'string' ? detail : detail.label;
+                            const hasAction = typeof detail !== 'string' && detail.actionType;
+
+                            return (
+                              <div
+                                key={`${issue.id}-${detailIndex}-${detailLabel}`}
+                                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold text-slate-500 dark:bg-slate-950/40 dark:text-slate-400"
+                              >
+                                <span className="min-w-0 flex-1">{detailLabel}</span>
+                                {hasAction && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHealthDetailAction(detail)}
+                                    className="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+                                  >
+                                    Open
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -681,3 +727,4 @@ export default function Analytics() {
     </PageWrapper>
   );
 }
+

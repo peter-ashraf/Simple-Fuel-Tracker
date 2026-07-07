@@ -181,8 +181,8 @@ Priority: High
 - [x] Make Data Health items expandable or clickable.
 - [x] Show affected dates/entries for each issue group.
 - [ ] Add actions:
-  - open affected fill-up
-  - open affected maintenance entry
+  - [x] open affected fill-up
+  - [x] open affected maintenance entry
   - ignore/dismiss warning locally
 - [x] Add maintenance-specific checks:
   - missing odometer
