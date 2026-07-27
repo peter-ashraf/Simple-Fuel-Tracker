@@ -13,7 +13,7 @@ export function useVehicleState() {
   );
 
   const addVehicle = async (vehicle) => {
-    const id = `v_${Date.now()}`;
+    const id = uuidv4(); // Use UUID for vehicle ID to ensure proper sync matching
     const stableKey = uuidv4(); // Generate stable key for new vehicles
     const newVehicle = { ...vehicle, id, stableKey };
     setVehicles(prev => [...prev, newVehicle]);

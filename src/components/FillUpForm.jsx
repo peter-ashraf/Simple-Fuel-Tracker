@@ -246,10 +246,33 @@ export default function FillUpForm() {
     saveEntry(entry);
   };
 
-  const activeAlerts = maintenanceEntries.filter(entry => {
-    if (!entry.nextDueODO || !entry.alertODO) return false;
+  // Get only the latest entry per category to avoid showing alerts for old maintenance
+  const latestByCategory = new Map();
+  maintenanceEntries.forEach(entry => {
+    const categoryId = entry.type;
+    const entryOdo = Number(entry.performedAtODO ?? entry.odometer ?? 0);
+    const current = latestByCategory.get(categoryId);
+    const currentOdo = Number(current?.performedAtODO ?? current?.odometer ?? 0);
+    
+    if (!current || entryOdo > currentOdo) {
+      latestByCategory.set(categoryId, entry);
+    }
+  });
+  
+  const latestEntries = Array.from(latestByCategory.values());
+  
+  const activeAlerts = latestEntries.filter(entry => {
     const currentOdo = activeVehicleFillUps.length > 0 ? activeVehicleFillUps[activeVehicleFillUps.length - 1].odometer : 0;
-    return currentOdo >= entry.alertODO;
+    const performedAtODO = Number(entry.performedAtODO ?? entry.odometer ?? 0);
+    const intervalKm = Number(entry.intervalKm ?? entry.distance ?? 0);
+    
+    // Recalculate nextDueODO based on performedAtODO and intervalKm
+    const calculatedNextDue = performedAtODO > 0 && intervalKm > 0 ? performedAtODO + intervalKm : 0;
+    const safetyMargin = Number(entry.safetyMarginKm ?? entry.safety ?? 2000);
+    const calculatedAlertODO = calculatedNextDue > 0 ? Math.max(0, calculatedNextDue - safetyMargin) : 0;
+    
+    // Only show alert if we've driven since maintenance AND we're at or past the alert threshold
+    return calculatedNextDue > 0 && currentOdo >= calculatedAlertODO && performedAtODO < currentOdo;
   });
 
   return (
@@ -296,11 +319,20 @@ export default function FillUpForm() {
                       <div className="mt-3 space-y-2">
                          {activeAlerts.map(alert => {
                            const cat = getCategoryById(alert.type);
-                           const isOverdue = Number(odometer) >= alert.nextDueODO;
+                           const alertPerformedAtODO = Number(alert.performedAtODO ?? alert.odometer ?? 0);
+                           const alertIntervalKm = Number(alert.intervalKm ?? alert.distance ?? 0);
+                           const alertCalculatedNextDue = alertPerformedAtODO > 0 && alertIntervalKm > 0 ? alertPerformedAtODO + alertIntervalKm : 0;
+                           const alertSafetyMargin = Number(alert.safetyMarginKm ?? alert.safety ?? 2000);
+                           const alertCalculatedAlertODO = alertCalculatedNextDue > 0 ? Math.max(0, alertCalculatedNextDue - alertSafetyMargin) : 0;
+                           
+                           const isOverdue = Number(odometer) >= alertCalculatedNextDue;
+                           // Only show alert if we've driven since maintenance
+                           const shouldShowAlert = alertPerformedAtODO < Number(odometer);
+                           if (!shouldShowAlert) return null;
                            return (
                              <div key={alert.id} className={cn("p-3 rounded-xl border flex flex-col gap-1", isOverdue ? 'bg-red-50 dark:bg-red-500/10 text-red-700' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700')}>
                                 <span className="text-[10px] font-black uppercase tracking-wider">{t(cat?.id)} {isOverdue ? t('overdue') : t('due_soon')}</span>
-                                <span className="text-[10px] font-bold">Due: {alert.nextDueODO.toLocaleString()} km</span>
+                                <span className="text-[10px] font-bold">Due: {alertCalculatedNextDue.toLocaleString()} km</span>
                              </div>
                            );
                          })}
