@@ -15,6 +15,8 @@ import {
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, MetricCard, PageWrapper, Modal, cn } from "./ui";
+import AIInsightsModal from "./AIInsightsModal";
+import ProactiveAlerts from "./ProactiveAlerts";
 import { useFuel } from "../hooks/useFuelContext";
 import {
   calculateTripMetrics,
@@ -36,6 +38,7 @@ import { useTranslation } from "react-i18next";
 export default function Dashboard() {
   const {
     stats,
+    activeVehicle,
     activeVehicleFillUps,
     activeVehicleFillUpsByOdometer,
     maintenanceEntries,
@@ -262,6 +265,8 @@ export default function Dashboard() {
             </MetricCard>
           </section>
 
+          <ProactiveAlerts />
+
           {(maintenanceAlerts.length > 0 || upcomingMaintenance.length > 0) && (
             <div className="grid grid-cols-1 gap-2 mb-6">
               {maintenanceAlerts.length > 0 && (
@@ -308,153 +313,6 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
-          )}
-
-          {/* --- Insights Widgets --- */}
-          {activeVehicleFillUps.length >= 2 && (
-            <section className="space-y-3 mb-6 overflow-x-hidden">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight px-1">
-                {t('insights') || 'Insights'}
-              </h2>
-
-              {/* Monthly Spending Bar Chart */}
-              {monthlySpending.length > 0 && monthlySpending.some(m => m.total > 0) && (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <ChartBar weight="duotone" className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                        {t('monthly_spending')}
-                      </span>
-                    </div>
-                    {selectedBarIdx !== null && monthlySpending[selectedBarIdx] && (
-                      <span className="text-xs font-black text-emerald-500 animate-pulse">
-                        {formatTo2Decimals(monthlySpending[selectedBarIdx].total).toFixed(0)} {t('currency')}
-                      </span>
-                    )}
-                  </div>
-                  {(() => {
-                    const maxVal = Math.max(...monthlySpending.map(m => m.total), 1);
-                    const chartH = 80;
-                    const maxBarW = 32;
-                    const minGap = 8;
-                    const maxTotalW = 400; // Maximum width before scaling
-                    const idealTotalW = monthlySpending.length * (maxBarW + minGap) - minGap;
-                    const scale = Math.min(1, maxTotalW / idealTotalW);
-                    const barW = maxBarW * scale;
-                    const gap = minGap * scale;
-                    const totalW = monthlySpending.length * (barW + gap) - gap;
-                    return (
-                      <div className="w-full overflow-x-auto no-scrollbar">
-                        <div className="flex justify-center min-w-full">
-                          <svg width={totalW} height={chartH + 22} viewBox={`0 0 ${totalW} ${chartH + 22}`} style={{ maxWidth: totalW }}>
-                          {monthlySpending.map((m, i) => {
-                            const barH = maxVal > 0 ? (m.total / maxVal) * chartH : 0;
-                            const x = i * (barW + gap);
-                            const isCurrentMonth = i === monthlySpending.length - 1;
-                            const isSelected = selectedBarIdx === i;
-                            return (
-                              <g key={i} onClick={() => setSelectedBarIdx(isSelected ? null : i)} style={{ cursor: 'pointer' }}>
-                                {/* Invisible wider tap target */}
-                                <rect x={x - 4} y={0} width={barW + 8} height={chartH + 22} fill="transparent" />
-                                <rect
-                                  x={x} y={chartH - barH} width={barW} height={Math.max(barH, 3)}
-                                  rx={6}
-                                  fill={isSelected ? '#10b981' : isCurrentMonth ? '#10b981cc' : '#10b98140'}
-                                  className="transition-all duration-300"
-                                />
-                                {isSelected && barH > 10 && (
-                                  <text x={x + barW / 2} y={chartH - barH - 6} textAnchor="middle" className="fill-emerald-500" style={{ fontSize: `${9 * scale}px`, fontWeight: 800 }}>
-                                    {formatTo2Decimals(m.total).toFixed(0)}
-                                  </text>
-                                )}
-                                <text x={x + barW / 2} y={chartH + 14} textAnchor="middle" style={{ fontSize: `${9 * scale}px`, fontWeight: isSelected ? 800 : 600, fill: isSelected ? '#10b981' : '#94a3b8' }}>
-                                  {m.label}
-                                </text>
-                              </g>
-                            );
-                          })}
-                        </svg>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </Card>
-              )}
-
-              {/* Efficiency Trend Sparkline */}
-              {efficiencyTrend.length >= 3 && (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <TrendUpIcon weight="duotone" className="w-3.5 h-3.5 text-blue-500" />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                        {t('efficiency_trend')}
-                      </span>
-                    </div>
-                    {selectedDotIdx !== null && efficiencyTrend[selectedDotIdx] ? (
-                      <span className="text-xs font-black text-emerald-500">
-                        {efficiencyTrend[selectedDotIdx].value.toFixed(2)} {t('avg_km_l_short')}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-medium text-slate-500">
-                        {t('last_n_fillups', { count: efficiencyTrend.length })}
-                      </span>
-                    )}
-                  </div>
-                  {(() => {
-                    const values = efficiencyTrend.map(p => p.value);
-                    const minV = Math.min(...values) * 0.9;
-                    const maxV = Math.max(...values) * 1.1;
-                    const range = maxV - minV || 1;
-                    const maxW = 320;
-                    const h = 60;
-                    const points = values.map((v, i) => {
-                      const x = (i / (values.length - 1)) * maxW;
-                      const y = h - ((v - minV) / range) * h;
-                      return { x, y, value: v };
-                    });
-                    const linePath = `M${points.map(p => `${p.x},${p.y}`).join(' L')}`;
-                    const areaPath = `${linePath} L${maxW},${h} L0,${h} Z`;
-                    return (
-                      <div className="w-full overflow-x-auto no-scrollbar">
-                        <div className="flex justify-center min-w-full">
-                          <svg width={maxW} height={h + 10} viewBox={`-4 -4 ${maxW + 8} ${h + 18}`} style={{ maxWidth: maxW }}>
-                          <defs>
-                            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-                              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                            </linearGradient>
-                          </defs>
-                          <path d={areaPath} fill="url(#sparkGrad)" />
-                          <path d={linePath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          {points.map((p, i) => {
-                            const isSelected = selectedDotIdx === i;
-                            return (
-                              <g key={i} onClick={() => setSelectedDotIdx(isSelected ? null : i)} style={{ cursor: 'pointer' }}>
-                                {/* Wider tap target */}
-                                <circle cx={p.x} cy={p.y} r={12} fill="transparent" />
-                                {/* Visible dot */}
-                                <circle cx={p.x} cy={p.y} r={isSelected ? 5 : 2.5} fill={isSelected ? '#10b981' : '#10b981'} className="transition-all duration-200" />
-                                {isSelected && (
-                                  <circle cx={p.x} cy={p.y} r={8} fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.4" />
-                                )}
-                                {isSelected && (
-                                  <text x={p.x} y={p.y - 12} textAnchor="middle" style={{ fontSize: '10px', fontWeight: 800, fill: '#10b981' }}>
-                                    {p.value.toFixed(2)}
-                                  </text>
-                                )}
-                              </g>
-                            );
-                          })}
-                        </svg>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </Card>
-              )}
-            </section>
           )}
         </div>
 
@@ -598,6 +456,7 @@ export default function Dashboard() {
             )}
           </div>
         </Modal>
+        <AIInsightsModal />
       </PageWrapper>
     </div>
   );
