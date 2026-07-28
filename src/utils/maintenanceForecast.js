@@ -87,17 +87,19 @@ export const buildMaintenanceForecast = ({
         2000,
       );
       const performedAtODO = numberFrom(latestLog?.performedAtODO, latestLog?.odometer);
-      let nextDueODO = latestLog
-        ? numberFrom(
-            latestLog.nextDueODO,
-            latestLog.next_due_odometer,
-            latestLog.nextDueOdometer,
-            performedAtODO > 0 && intervalKm > 0 ? performedAtODO + intervalKm : 0,
-          )
-        : 0;
-
-      if (nextDueODO === 0 && performedAtODO > 0 && intervalKm > 0) {
+      let nextDueODO = 0;
+      
+      // Always recalculate nextDueODO based on performedAtODO and intervalKm
+      // This ensures the due date is always relative to when the maintenance was actually performed
+      if (performedAtODO > 0 && intervalKm > 0) {
         nextDueODO = performedAtODO + intervalKm;
+      } else {
+        // Fallback to stored value if we can't calculate
+        nextDueODO = numberFrom(
+          latestLog?.nextDueODO,
+          latestLog?.next_due_odometer,
+          latestLog?.nextDueOdometer,
+        );
       }
 
       const alertODO = nextDueODO > 0 ? Math.max(0, nextDueODO - safetyMarginKm) : 0;
@@ -110,9 +112,26 @@ export const buildMaintenanceForecast = ({
 
       let status = "untracked";
       if (latestLog) {
-        if (nextDueODO > 0 && currentOdometer >= nextDueODO) status = "overdue";
-        else if (alertODO > 0 && currentOdometer >= alertODO) status = "due-soon";
-        else status = "healthy";
+        // Only show overdue if we've actually passed the next due odometer
+        // AND we've driven since the maintenance was performed
+        const isActuallyOverdue = nextDueODO > 0 && 
+                                   currentOdometer > nextDueODO && 
+                                   performedAtODO < currentOdometer;
+        
+        // Only show due-soon if we've passed the alert threshold but not overdue yet
+        // AND we've driven since the maintenance was performed
+        const isDueSoon = alertODO > 0 && 
+                          currentOdometer > alertODO && 
+                          performedAtODO < currentOdometer && 
+                          !isActuallyOverdue;
+        
+        if (isActuallyOverdue) {
+          status = "overdue";
+        } else if (isDueSoon) {
+          status = "due-soon";
+        } else {
+          status = "healthy";
+        }
       }
 
       const kmUntilDue = Math.max(0, remainingKm);

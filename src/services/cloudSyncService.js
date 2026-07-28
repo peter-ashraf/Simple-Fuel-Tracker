@@ -1367,17 +1367,29 @@ function remapLegacyIds(vehicles, fillups, maintenance, tripEstimates) {
   // Remap vehicle IDs
   const remappedVehicles = vehicles.map(vehicle => {
     const oldId = vehicle.id;
-    if (isValidUuid(oldId)) {
-      preservedVehicleUuids++;
-      console.log(`[Sync][uuid] Vehicle ID preserved: ${oldId}`);
-      return vehicle;
-    } else {
+    let remappedVehicle = vehicle
+    
+    // Remap vehicle ID if invalid
+    if (!isValidUuid(oldId)) {
       const newId = uuidv4();
       regeneratedVehicleIds++;
       vehicleIdMap.set(oldId, newId);
       console.log(`[Sync][uuid] Vehicle ID remapped from "${oldId}" to "${newId}"`);
-      return { ...vehicle, id: newId };
+      remappedVehicle = { ...vehicle, id: newId };
+    } else {
+      preservedVehicleUuids++;
+      console.log(`[Sync][uuid] Vehicle ID preserved: ${oldId}`);
     }
+    
+    // Validate and fix stableKey - ensure it's always a valid UUID
+    const currentStableKey = remappedVehicle.stableKey || remappedVehicle.stable_key;
+    if (!currentStableKey || !isValidUuid(currentStableKey)) {
+      const newStableKey = uuidv4();
+      console.log(`[Sync][uuid] Vehicle stable_key fixed from "${currentStableKey}" to "${newStableKey}"`);
+      remappedVehicle = { ...remappedVehicle, stableKey: newStableKey };
+    }
+    
+    return remappedVehicle;
   });
   
   // Remap fillup IDs and vehicle references
@@ -2747,7 +2759,7 @@ export const cloudSyncService = {
           fuelType: v.fuel_type,
           tankCapacity: v.tank_capacity,
           licensePlate: v.license_plate,
-          stableKey: v.stable_key,
+          stableKey: (v.stable_key && isValidUuid(v.stable_key)) ? v.stable_key : uuidv4(),
           tyreSize: {
             width: v.tyre_width || null,
             aspectRatio: v.tyre_ratio || null,
@@ -3381,6 +3393,7 @@ export const cloudSyncService = {
           fuelType: v.fuel_type,
           tankCapacity: v.tank_capacity,
           licensePlate: v.license_plate,
+          stableKey: (v.stable_key && isValidUuid(v.stable_key)) ? v.stable_key : uuidv4(),
           tyreSize: {
             width: v.tyre_width || null,
             aspectRatio: v.tyre_ratio || null,
