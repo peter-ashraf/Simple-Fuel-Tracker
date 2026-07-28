@@ -36,6 +36,7 @@ import { backupService } from "../services/backupService";
 import { excelService } from "../services/excelService";
 import { cloudSyncService } from "../services/cloudSyncService";
 import ImportResolver from "./ImportResolver";
+import AISettings from "./AISettings";
 import { useNotifications } from "../hooks/useNotifications";
 import { useTranslation } from "react-i18next";
 import { authService } from "../services/authService";
@@ -1357,6 +1358,10 @@ export default function Settings() {
         </Card>
       </section>
 
+
+      <AISettings />
+
+      
       <section className="pt-4">
         <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2 ms-1">
           <ArrowClockwise weight="duotone" className="w-4 h-4" />{" "}
@@ -1405,6 +1410,8 @@ export default function Settings() {
           </button>
         </Card>
       </section>
+
+      
         </>
       )}
 
@@ -2363,66 +2370,67 @@ export default function Settings() {
         title={t("manual_sync")}
         size="sm"
       >
-        <div className="p-1 space-y-4">
-          {/* Sync Summary */}
-          {syncSummary && !syncResult && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                    Local Data
-                  </p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.localCounts?.vehicles || 0} Vehicles
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.localCounts?.fillups || 0} Fill-ups
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.localCounts?.maintenance || 0} Maintenance
-                      </span>
+        <div className="max-h-[calc(100vh-16rem)] overflow-hidden">
+          <div className="h-full min-h-0 overflow-y-auto p-1 space-y-4">
+            {/* Sync Summary */}
+            {syncSummary && !syncResult && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                      Local Data
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.localCounts?.vehicles || 0} Vehicles
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.localCounts?.fillups || 0} Fill-ups
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.localCounts?.maintenance || 0} Maintenance
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                    Cloud Data
-                  </p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.cloudCounts?.vehicles || 0} Vehicles
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.cloudCounts?.fillups || 0} Fill-ups
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {syncSummary.cloudCounts?.maintenance || 0} Maintenance
-                      </span>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                      Cloud Data
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.cloudCounts?.vehicles || 0} Vehicles
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.cloudCounts?.fillups || 0} Fill-ups
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {syncSummary.cloudCounts?.maintenance || 0} Maintenance
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Sync Actions */}
+            {/* Sync Actions */}
           {/* Sync Actions */}
           {!syncResult &&
             !isSyncing &&
@@ -2685,6 +2693,7 @@ export default function Settings() {
             </div>
           )}
         </div>
+      </div>
       </Modal>
 
       {/* Sync Confirmation Modal */}

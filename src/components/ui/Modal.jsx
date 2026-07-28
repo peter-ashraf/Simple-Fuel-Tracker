@@ -12,7 +12,8 @@ export const Modal = ({
   children, 
   size = 'md',
   showCloseButton = true,
-  closeOnBackdrop = true 
+  closeOnBackdrop = true,
+  footer
 }) => {
   useEffect(() => {
     const handleEscape = (e) => {
@@ -35,7 +36,7 @@ export const Modal = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] overflow-hidden flex items-center justify-center px-4">
           {/* Backdrop */}
           <MotionDiv
             initial={{ opacity: 0 }}
@@ -58,13 +59,13 @@ export const Modal = ({
               duration: 0.2 
             }}
             className={cn(
-              "relative w-full glass-card rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800",
+              "relative w-full glass-card rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col",
               sizeClasses[size]
             )}
           >
-            {/* Header */}
+            {/* Fixed Header */}
             {(title || showCloseButton) && (
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                 {title && (
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                     {title}
@@ -81,11 +82,18 @@ export const Modal = ({
                 )}
               </div>
             )}
-            
-            {/* Content */}
-            <div className="relative">
+
+            {/* Scrollable Content */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
               {children}
             </div>
+
+            {/* Fixed Footer */}
+            {footer && (
+              <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-800 flex-shrink-0">
+                {footer}
+              </div>
+            )}
           </MotionDiv>
         </div>
       )}

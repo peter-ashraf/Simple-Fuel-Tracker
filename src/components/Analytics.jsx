@@ -1,5 +1,6 @@
 import { useFuel } from '../hooks/useFuelContext';
 import { Card, MetricCard, PageWrapper, cn } from './ui';
+import AIInsightsModal from './AIInsightsModal';
 import { calculateAverageDailyDistance, calculateTripMetrics } from '../utils/calculations';
 import { format } from 'date-fns';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
@@ -564,6 +565,7 @@ export default function Analytics() {
 
   return (
     <PageWrapper className="space-y-8 pb-10">
+      <AIInsightsModal />
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{t('analytics')}</h2>
         <div className="bg-emerald-500/10 px-3 py-1 rounded-full">
