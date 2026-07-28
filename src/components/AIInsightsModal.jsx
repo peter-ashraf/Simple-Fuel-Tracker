@@ -38,7 +38,7 @@ const MODES = [
 
 export default function AIInsightsModal() {
   const { stats, activeVehicleFillUps, activeVehicle } = useFuel();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [floatingEnabled] = useLocalStorage(
     "fueltracker-ai-floating-buttons-enabled-v1",
     true,
