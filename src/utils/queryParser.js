@@ -21,6 +21,12 @@ export function parseQuery(text, conversationHistory = []) {
     confidence: 0.5,
   }
 
+  // For comparison queries, if no vehicles specified, use all available vehicles
+  if (query.type === 'comparison' && (!query.vehicleIds || query.vehicleIds.length === 0)) {
+    query.vehicleIds = getAllVehicleIds()
+    console.log('[QueryParser] Comparison query with no vehicles specified, using all vehicles:', query.vehicleIds)
+  }
+
   // Merge context if current query references it
   mergeContext(query, context, text)
 
@@ -281,6 +287,24 @@ export function extractDateRange(text) {
   }
 
   return null
+}
+
+/**
+ * Get all available vehicle IDs
+ * @returns {Array} Array of vehicle IDs
+ */
+function getAllVehicleIds() {
+  try {
+    const vehicleData = localStorage.getItem('fueltracker-vehicles-v2')
+    if (vehicleData) {
+      const allVehicles = JSON.parse(vehicleData)
+      const activeVehicles = allVehicles.filter(v => !v.deletedAt && !v.pendingDelete)
+      return activeVehicles.map(v => v.id)
+    }
+  } catch (error) {
+    console.error('[QueryParser] Error getting all vehicle IDs:', error)
+  }
+  return []
 }
 
 /**
