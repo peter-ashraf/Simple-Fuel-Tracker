@@ -168,12 +168,13 @@ export default function AIInsightsModal() {
       let blob;
       const timestamp = new Date().toISOString().split('T')[0];
       const filename = `fuel-data-${timestamp}`;
+      const vehicleName = activeVehicle?.name || 'Vehicle';
       
       if (format === 'excel') {
-        blob = await exportToExcel(data, filename);
+        blob = await exportToExcel(data, filename, vehicleName);
         downloadBlob(blob, filename, 'xlsx');
       } else if (format === 'pdf') {
-        blob = await exportToPDF(data, filename);
+        blob = await exportToPDF(data, filename, vehicleName);
         downloadBlob(blob, filename, 'pdf');
       }
     } catch (err) {

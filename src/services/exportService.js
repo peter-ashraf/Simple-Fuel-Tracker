@@ -4,6 +4,7 @@
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { autoTable } from 'jspdf-autotable'
+import { format } from 'date-fns'
 
 /**
  * Export data to Excel format
@@ -11,7 +12,7 @@ import { autoTable } from 'jspdf-autotable'
  * @param {string} filename - Filename for the export
  * @returns {Promise<Blob>} Excel file as blob
  */
-export async function exportToExcel(data, filename = 'fuel-data-export') {
+export async function exportToExcel(data, filename = 'fuel-data-export', vehicleName = 'Vehicle') {
   try {
     // Format data for Excel
     const formattedData = formatDataForExport(data, 'excel')
@@ -19,24 +20,57 @@ export async function exportToExcel(data, filename = 'fuel-data-export') {
     // Create workbook
     const wb = XLSX.utils.book_new()
     
-    // Add sheets based on data structure
-    if (formattedData.fillUps && formattedData.fillUps.length > 0) {
-      const ws = XLSX.utils.json_to_sheet(formattedData.fillUps)
-      XLSX.utils.book_append_sheet(wb, ws, 'Fill-ups')
-    }
-    
-    if (formattedData.maintenance && formattedData.maintenance.length > 0) {
-      const ws = XLSX.utils.json_to_sheet(formattedData.maintenance)
-      XLSX.utils.book_append_sheet(wb, ws, 'Maintenance')
-    }
-    
+    // Add summary sheet first
     if (formattedData.summary) {
       const summaryData = Object.entries(formattedData.summary).map(([key, value]) => ({
         Metric: key,
         Value: value,
       }))
       const ws = XLSX.utils.json_to_sheet(summaryData)
+      
+      // Add title to summary sheet
+      XLSX.utils.sheet_add_aoa(ws, [['Fuel Data Report - Summary']], { origin: 'A1' })
+      XLSX.utils.sheet_add_aoa(ws, [['Vehicle:', vehicleName]], { origin: 'A2' })
+      XLSX.utils.sheet_add_aoa(ws, [['Generated:', format(new Date(), 'MMM d, yyyy')]], { origin: 'A3' })
+      XLSX.utils.sheet_add_aoa(ws, [['Metric', 'Value']], { origin: 'A5' })
+      XLSX.utils.sheet_add_json(ws, summaryData, { origin: 'A6' })
+      
+      // Set column widths
+      ws['!cols'] = [{ wch: 25 }, { wch: 20 }]
+      
       XLSX.utils.book_append_sheet(wb, ws, 'Summary')
+    }
+    
+    // Add fill-ups sheet
+    if (formattedData.fillUps && formattedData.fillUps.length > 0) {
+      const ws = XLSX.utils.json_to_sheet(formattedData.fillUps)
+      
+      // Add title
+      XLSX.utils.sheet_add_aoa(ws, [['Fuel Data Report - Fill-ups']], { origin: 'A1' })
+      XLSX.utils.sheet_add_aoa(ws, [['Vehicle:', vehicleName]], { origin: 'A2' })
+      XLSX.utils.sheet_add_aoa(ws, [['Generated:', format(new Date(), 'MMM d, yyyy')]], { origin: 'A3' })
+      
+      // Set column widths
+      const colWidths = Object.keys(formattedData.fillUps[0]).map(() => ({ wch: 18 }))
+      ws['!cols'] = colWidths
+      
+      XLSX.utils.book_append_sheet(wb, ws, 'Fill-ups')
+    }
+    
+    // Add maintenance sheet
+    if (formattedData.maintenance && formattedData.maintenance.length > 0) {
+      const ws = XLSX.utils.json_to_sheet(formattedData.maintenance)
+      
+      // Add title
+      XLSX.utils.sheet_add_aoa(ws, [['Fuel Data Report - Maintenance']], { origin: 'A1' })
+      XLSX.utils.sheet_add_aoa(ws, [['Vehicle:', vehicleName]], { origin: 'A2' })
+      XLSX.utils.sheet_add_aoa(ws, [['Generated:', format(new Date(), 'MMM d, yyyy')]], { origin: 'A3' })
+      
+      // Set column widths
+      const colWidths = Object.keys(formattedData.maintenance[0]).map(() => ({ wch: 18 }))
+      ws['!cols'] = colWidths
+      
+      XLSX.utils.book_append_sheet(wb, ws, 'Maintenance')
     }
     
     // Generate buffer
@@ -60,18 +94,24 @@ export async function exportToExcel(data, filename = 'fuel-data-export') {
  * @param {string} filename - Filename for the export
  * @returns {Promise<Blob>} PDF file as blob
  */
-export async function exportToPDF(data, filename = 'fuel-data-export') {
+export async function exportToPDF(data, filename = 'fuel-data-export', vehicleName = 'Vehicle') {
   try {
     const formattedData = formatDataForExport(data, 'pdf')
     
     // Create PDF document
     const doc = new jsPDF()
+    const currentDate = format(new Date(), 'MMM d, yyyy')
     
     // Add title
-    doc.setFontSize(18)
+    doc.setFontSize(20)
     doc.text('Fuel Data Report', 14, 22)
     
-    let yPos = 35
+    // Vehicle & Date Info
+    doc.setFontSize(12)
+    doc.text(`Vehicle: ${vehicleName}`, 14, 32)
+    doc.text(`Date: ${currentDate}`, 14, 40)
+    
+    let yPos = 52
     
     // Add summary if available
     if (formattedData.summary) {
@@ -100,9 +140,10 @@ export async function exportToPDF(data, filename = 'fuel-data-export') {
         startY: yPos,
         head: [fillUpColumns],
         body: fillUpRows,
-        theme: 'grid',
-        styles: { fontSize: 8 },
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
       })
       
       yPos = doc.lastAutoTable.finalY + 15
@@ -127,9 +168,10 @@ export async function exportToPDF(data, filename = 'fuel-data-export') {
         startY: yPos,
         head: [maintenanceColumns],
         body: maintenanceRows,
-        theme: 'grid',
-        styles: { fontSize: 8 },
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
       })
     }
     
@@ -218,11 +260,12 @@ function formatDataForExport(data, format) {
  * @param {string} type - Report type
  * @returns {Promise<Blob>} Report as blob (PDF)
  */
-export async function generateReport(data, type = 'general') {
+export async function generateReport(data, type = 'general', vehicleName = 'Vehicle') {
   try {
     const formattedData = formatDataForExport(data, 'pdf')
     
     const doc = new jsPDF()
+    const currentDate = format(new Date(), 'MMM d, yyyy')
     
     // Add title based on type
     const titles = {
@@ -235,11 +278,12 @@ export async function generateReport(data, type = 'general') {
     doc.setFontSize(20)
     doc.text(titles[type] || 'Fuel Data Report', 14, 22)
     
-    // Add date
-    doc.setFontSize(10)
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 30)
+    // Vehicle & Date Info
+    doc.setFontSize(12)
+    doc.text(`Vehicle: ${vehicleName}`, 14, 32)
+    doc.text(`Date: ${currentDate}`, 14, 40)
     
-    let yPos = 40
+    let yPos = 52
     
     // Add summary section
     if (formattedData.summary) {
@@ -271,9 +315,10 @@ export async function generateReport(data, type = 'general') {
         startY: yPos,
         head: [['Date', 'Cost', 'Price/L']],
         body: costData.map(row => [row.Date, row.Cost, row['Price/L']]),
-        theme: 'grid',
-        styles: { fontSize: 8 },
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
       })
     }
     
@@ -289,9 +334,10 @@ export async function generateReport(data, type = 'general') {
         startY: yPos,
         head: [maintenanceColumns],
         body: maintenanceRows,
-        theme: 'grid',
-        styles: { fontSize: 8 },
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [240, 253, 244] },
       })
     }
     
