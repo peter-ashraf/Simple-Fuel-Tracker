@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Robot, ArrowRight, ChartBar, ChatCircle, Sparkle, Brain } from "@phosphor-icons/react";
 import { Modal, Card, cn } from "./ui";
@@ -53,6 +53,66 @@ export default function AIInsightsModal() {
   // Chat state
   const [messages, setMessages] = useState([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [conversationHistoryDays] = useLocalStorage(
+    "fueltracker-ai-conversation-history-days-v1",
+    7
+  );
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+
+  // Load conversation history from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedConversations = localStorage.getItem('fueltracker-ai-conversations-v1');
+      if (savedConversations) {
+        const parsedConversations = JSON.parse(savedConversations);
+        const filteredConversations = filterConversationsByDate(parsedConversations, conversationHistoryDays);
+        setConversations(filteredConversations);
+      }
+    } catch (error) {
+      console.error('[AIInsightsModal] Error loading conversations:', error);
+    }
+  }, [conversationHistoryDays]);
+
+  // Save conversations to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('fueltracker-ai-conversations-v1', JSON.stringify(conversations));
+    } catch (error) {
+      console.error('[AIInsightsModal] Error saving conversations:', error);
+    }
+  }, [conversations]);
+
+  // Start new conversation when modal opens
+  useEffect(() => {
+    if (isOpen && selectedMode === 'chat') {
+      const newConversationId = Date.now().toString();
+      setCurrentConversationId(newConversationId);
+      setMessages([]);
+    }
+  }, [isOpen, selectedMode]);
+
+  // Filter conversations based on time window
+  const filterConversationsByDate = (conversations, days) => {
+    if (days === 0) return conversations; // Keep all history if set to 0 (forever)
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return conversations.filter(conv => {
+      const convDate = new Date(conv.timestamp);
+      return convDate >= cutoffDate;
+    });
+  };
+
+  // Load a specific conversation
+  const loadConversation = (conversationId) => {
+    const conversation = conversations.find(c => c.id === conversationId);
+    if (conversation) {
+      setMessages(conversation.messages);
+      setCurrentConversationId(conversationId);
+    }
+  };
 
   const currentLanguage = i18n.language.startsWith("ar") ? "ar" : "en";
   const hasEnoughData = activeVehicleFillUps.length >= 2;
@@ -80,16 +140,28 @@ export default function AIInsightsModal() {
     setSelectedMode(null);
     setResultText("");
     setError("");
-    setMessages([]);
+    // Don't clear messages here - let the mode selection handle it
   };
 
   const handleClose = () => {
+    // Save current conversation before closing
+    if (messages.length > 0 && currentConversationId) {
+      const conversation = {
+        id: currentConversationId,
+        timestamp: parseInt(currentConversationId),
+        messages: messages,
+        title: messages[0]?.content?.substring(0, 50) || 'New Conversation'
+      };
+      setConversations(prev => [conversation, ...prev]);
+    }
+    
     setIsOpen(false);
     setSelectedMode(null);
     setResultText("");
     setError("");
     setIsLoading(false);
     setMessages([]);
+    setCurrentConversationId(null);
   };
 
   const handleModeSelect = (modeId) => {
@@ -129,8 +201,8 @@ export default function AIInsightsModal() {
   const handleSendMessage = async (message) => {
     if (!message.trim()) return;
 
-    // Add user message
-    const userMessage = { role: 'user', content: message };
+    // Add user message with timestamp
+    const userMessage = { role: 'user', content: message, timestamp: Date.now() };
     setMessages(prev => [...prev, userMessage]);
     setIsChatLoading(true);
 
@@ -152,7 +224,8 @@ export default function AIInsightsModal() {
       const aiMessage = { 
         role: 'assistant', 
         content: result.text || '',
-        queryResults: queryResults.success ? queryResults.data : null
+        queryResults: queryResults.success ? queryResults.data : null,
+        timestamp: Date.now()
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (err) {
@@ -160,6 +233,20 @@ export default function AIInsightsModal() {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsChatLoading(false);
+    }
+  };
+
+  const handleClearHistory = () => {
+    setConversations([]);
+    setMessages([]);
+    setCurrentConversationId(null);
+  };
+
+  const handleDeleteConversation = (conversationId) => {
+    setConversations(prev => prev.filter(c => c.id !== conversationId));
+    if (currentConversationId === conversationId) {
+      setMessages([]);
+      setCurrentConversationId(null);
     }
   };
 
@@ -221,7 +308,7 @@ export default function AIInsightsModal() {
 
   return (
     <>
-      {floatingEnabled && createPortal(
+      {floatingEnabled && !isOpen && createPortal(
         <div style={{ position: 'fixed', bottom: '96px', right: '24px', zIndex: 99999, direction: 'ltr' }}>
           <button
             type="button"
@@ -301,9 +388,13 @@ export default function AIInsightsModal() {
             <div className="h-[500px]">
               <ChatUI
                 messages={messages}
+                conversations={conversations}
                 onSendMessage={handleSendMessage}
                 isLoading={isChatLoading}
                 onExport={handleExport}
+                onClearHistory={handleClearHistory}
+                onLoadConversation={loadConversation}
+                onDeleteConversation={handleDeleteConversation}
                 placeholder="Ask about your fuel data..."
               />
             </div>

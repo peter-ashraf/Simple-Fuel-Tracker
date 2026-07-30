@@ -34,6 +34,9 @@ export function executeQuery(query) {
 
   try {
     switch (type) {
+      case 'capabilities':
+        results.data = executeCapabilitiesQuery()
+        break
       case 'cost':
         results.data = executeCostQuery(resolvedVehicleIds, dateRange, metrics)
         break
@@ -143,14 +146,90 @@ function executeEfficiencyQuery(vehicleIds, dateRange, metrics) {
 }
 
 /**
+ * Execute capabilities query - return what the AI can do
+ */
+function executeCapabilitiesQuery() {
+  return {
+    capabilities: [
+      {
+        category: 'Fuel Cost Analysis',
+        features: [
+          'Show fuel costs for specific time periods (e.g., "Show me fuel costs for January")',
+          'Calculate average cost per fill-up',
+          'Track total fuel spending over time',
+          'Analyze monthly fuel cost trends',
+        ]
+      },
+      {
+        category: 'Fuel Efficiency',
+        features: [
+          'Calculate fuel efficiency (km/L or L/100km)',
+          'Track efficiency trends over time',
+          'Compare efficiency between vehicles',
+          'Identify best and worst fuel efficiency periods',
+        ]
+      },
+      {
+        category: 'Vehicle Comparison',
+        features: [
+          'Compare multiple vehicles side by side',
+          'Analyze cost differences between vehicles',
+          'Compare efficiency metrics across vehicles',
+          'Identify which vehicle is more cost-effective',
+        ]
+      },
+      {
+        category: 'Maintenance Tracking',
+        features: [
+          'View maintenance history',
+          'Track maintenance costs',
+          'Analyze maintenance patterns',
+          'Get maintenance reminders',
+        ]
+      },
+      {
+        category: 'Data Export',
+        features: [
+          'Export data to Excel',
+          'Export data to PDF',
+          'Generate reports',
+          'Download fuel history',
+        ]
+      },
+      {
+        category: 'General Insights',
+        features: [
+          'Get overall fuel spending summary',
+          'View total distance traveled',
+          'Track fill-up count',
+          'Analyze driving patterns',
+        ]
+      }
+    ],
+    examples: [
+      'Show me fuel costs for January',
+      'Compare my vehicles',
+      'What\'s my fuel efficiency?',
+      'Export my data to Excel',
+      'Show maintenance history',
+      'How much did I spend on fuel last month?',
+    ]
+  }
+}
+
+/**
  * Execute comparison query between vehicles
  */
 function executeComparisonQuery(vehicleIds, metrics, dateRange) {
+  console.log('[QueryExecutor] executeComparisonQuery called with:', { vehicleIds, metrics, dateRange })
+  
   if (!vehicleIds || vehicleIds.length < 2) {
+    console.log('[QueryExecutor] Not enough vehicles for comparison:', vehicleIds)
     return { error: 'Comparison requires at least 2 vehicles' }
   }
 
   const comparison = compareVehicles(vehicleIds, metrics || ['all'], dateRange)
+  console.log('[QueryExecutor] Comparison result:', comparison)
 
   return {
     vehicles: comparison,

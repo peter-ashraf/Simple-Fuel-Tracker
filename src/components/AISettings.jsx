@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Card } from "./ui";
-import { Sparkle, CheckCircle, WarningCircle, ArrowClockwise, ChartLine, Gauge, CurrencyDollar, Drop, Wrench } from "@phosphor-icons/react";
+import { Sparkle, CheckCircle, WarningCircle, ArrowClockwise, ChartLine, Gauge, CurrencyDollar, Drop, Wrench, CaretDown, Check } from "@phosphor-icons/react";
 import { aiService } from "../services/aiService";
 import { useTranslation } from "react-i18next";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 
 export default function AISettings() {
   const { t, i18n } = useTranslation();
@@ -29,6 +30,21 @@ export default function AISettings() {
       maintenance: true,
     }
   );
+  const [conversationHistoryDays, setConversationHistoryDays] = useLocalStorage(
+    "fueltracker-ai-conversation-history-days-v1",
+    7
+  );
+  const [isHistoryDropdownOpen, setIsHistoryDropdownOpen] = useState(false);
+  const historyDropdownRef = useState({ current: null })[0];
+
+  const historyOptions = [
+    { value: 1, label: '1 day' },
+    { value: 3, label: '3 days' },
+    { value: 7, label: '7 days' },
+    { value: 14, label: '14 days' },
+    { value: 30, label: '30 days' },
+    { value: 0, label: 'Forever' },
+  ];
 
   const handleTestConnection = async () => {
     setIsTesting(true);
@@ -348,6 +364,72 @@ export default function AISettings() {
           </div>
         </Card>
       )}
+
+      <Card className="px-5 py-6 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white">
+            Conversation History
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Set how long to save AI conversation history for context awareness.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-slate-700 dark:text-slate-300">History Duration</p>
+          </div>
+          <div className="relative" ref={historyDropdownRef}>
+            <button
+              onClick={() => setIsHistoryDropdownOpen(!isHistoryDropdownOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.08] rounded-xl transition-colors border-0"
+            >
+              <span>{historyOptions.find(o => o.value === conversationHistoryDays)?.label || '7 days'}</span>
+              <Motion.div
+                animate={{ rotate: isHistoryDropdownOpen ? 180 : 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              >
+                <CaretDown weight="duotone" className="w-4 h-4 text-slate-400" />
+              </Motion.div>
+            </button>
+
+            <AnimatePresence>
+              {isHistoryDropdownOpen && (
+                <Motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{
+                    opacity: 0,
+                    y: -10,
+                    scale: 0.95,
+                    transition: { duration: 0.15 },
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  className="absolute right-0 top-10 w-32 bg-white/95 dark:bg-black/90 backdrop-blur-2xl border border-slate-200/50 dark:border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right"
+                >
+                  <div className="p-1">
+                    {historyOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setConversationHistoryDays(option.value);
+                          setIsHistoryDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-xl transition-colors ${conversationHistoryDays === option.value ? "bg-emerald-500 text-white" : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]"}`}
+                      >
+                        <span>{option.label}</span>
+                        {conversationHistoryDays === option.value && (
+                          <Check className="w-4 h-4" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </Motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </Card>
     </section>
   );
 }

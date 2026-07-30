@@ -1,10 +1,49 @@
 import { useState, useRef, useEffect } from 'react';
-import { Robot, User, PaperPlaneRight, X, Download, Table, ArrowRight } from '@phosphor-icons/react';
+import { Robot, User, PaperPlaneRight, X, Download, Table, ArrowRight, Clock, Trash } from '@phosphor-icons/react';
 import { cn } from './index';
 
 // Helper component to render query results as a table
 function QueryResultsTable({ data }) {
   if (!data || typeof data !== 'object') return null;
+
+  // Map technical field names to user-friendly labels
+  const labelMap = {
+    vehicleId: null, // Hide this field
+    vehicleName: 'Vehicle',
+    totalDistance: 'Total Distance',
+    totalCost: 'Total Cost',
+    avgEfficiency: 'Average Efficiency',
+    fillUpCount: 'Fill-up Count',
+    avgCostPerKm: 'Cost per KM',
+    period: 'Period',
+    metrics: 'Metrics',
+    totalLiters: 'Total Liters',
+    avgCostPerFill: 'Average Cost per Fill',
+    monthlyBreakdown: 'Monthly Breakdown',
+    year: 'Year',
+    month: 'Month',
+    sum: 'Total',
+    avg: 'Average',
+    count: 'Count',
+    currency: 'Currency',
+    maintenanceCount: 'Maintenance Count',
+    dateRange: 'Date Range'
+  };
+
+  const getLabel = (key) => {
+    if (labelMap.hasOwnProperty(key)) {
+      return labelMap[key];
+    }
+    // Convert camelCase to Title Case
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
+  };
+
+  const shouldShowField = (key) => {
+    return labelMap[key] !== null;
+  };
 
   const renderValue = (value) => {
     if (value === null || value === undefined) return 'N/A';
@@ -17,11 +56,12 @@ function QueryResultsTable({ data }) {
   };
 
   const renderRow = (key, value, depth = 0) => {
+    if (!shouldShowField(key)) return null;
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       return (
         <div key={key} className={depth > 0 ? "ml-4 mt-2" : ""}>
           <div className="font-semibold text-xs uppercase text-slate-500 dark:text-slate-400 mb-1">
-            {key}
+            {getLabel(key)}
           </div>
           {Object.entries(value).map(([k, v]) => renderRow(k, v, depth + 1))}
         </div>
@@ -32,11 +72,11 @@ function QueryResultsTable({ data }) {
       return (
         <div key={key} className={depth > 0 ? "ml-4 mt-2" : ""}>
           <div className="font-semibold text-xs uppercase text-slate-500 dark:text-slate-400 mb-1">
-            {key} ({value.length} items)
+            {getLabel(key)} ({value.length} items)
           </div>
           {value.slice(0, 5).map((item, idx) => (
             <div key={idx} className="text-xs text-slate-600 dark:text-slate-300 ml-4">
-              {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+              {typeof item === 'object' ? renderRow(`Item ${idx + 1}`, item, depth + 1) : String(item)}
             </div>
           ))}
           {value.length > 5 && (
@@ -50,7 +90,7 @@ function QueryResultsTable({ data }) {
 
     return (
       <div key={key} className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700 last:border-0">
-        <span className="text-xs text-slate-600 dark:text-slate-300">{key}</span>
+        <span className="text-xs text-slate-600 dark:text-slate-300">{getLabel(key)}</span>
         <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{renderValue(value)}</span>
       </div>
     );
@@ -89,13 +129,18 @@ function ExportButtons({ data, onExport }) {
 
 export default function ChatUI({ 
   messages = [], 
+  conversations = [],
   onSendMessage, 
   isLoading = false,
   onClose,
   onExport,
+  onClearHistory,
+  onLoadConversation,
+  onDeleteConversation,
   placeholder = "Ask about your fuel data..."
 }) {
   const [input, setInput] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -121,8 +166,104 @@ export default function ChatUI({
     }
   };
 
+  const handleClearHistory = () => {
+    if (onClearHistory) {
+      onClearHistory();
+    }
+  };
+
+  const handleLoadConversation = (conversationId) => {
+    if (onLoadConversation) {
+      onLoadConversation(conversationId);
+      setShowHistory(false);
+    }
+  };
+
+  const handleDeleteConversation = (conversationId, e) => {
+    e.stopPropagation();
+    if (onDeleteConversation) {
+      onDeleteConversation(conversationId);
+    }
+  };
+
+  const formatDate = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {/* Header with history button */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+              showHistory 
+                ? "bg-emerald-500 text-white" 
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+            )}
+          >
+            <Clock weight="duotone" className="w-4 h-4" />
+            <span>Conversations ({conversations.length})</span>
+          </button>
+        </div>
+        {conversations.length > 0 && onClearHistory && (
+          <button
+            onClick={handleClearHistory}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+          >
+            <Trash weight="duotone" className="w-4 h-4" />
+            <span>Clear All</span>
+          </button>
+        )}
+      </div>
+
+      {/* Conversations Panel */}
+      {showHistory && (
+        <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
+          {conversations.length === 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">No conversation history</p>
+          ) : (
+            <div className="space-y-2">
+              {conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  onClick={() => handleLoadConversation(conv.id)}
+                  className="group relative p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{conv.title}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {formatDate(conv.timestamp)} • {conv.messages.length} messages
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteConversation(conv.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all"
+                    >
+                      <Trash weight="duotone" className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-2">
         {messages.length === 0 ? (

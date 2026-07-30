@@ -21,10 +21,10 @@ export function parseQuery(text, conversationHistory = []) {
     confidence: 0.5,
   }
 
-  // For comparison queries, if no vehicles specified, use all available vehicles
-  if (query.type === 'comparison' && (!query.vehicleIds || query.vehicleIds.length === 0)) {
+  // For comparison queries, if fewer than 2 vehicles specified, use all available vehicles
+  if (query.type === 'comparison' && (!query.vehicleIds || query.vehicleIds.length < 2)) {
     query.vehicleIds = getAllVehicleIds()
-    console.log('[QueryParser] Comparison query with no vehicles specified, using all vehicles:', query.vehicleIds)
+    console.log('[QueryParser] Comparison query with insufficient vehicles, using all vehicles:', query.vehicleIds)
   }
 
   // Merge context if current query references it
@@ -147,10 +147,16 @@ function mergeContext(query, context, text) {
 /**
  * Detect the type of query from natural language
  * @param {string} text - User's query text
- * @returns {string} Query type: 'cost', 'efficiency', 'comparison', 'maintenance', 'export', 'general'
+ * @returns {string} Query type: 'cost', 'efficiency', 'comparison', 'maintenance', 'export', 'capabilities', 'general'
  */
 export function detectQueryType(text) {
   const lowerText = text.toLowerCase()
+
+  // Capability questions - check these first
+  const capabilityKeywords = ['what can you do', 'what can you help', 'your capabilities', 'what are your features', 'what can you offer', 'what do you do', 'help me with', 'what can i ask', 'how can you help']
+  if (capabilityKeywords.some(keyword => lowerText.includes(keyword))) {
+    return 'capabilities'
+  }
 
   // Cost-related queries
   const costKeywords = ['cost', 'spend', 'spent', 'price', 'expensive', 'cheap', 'budget', 'money', 'fuel cost', 'fuel price']
@@ -296,14 +302,20 @@ export function extractDateRange(text) {
 function getAllVehicleIds() {
   try {
     const vehicleData = localStorage.getItem('fueltracker-vehicles-v2')
+    console.log('[QueryParser] Vehicle data from localStorage:', vehicleData)
     if (vehicleData) {
       const allVehicles = JSON.parse(vehicleData)
+      console.log('[QueryParser] All vehicles parsed:', allVehicles)
       const activeVehicles = allVehicles.filter(v => !v.deletedAt && !v.pendingDelete)
-      return activeVehicles.map(v => v.id)
+      console.log('[QueryParser] Active vehicles:', activeVehicles)
+      const vehicleIds = activeVehicles.map(v => v.id)
+      console.log('[QueryParser] Returning vehicle IDs:', vehicleIds)
+      return vehicleIds
     }
   } catch (error) {
     console.error('[QueryParser] Error getting all vehicle IDs:', error)
   }
+  console.log('[QueryParser] No vehicles found, returning empty array')
   return []
 }
 
