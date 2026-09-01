@@ -4,6 +4,7 @@
 // but the implementation is provider-agnostic (currently uses Hugging Face)
 
 import { supabase } from '../lib/supabaseClient'
+import { aiClientFallback } from './aiClientFallback'
 
 const EDGE_FUNCTION_NAME = 'gemini-proxy'
 
@@ -33,7 +34,14 @@ export const aiService = {
 
       return data.data
     } catch (error) {
-      console.error('[AI Service] Test connection exception:', error)
+      console.warn('[AI Service] Edge function test connection failed, attempting client fallback...', error)
+      if (aiClientFallback.isAvailable) {
+        try {
+          return await aiClientFallback.testConnection();
+        } catch (fbError) {
+          console.error('[AI Service] Client fallback also failed:', fbError)
+        }
+      }
       throw error
     }
   },
@@ -65,8 +73,18 @@ export const aiService = {
 
       return data.data
     } catch (error) {
-      console.error('[AI Service] Generate insights exception:', error)
-      throw error
+      console.warn('[AI Service] Generate insights failed, attempting client fallback...', error)
+      if (aiClientFallback.isAvailable) {
+          try {
+              return await aiClientFallback.generateInsights(stats, language);
+          } catch (e) {
+              console.warn('[AI Service] Fallback failed:', e);
+          }
+      }
+      return {
+        text: `**Local Insights (Offline)**\n\n- Total Distance: ${stats?.totalDistance || 0} km\n- Total Cost: ${(stats?.totalCost || 0).toFixed(2)}\n- Average Efficiency: ${(stats?.avgKmPerLiter || 0).toFixed(2)} km/L\n\n*Note: The AI service is currently unreachable, displaying basic local metrics instead.*`,
+        timestamp: Date.now()
+      }
     }
   },
 
@@ -97,8 +115,18 @@ export const aiService = {
 
       return data.data
     } catch (error) {
-      console.error('[AI Service] Generate monthly report exception:', error)
-      throw error
+      console.warn('[AI Service] Generate monthly report failed, attempting client fallback...', error)
+      if (aiClientFallback.isAvailable) {
+          try {
+              return await aiClientFallback.generateMonthlyReport(monthlyStats, language);
+          } catch (e) {
+              console.warn('[AI Service] Fallback failed:', e);
+          }
+      }
+      return {
+        text: `**Local Monthly Report (Offline)**\n\n- Vehicle: ${monthlyStats?.vehicleName || 'Unknown'}\n- Period: ${monthlyStats?.period || 'Current'}\n- Total Distance: ${monthlyStats?.totalDistance || 0} km\n- Total Cost: ${(monthlyStats?.totalFuelCost || 0).toFixed(2)}\n- Efficiency: ${(monthlyStats?.avgEfficiency || 0).toFixed(2)} km/L\n\n*Note: The AI service is currently unreachable. Please try again later for the full generated report.*`,
+        timestamp: Date.now()
+      }
     }
   },
 
@@ -135,7 +163,14 @@ export const aiService = {
 
       return data.data
     } catch (error) {
-      console.error('[AI Service] Chat message exception:', error)
+      console.warn('[AI Service] Chat message exception, attempting client fallback...', error)
+      if (aiClientFallback.isAvailable) {
+          try {
+              return await aiClientFallback.sendChatMessage(message, conversationHistory, stats, language);
+          } catch (e) {
+              console.warn('[AI Service] Fallback failed:', e);
+          }
+      }
       throw error
     }
   },
@@ -148,23 +183,24 @@ export const aiService = {
    * @param {string} language - Language code ('en' or 'ar')
    * @returns {Promise<Object>} Response with text and timestamp
    */
-  async executeQuery(queryText, parsedQuery, queryResults, language = 'en') {
+  async executeQuery(queryText, parsedQuery, queryResults, language = 'en', stats = null, predictiveContext = null) {
     try {
       const { data, error } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
         body: {
           action: 'query',
           data: {
-            query: parsedQuery,
-            results: queryResults,
-            originalText: queryText,
+            queryText,
+            parsedQuery,
+            queryResults,
+            stats,
+            predictiveContext
           },
-          language,
-        },
+          language
+        }
       })
 
       if (error) {
-        console.error('[AI Service] Query error:', error)
-        throw new Error(error.message || 'Failed to execute query')
+        throw new Error(error.message || 'Failed to execute query function')
       }
 
       if (!data.success) {
@@ -173,8 +209,18 @@ export const aiService = {
 
       return data.data
     } catch (error) {
-      console.error('[AI Service] Query exception:', error)
-      throw error
+      console.warn('[AI Service] Query exception, attempting client fallback...', error)
+      if (aiClientFallback.isAvailable) {
+          try {
+              return await aiClientFallback.executeQuery(queryText, parsedQuery, queryResults, language, stats, predictiveContext);
+          } catch (e) {
+              console.warn('[AI Service] Fallback failed:', e);
+          }
+      }
+      return {
+        text: "I'm sorry, the AI service is currently unreachable or offline. Please check your connection or try again later.",
+        timestamp: Date.now()
+      }
     }
   },
 

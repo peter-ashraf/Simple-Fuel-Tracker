@@ -28,7 +28,7 @@ export function useFuelTrackingState(selectedVehicleId) {
   const activeVehicleFillUpsByOdometer = useMemo(() => 
     activeFillUps
       .filter(f => f.vehicleId === selectedVehicleId)
-      .sort((a,b) => a.odometer - b.odometer),
+      .sort((a,b) => Number(a.odometer || 0) - Number(b.odometer || 0)),
     [activeFillUps, selectedVehicleId]
   );
 

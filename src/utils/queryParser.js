@@ -14,7 +14,7 @@ export function parseQuery(text, conversationHistory = []) {
   const query = {
     originalText: text,
     type: detectQueryType(text),
-    dateRange: extractDateRange(text),
+    dateRange: extractDateRange(text, detectQueryType(text) === 'prediction'),
     vehicleIds: extractVehicles(text),
     metrics: extractMetrics(text),
     filters: {},
@@ -158,6 +158,12 @@ export function detectQueryType(text) {
     return 'capabilities'
   }
 
+  // Prediction queries
+  const predictionKeywords = ['predict', 'suggest', 'estimate', 'future', 'forecast', 'expect']
+  if (predictionKeywords.some(keyword => lowerText.includes(keyword))) {
+    return 'prediction'
+  }
+
   // Cost-related queries
   const costKeywords = ['cost', 'spend', 'spent', 'price', 'expensive', 'cheap', 'budget', 'money', 'fuel cost', 'fuel price']
   if (costKeywords.some(keyword => lowerText.includes(keyword))) {
@@ -195,11 +201,18 @@ export function detectQueryType(text) {
 /**
  * Extract date range from natural language
  * @param {string} text - User's query text
+ * @param {boolean} isPrediction - If true, ignores specific future/current bounds to allow fetching historical data for predictions.
  * @returns {Object|null} Date range { startDate, endDate } or null
  */
-export function extractDateRange(text) {
+export function extractDateRange(text, isPrediction = false) {
   const lowerText = text.toLowerCase()
   const now = new Date()
+  
+  if (isPrediction) {
+      // For predictions, we intentionally do NOT restrict the query to the mentioned future month.
+      // We want the AI to have access to historical data.
+      return null;
+  }
 
   // Specific month names
   const months = ['january', 'february', 'march', 'april', 'may', 'june', 

@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Robot, ArrowRight, ChartBar, ChatCircle, Sparkle, Brain } from "@phosphor-icons/react";
+import { Robot, ArrowRight, ChartBar, ChatCircle, Sparkle, Brain, Microphone } from "@phosphor-icons/react";
 import { Modal, Card, cn } from "./ui";
 import { useFuel } from "../hooks/useFuelContext";
 import { aiService } from "../services/aiService";
 import {
   prepareInsightsData,
   prepareMonthlyReportData,
+  preparePredictiveData,
 } from "../utils/aiDataPrep";
 import { useTranslation } from "react-i18next";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -46,6 +47,7 @@ export default function AIInsightsModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [isResultOpen, setIsResultOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState(null);
+  const [autoStartMic, setAutoStartMic] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [resultText, setResultText] = useState("");
   const [error, setError] = useState("");
@@ -157,6 +159,7 @@ export default function AIInsightsModal() {
     
     setIsOpen(false);
     setSelectedMode(null);
+    setAutoStartMic(false);
     setResultText("");
     setError("");
     setIsLoading(false);
@@ -213,12 +216,27 @@ export default function AIInsightsModal() {
       // Execute the query locally to get data
       const queryResults = executeQuery(parsedQuery);
       
+      // OPTIMIZATION: Limit context payload if it contains large arrays
+      let optimizedResults = { ...queryResults };
+      if (optimizedResults.data) {
+        if (Array.isArray(optimizedResults.data.fillUps) && optimizedResults.data.fillUps.length > 100) {
+          optimizedResults.data.fillUps = optimizedResults.data.fillUps.slice(-100);
+        }
+        if (Array.isArray(optimizedResults.data.maintenance) && optimizedResults.data.maintenance.length > 100) {
+          optimizedResults.data.maintenance = optimizedResults.data.maintenance.slice(-100);
+        }
+      }
+      
+      const predictiveContext = activeVehicle ? preparePredictiveData(activeVehicle.id) : null;
+
       // Send to AI for interpretation with query results
       const result = await aiService.executeQuery(
         message,
         parsedQuery,
-        queryResults,
-        currentLanguage
+        optimizedResults,
+        currentLanguage,
+        stats,
+        predictiveContext
       );
 
       const aiMessage = { 
@@ -309,7 +327,7 @@ export default function AIInsightsModal() {
   return (
     <>
       {floatingEnabled && !isOpen && createPortal(
-        <div style={{ position: 'fixed', bottom: '96px', right: '24px', zIndex: 99999, direction: 'ltr' }}>
+        <div className="flex flex-col gap-3" style={{ position: 'fixed', bottom: '96px', right: '24px', zIndex: 99999, direction: 'ltr' }}>
           <button
             type="button"
             onClick={handleOpen}
@@ -328,6 +346,20 @@ export default function AIInsightsModal() {
             {/* Tooltip */}
             <span className="absolute right-full mr-3 px-3 py-1.5 bg-slate-900 dark:bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
               AI Assistant
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleOpen();
+              setSelectedMode('chat');
+              setAutoStartMic(true);
+            }}
+            className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg shadow-red-500/30 transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-red-500/50 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+          >
+            <Microphone weight="fill" className="w-6 h-6 relative z-10" />
+            <span className="absolute right-full mr-3 px-3 py-1.5 bg-slate-900 dark:bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+              Voice Input
             </span>
           </button>
         </div>,
@@ -387,6 +419,8 @@ export default function AIInsightsModal() {
           {selectedMode === 'chat' && (
             <div className="h-[500px]">
               <ChatUI
+                autoStartMic={autoStartMic}
+                onMicStartComplete={() => setAutoStartMic(false)}
                 messages={messages}
                 conversations={conversations}
                 onSendMessage={handleSendMessage}

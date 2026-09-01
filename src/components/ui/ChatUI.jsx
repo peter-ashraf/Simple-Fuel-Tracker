@@ -1,10 +1,94 @@
 import { useState, useRef, useEffect } from 'react';
-import { Robot, User, PaperPlaneRight, X, Download, Table, ArrowRight, Clock, Trash } from '@phosphor-icons/react';
+import { Robot, User, PaperPlaneRight, X, Download, Table, ArrowRight, Clock, Trash, Microphone, ImageSquare, SpinnerGap } from '@phosphor-icons/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './index';
+import Tesseract from 'tesseract.js';
+import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 // Helper component to render query results as a table
 function QueryResultsTable({ data }) {
   if (!data || typeof data !== 'object') return null;
+
+  // Render Charts if data contains arrays suitable for charting
+  let chartElement = null;
+  
+  if (data.monthlySpending && Array.isArray(data.monthlySpending) && data.monthlySpending.length > 0) {
+    const chartData = {
+      labels: data.monthlySpending.map(m => m.month),
+      datasets: [{
+        label: 'Monthly Spending',
+        data: data.monthlySpending.map(m => m.total),
+        backgroundColor: 'rgba(16, 185, 129, 0.5)',
+        borderColor: 'rgb(16, 185, 129)',
+        borderWidth: 2,
+        borderRadius: 4
+      }]
+    };
+    chartElement = (
+      <div className="h-48 mt-4 bg-white dark:bg-slate-900 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+        <Bar options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={chartData} />
+      </div>
+    );
+  } else if (data.monthlyBreakdown && Array.isArray(data.monthlyBreakdown) && data.monthlyBreakdown.length > 0) {
+    const chartData = {
+      labels: data.monthlyBreakdown.map(m => `${m.year}-${m.month}`),
+      datasets: [{
+        label: 'Total Cost',
+        data: data.monthlyBreakdown.map(m => m.sum || m.totalCost || 0),
+        backgroundColor: 'rgba(16, 185, 129, 0.5)',
+        borderColor: 'rgb(16, 185, 129)',
+        borderWidth: 2,
+        borderRadius: 4
+      }]
+    };
+    chartElement = (
+      <div className="h-48 mt-4 bg-white dark:bg-slate-900 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+        <Bar options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={chartData} />
+      </div>
+    );
+  } else if (data.efficiencyTrend && Array.isArray(data.efficiencyTrend) && data.efficiencyTrend.length > 0) {
+    const chartData = {
+      labels: data.efficiencyTrend.map((_, i) => `Fill #${i+1}`),
+      datasets: [{
+        label: 'Efficiency (km/L)',
+        data: data.efficiencyTrend.map(e => e.value),
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4
+      }]
+    };
+    chartElement = (
+      <div className="h-48 mt-4 bg-white dark:bg-slate-900 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+        <Line options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={chartData} />
+      </div>
+    );
+  }
 
   // Map technical field names to user-friendly labels
   const labelMap = {
@@ -97,8 +181,11 @@ function QueryResultsTable({ data }) {
   };
 
   return (
-    <div className="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-      {Object.entries(data).map(([key, value]) => renderRow(key, value))}
+    <div>
+      <div className="mt-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+        {Object.entries(data).map(([key, value]) => renderRow(key, value))}
+      </div>
+      {chartElement}
     </div>
   );
 }
@@ -108,7 +195,7 @@ function ExportButtons({ data, onExport }) {
   if (!data) return null;
 
   return (
-    <div className="flex gap-2 mt-3">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex gap-2 mt-3">
       <button
         onClick={() => onExport('excel', data)}
         className="flex items-center gap-2 px-3 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-semibold hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition"
@@ -123,8 +210,33 @@ function ExportButtons({ data, onExport }) {
         <Download weight="duotone" className="w-4 h-4" />
         PDF
       </button>
-    </div>
+    </motion.div>
   );
+}
+
+// Typewriter effect for AI messages
+function TypewriterText({ text, shouldAnimate, onComplete }) {
+  const [displayedText, setDisplayedText] = useState(shouldAnimate ? "" : text);
+  const [index, setIndex] = useState(shouldAnimate ? 0 : text.length);
+
+  useEffect(() => {
+    if (!shouldAnimate) {
+      setDisplayedText(text);
+      return;
+    }
+    
+    if (index < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText(prev => prev + text.charAt(index));
+        setIndex(prev => prev + 1);
+      }, 15);
+      return () => clearTimeout(timeout);
+    } else if (onComplete) {
+      onComplete();
+    }
+  }, [index, text, shouldAnimate, onComplete]);
+
+  return <p className="text-sm leading-6 whitespace-pre-wrap">{displayedText}</p>;
 }
 
 export default function ChatUI({ 
@@ -136,13 +248,93 @@ export default function ChatUI({
   onExport,
   onClearHistory,
   onLoadConversation,
-  onDeleteConversation,
+  autoStartMic,
+  onMicStartComplete,
   placeholder = "Ask about your fuel data..."
 }) {
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
+  // Voice Input State
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  
+  // OCR State
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        
+        recognitionRef.current.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setInput((prev) => prev ? `${prev} ${transcript}` : transcript);
+          setIsListening(false);
+        };
+        
+        recognitionRef.current.onerror = (event) => {
+          console.error('Speech recognition error', event.error);
+          setIsListening(false);
+        };
+        
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (autoStartMic && !isListening && recognitionRef.current) {
+      // Small timeout to ensure modal transition finishes
+      setTimeout(() => {
+        toggleListening();
+        if (onMicStartComplete) {
+          onMicStartComplete();
+        }
+      }, 300);
+    }
+  }, [autoStartMic]);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      try {
+        recognitionRef.current?.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error("Speech recognition failed to start", e);
+      }
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsOcrProcessing(true);
+    try {
+      const result = await Tesseract.recognize(file, 'eng');
+      const text = result.data.text;
+      
+      const ocrPrompt = `I just scanned a fuel receipt. Here is the raw OCR text. Please extract the fill-up details (cost, liters, date) and ask me if I want to log it:\n\n${text}`;
+      onSendMessage(ocrPrompt);
+    } catch (err) {
+      console.error('OCR failed', err);
+      alert("Failed to scan receipt. Please try again.");
+    } finally {
+      setIsOcrProcessing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -279,60 +471,101 @@ export default function ChatUI({
                 I can help you analyze your fuel efficiency, costs, and driving patterns
               </p>
               <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full text-xs">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onSendMessage("Show me fuel costs for January")}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-full text-xs font-medium cursor-pointer transition-colors border-0"
+                >
                   "Show me fuel costs for January"
-                </span>
-                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full text-xs">
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onSendMessage("Compare my vehicles")}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-full text-xs font-medium cursor-pointer transition-colors border-0"
+                >
                   "Compare my vehicles"
-                </span>
-                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full text-xs">
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onSendMessage("Export my data to Excel")}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-full text-xs font-medium cursor-pointer transition-colors border-0"
+                >
                   "Export to Excel"
-                </span>
+                </motion.button>
               </div>
             </div>
           </div>
         ) : (
-          messages.map((message, index) => (
-            <div
-              key={index}
-              className={cn(
-                "flex gap-3",
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              {message.role === 'assistant' && (
-                <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center">
-                  <Robot weight="fill" className="w-4 h-4 text-white" />
-                </div>
-              )}
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-2xl px-4 py-3",
-                  message.role === 'user'
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                )}
-              >
-                <p className="text-sm leading-6 whitespace-pre-wrap">{message.content}</p>
-                {message.queryResults && (
-                  <>
-                    <QueryResultsTable data={message.queryResults} />
-                    {onExport && (
-                      <ExportButtons data={message.queryResults} onExport={handleExport} />
+          <AnimatePresence initial={false}>
+            {messages.map((message, index) => {
+              const isRecent = Date.now() - message.timestamp < 3000;
+              const isLastMessage = index === messages.length - 1;
+              const shouldTypewrite = message.role === 'assistant' && isRecent && isLastMessage;
+
+              return (
+                <motion.div
+                  key={message.timestamp + index}
+                  initial={{ opacity: 0, y: 15, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className={cn(
+                    "flex gap-3",
+                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                  )}
+                >
+                  {message.role === 'assistant' && (
+                    <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center">
+                      <Robot weight="fill" className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-2xl px-4 py-3",
+                      message.role === 'user'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
                     )}
-                  </>
-                )}
-              </div>
-              {message.role === 'user' && (
-                <div className="flex-shrink-0 w-8 h-8 bg-slate-300 dark:bg-slate-600 rounded-xl flex items-center justify-center">
-                  <User weight="fill" className="w-4 h-4 text-white" />
-                </div>
-              )}
-            </div>
-          ))
+                  >
+                    {message.role === 'assistant' ? (
+                      <TypewriterText text={message.content} shouldAnimate={shouldTypewrite} onComplete={scrollToBottom} />
+                    ) : (
+                      <p className="text-sm leading-6 whitespace-pre-wrap">{message.content}</p>
+                    )}
+                    
+                    {message.queryResults && (
+                      <motion.div
+                        initial={shouldTypewrite ? { opacity: 0, height: 0 } : false}
+                        animate={shouldTypewrite ? { opacity: 1, height: 'auto' } : false}
+                        transition={{ delay: 1 }}
+                        className="overflow-hidden"
+                      >
+                        <QueryResultsTable data={message.queryResults} />
+                        {onExport && (
+                          <ExportButtons data={message.queryResults} onExport={handleExport} />
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                  {message.role === 'user' && (
+                    <div className="flex-shrink-0 w-8 h-8 bg-slate-300 dark:bg-slate-600 rounded-xl flex items-center justify-center">
+                      <User weight="fill" className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
         {isLoading && (
-          <div className="flex gap-3 justify-start">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="flex gap-3 justify-start"
+          >
             <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center">
               <Robot weight="fill" className="w-4 h-4 text-white" />
             </div>
@@ -343,13 +576,54 @@ export default function ChatUI({
                 <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <form onSubmit={handleSubmit} className="flex gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading || isOcrProcessing}
+          className={cn(
+            "px-3 py-3 rounded-xl transition flex items-center justify-center",
+            isOcrProcessing 
+              ? "bg-slate-100 dark:bg-slate-800 text-emerald-500" 
+              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+          )}
+          title="Scan Receipt"
+        >
+          {isOcrProcessing ? (
+            <SpinnerGap weight="bold" className="w-5 h-5 animate-spin" />
+          ) : (
+            <ImageSquare weight="fill" className="w-5 h-5" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={toggleListening}
+          disabled={isLoading || !recognitionRef.current}
+          className={cn(
+            "px-3 py-3 rounded-xl transition flex items-center justify-center relative",
+            isListening 
+              ? "bg-red-100 dark:bg-red-900/30 text-red-500" 
+              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+          )}
+          title="Voice Input"
+        >
+          {isListening && (
+            <span className="absolute inset-0 rounded-xl bg-red-400 opacity-25 animate-ping" />
+          )}
+          <Microphone weight="fill" className="w-5 h-5 relative z-10" />
+        </button>
         <input
           ref={inputRef}
           type="text"

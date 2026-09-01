@@ -184,9 +184,10 @@ export const compareVehicles = (vehicleIds, metrics = [], period = null) => {
 
     // Calculate requested metrics
     if (metrics.includes('totalDistance') || metrics.includes('all')) {
-      const totalDistance = vehicleFillUps.length > 1
-        ? vehicleFillUps[vehicleFillUps.length - 1].odometer - vehicleFillUps[0].odometer
-        : 0;
+      let totalDistance = 0;
+      for (let i = 1; i < vehicleFillUps.length; i++) {
+        totalDistance += Math.max(0, vehicleFillUps[i].odometer - vehicleFillUps[i - 1].odometer);
+      }
       comparison.totalDistance = totalDistance;
     }
 
@@ -218,9 +219,10 @@ export const compareVehicles = (vehicleIds, metrics = [], period = null) => {
         if (idx === 0) return sum;
         return sum + (f.liters * (f.pricePerLiter || 0));
       }, 0);
-      const totalDistance = vehicleFillUps.length > 1
-        ? vehicleFillUps[vehicleFillUps.length - 1].odometer - vehicleFillUps[0].odometer
-        : 0;
+      let totalDistance = 0;
+      for (let i = 1; i < vehicleFillUps.length; i++) {
+        totalDistance += Math.max(0, vehicleFillUps[i].odometer - vehicleFillUps[i - 1].odometer);
+      }
       comparison.avgCostPerKm = totalDistance > 0 ? totalCost / totalDistance : 0;
     }
 

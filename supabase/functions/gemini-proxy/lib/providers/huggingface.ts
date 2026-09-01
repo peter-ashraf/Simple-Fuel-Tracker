@@ -3,15 +3,15 @@
 
 import { AIProvider, AIMessage, AIResponse } from '../ai.ts'
 
-const HF_API_KEY = Deno.env.get('HF_API_KEY')
-const HF_MODEL = Deno.env.get('HF_MODEL') || 'deepseek-ai/DeepSeek-V3:novita'
+const HF_API_KEY = Deno.env.get('HF_API_KEY') || Deno.env.get('HUGGINGFACE_API_KEY')
+const HF_MODEL = Deno.env.get('HF_MODEL') || 'meta-llama/Llama-3.3-70B-Instruct'
 const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 // Hugging Face provider wrapper: add explicit env checks and structured logging
 export async function callHuggingFace(payload: any) {
   try {
-    const hfKey = Deno.env.get('HF_API_KEY')
-    const hfModel = Deno.env.get('HF_MODEL') || 'deepseek-ai/DeepSeek-V3:novita'
+    const hfKey = Deno.env.get('HF_API_KEY') || Deno.env.get('HUGGINGFACE_API_KEY')
+    const hfModel = Deno.env.get('HF_MODEL') || 'meta-llama/Llama-3.3-70B-Instruct'
     if (!hfKey) throw new Error('MISSING_SECRET: HF_API_KEY')
 
     const hfUrl = 'https://router.huggingface.co/v1/chat/completions'

@@ -115,9 +115,10 @@ export function prepareMonthlyReportData(stats, activeVehicleFillUps, vehicleNam
   )
 
   const monthlyLiters = monthFillUps.reduce((sum, fill) => sum + fill.liters, 0)
-  const monthlyDistance = monthFillUps.length > 1
-    ? monthFillUps[monthFillUps.length - 1].odometer - monthFillUps[0].odometer
-    : 0
+  let monthlyDistance = 0;
+  for (let i = 1; i < monthFillUps.length; i++) {
+    monthlyDistance += Math.max(0, monthFillUps[i].odometer - monthFillUps[i - 1].odometer);
+  }
 
   const monthlyEfficiencyValues = []
   for (let i = 1; i < monthFillUps.length; i++) {
@@ -203,9 +204,14 @@ export function prepareFullDataset() {
       year: v.year,
       fillUpCount: v.fillUps.length,
       maintenanceEntryCount: v.maintenanceEntries.length,
-      totalDistance: v.fillUps.length > 1 
-        ? v.fillUps[v.fillUps.length - 1].odometer - v.fillUps[0].odometer 
-        : 0,
+      totalDistance: (() => {
+        let dist = 0;
+        const sorted = [...v.fillUps].sort((a, b) => a.odometer - b.odometer);
+        for (let i = 1; i < sorted.length; i++) {
+          dist += Math.max(0, sorted[i].odometer - sorted[i - 1].odometer);
+        }
+        return dist;
+      })(),
     })),
     totalVehicles: allVehiclesData.length,
     totalFillUps: allVehiclesData.reduce((sum, v) => sum + v.fillUps.length, 0),
@@ -324,7 +330,7 @@ export function preparePredictiveData(vehicleId, horizon = 6) {
   })
 
   // Calculate distance between fill-ups for monthly distance
-  const sortedByOdometer = [...fillUps].sort((a, b) => a.odometer - b.odometer)
+  const sortedByOdometer = [...fillUps].sort((a, b) => Number(a.odometer || 0) - Number(b.odometer || 0))
   for (let i = 1; i < sortedByOdometer.length; i++) {
     const prev = sortedByOdometer[i - 1]
     const curr = sortedByOdometer[i]
@@ -332,7 +338,7 @@ export function preparePredictiveData(vehicleId, horizon = 6) {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     
     if (monthlyData[key]) {
-      monthlyData[key].totalDistance += curr.odometer - prev.odometer
+      monthlyData[key].totalDistance += Math.max(0, Number(curr.odometer) - Number(prev.odometer))
     }
   }
 

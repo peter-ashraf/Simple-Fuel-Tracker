@@ -6,8 +6,8 @@ export function calculateTripMetrics(fillUps, index) {
   const current = fillUps[index];
   const previous = index > 0 ? fillUps[index - 1] : null;
 
-  const distance = previous ? current.odometer - previous.odometer : 0;
-  let fuelConsumed = current.liters;
+  const distance = previous ? Math.max(0, Number(current.odometer) - Number(previous.odometer)) : 0;
+  let fuelConsumed = Number(current.liters || 0);
   let isEstimated = false;
 
   if (current.tankCapacityLiters > 0) {
@@ -27,7 +27,7 @@ export function calculateTripMetrics(fillUps, index) {
 
   const kmPerLiter = distance > 0 && fuelConsumed > 0 ? distance / fuelConsumed : 0;
   const litersPer100km = distance > 0 && fuelConsumed > 0 ? (fuelConsumed / distance) * 100 : 0;
-  const tripCost = current.liters * current.pricePerLiter;
+  const tripCost = fuelConsumed * Number(current.pricePerLiter || 0);
 
   return {
     distance: formatTo2Decimals(distance),

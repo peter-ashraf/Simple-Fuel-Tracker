@@ -327,9 +327,12 @@ function executeGeneralQuery(vehicleIds, dateRange, metrics) {
   })
 
   const totalCost = fillUps.reduce((sum, f) => sum + (f.liters * (f.pricePerLiter || 0)), 0)
-  const totalDistance = fillUps.length > 1 
-    ? fillUps[fillUps.length - 1].odometer - fillUps[0].odometer 
-    : 0
+  
+  let totalDistance = 0;
+  const sortedFillUps = [...fillUps].sort((a, b) => a.odometer - b.odometer);
+  for (let i = 1; i < sortedFillUps.length; i++) {
+    totalDistance += Math.max(0, sortedFillUps[i].odometer - sortedFillUps[i - 1].odometer);
+  }
 
   return {
     fillUpCount: fillUps.length,
