@@ -79,7 +79,7 @@
   }
 
   html, body {
-    @apply bg-slate-50 text-slate-900 min-h-screen text-base transition-colors duration-300;
+    @apply bg-slate-50 text-slate-900 min-h-screen text-base;
     @apply dark:bg-black dark:text-slate-100;
     font-family: 'Inter', 'Cairo', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;

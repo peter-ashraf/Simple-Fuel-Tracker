@@ -13,6 +13,8 @@ export function ThemeProvider({ children }) {
       // Use actual CSS background colors: slate-50 (#f8fafc) for light, black (#000000) for dark
       metaThemeColor.setAttribute('content', isDark ? '#000000' : '#f8fafc');
     }
+    // iOS also samples the page background for the status bar strip
+    document.documentElement.style.backgroundColor = isDark ? '#000000' : '#f8fafc';
   };
 
   useEffect(() => {
