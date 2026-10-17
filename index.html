@@ -10,7 +10,17 @@
       name="description"
       content="Track your vehicle fuel consumption, mileage and costs offline. Installable PWA."
     />
-    <meta name="theme-color" id="theme-color-meta" content="#10b981" />
+    <meta name="theme-color" id="theme-color-meta" content="#f8fafc" />
+    <script>
+      // Set the theme before first paint: iOS takes the status bar colour from theme-color and the page background at launch.
+      try {
+        var t = JSON.parse(localStorage.getItem('fueltracker-theme') || '"system"');
+        var d = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.add(d ? 'dark' : 'light');
+        document.documentElement.style.backgroundColor = d ? '#000000' : '#f8fafc';
+        document.getElementById('theme-color-meta').setAttribute('content', d ? '#000000' : '#f8fafc');
+      } catch (e) {}
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
